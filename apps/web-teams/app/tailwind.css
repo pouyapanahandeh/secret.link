@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  /* Warm, welcoming palette — feels approachable and human */
+  --color-cream: #FFFBF5;
+  --color-warm-white: #FFF8F0;
+  --color-ink: #1E1B2E;
+  --color-ink-soft: #4A4560;
+  --color-primary: #6C5CE7;
+  --color-primary-light: #A29BFE;
+  --color-coral: #FF7675;
+  --color-peach: #FAB1A0;
+  --color-mint: #55EFC4;
+  --color-sky: #74B9FF;
+  --color-border: #E8E4DF;
+  --color-card: #FFFFFF;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Source Serif 4", ui-serif, Georgia, serif;
+}

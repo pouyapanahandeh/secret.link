@@ -1,0 +1,27 @@
+{
+  "name": "@secretlink/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./secret": "./src/secret/index.ts",
+    "./result": "./src/result.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "neverthrow": "^8.0.0",
+    "remeda": "^2.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@secretlink/config-tsconfig": "workspace:*",
+    "vitest": "^2.1.0",
+    "typescript": "^5.7.0"
+  }
+}

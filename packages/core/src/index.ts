@@ -1,0 +1,4 @@
+export { createSecret, type CreateSecretInput, type CreateSecretDeps } from "./secret/create.js";
+export { revealSecret, type RevealSecretDeps } from "./secret/reveal.js";
+export { type SecretRecord } from "./secret/types.js";
+export { ok, err, type Result } from "./result.js";

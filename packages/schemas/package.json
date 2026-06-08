@@ -1,0 +1,24 @@
+{
+  "name": "@secretlink/schemas",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./secret": "./src/secret.ts",
+    "./user": "./src/user.ts",
+    "./workspace": "./src/workspace.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@secretlink/config-tsconfig": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}

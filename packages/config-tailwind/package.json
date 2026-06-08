@@ -1,0 +1,14 @@
+{
+  "name": "@secretlink/config-tailwind",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./teams": "./teams.ts",
+    "./public": "./public.ts",
+    "./base": "./base.ts"
+  },
+  "dependencies": {
+    "tailwindcss": "^4.0.0"
+  }
+}

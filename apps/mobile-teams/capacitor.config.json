@@ -1,0 +1,13 @@
+{
+  "appId": "link.secret.teams",
+  "appName": "Secret.link for Teams",
+  "webDir": "../web-teams/build/client",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "appId": "link.secret.app",
+  "appName": "Secret.link",
+  "webDir": "../web-public/build/client",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

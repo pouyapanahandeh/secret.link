@@ -1,0 +1,21 @@
+{
+  "name": "@secretlink/game-sdk",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@secretlink/config-tsconfig": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}

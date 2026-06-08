@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: secretlink-public
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: pnpm install && pnpm turbo run build --filter=@secretlink/web-public...
+    startCommand: cd apps/web-public && npx remix-serve ./build/server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+
+  - type: web
+    name: secretlink-teams
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: pnpm install && pnpm turbo run build --filter=@secretlink/web-teams...
+    startCommand: cd apps/web-teams && npx remix-serve ./build/server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+
+  - type: web
+    name: secretlink-api
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: pnpm install && pnpm turbo run build --filter=@secretlink/api-gateway...
+    startCommand: node apps/api-gateway/dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+
+  - type: web
+    name: secretlink-game-runtime
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: pnpm install && pnpm turbo run build --filter=@secretlink/game-runtime...
+    startCommand: node apps/game-runtime/dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4002"

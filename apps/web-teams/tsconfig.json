@@ -1,0 +1,9 @@
+{
+  "extends": "@secretlink/config-tsconfig/remix.json",
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "env.d.ts"
+  ],
+  "exclude": ["node_modules", "build"]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@secretlink/ui-public",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@secretlink/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@secretlink/config-tsconfig": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}
