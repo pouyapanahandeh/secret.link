@@ -20,7 +20,8 @@
     "@secretlink/schemas": "workspace:*",
     "@secretlink/ui": "workspace:*",
     "@secretlink/ui-public": "workspace:*",
-    "isbot": "^5.1.0",
+    "@vercel/remix": "^2.16.7",
+    "isbot": "4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -31,6 +32,7 @@
     "@tailwindcss/vite": "^4.3.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vercel/node": "^5.8.12",
     "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^4.0.0",
