@@ -112,6 +112,8 @@ usersRouter.get("/:handle", async (ctx: Context) => {
     bio: user.bio ?? null,
     avatarUrl: user.avatarUrl ?? null,
     socials: user.socials ?? [],
+    followersCount: followers.get(user.id)?.size ?? 0,
+    followingCount: follows.get(user.id)?.size ?? 0,
   };
 });
 
@@ -169,6 +171,80 @@ usersRouter.patch("/me/profile", requireAuth(), async (ctx: Context) => {
     avatarUrl: user.avatarUrl,
     socials: user.socials,
   };
+});
+
+// ─── Search users ───────────────────────────────────────────────────────────
+usersRouter.get("/search", async (ctx: Context) => {
+  const q = String(ctx.query["q"] ?? "").trim().toLowerCase();
+  if (!q || q.length < 2) {
+    ctx.body = [];
+    return;
+  }
+
+  const results: { id: string; handle: string; bio: string | null; avatarUrl: string | null; isPro: boolean }[] = [];
+  for (const user of users.values()) {
+    if (user.handle.includes(q)) {
+      results.push({
+        id: user.id,
+        handle: user.handle,
+        bio: user.bio ?? null,
+        avatarUrl: user.avatarUrl ?? null,
+        isPro: user.isPro,
+      });
+    }
+    if (results.length >= 20) break;
+  }
+
+  ctx.body = results;
+});
+
+// ─── Follow system ──────────────────────────────────────────────────────────
+const follows = new Map<string, Set<string>>(); // userId -> set of followed userIds
+const followers = new Map<string, Set<string>>(); // userId -> set of follower userIds
+
+usersRouter.post("/follow/:targetId", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const targetId = ctx.params["targetId"]!;
+
+  if (targetId === userId) {
+    ctx.status = 400;
+    ctx.body = { error: "cannot_follow_self" };
+    return;
+  }
+
+  if (!usersById.has(targetId)) {
+    ctx.status = 404;
+    ctx.body = { error: "user_not_found" };
+    return;
+  }
+
+  if (!follows.has(userId)) follows.set(userId, new Set());
+  if (!followers.has(targetId)) followers.set(targetId, new Set());
+
+  follows.get(userId)!.add(targetId);
+  followers.get(targetId)!.add(userId);
+
+  ctx.body = { following: true, followersCount: followers.get(targetId)!.size };
+});
+
+usersRouter.delete("/follow/:targetId", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const targetId = ctx.params["targetId"]!;
+
+  if (follows.has(userId)) follows.get(userId)!.delete(targetId);
+  if (followers.has(targetId)) followers.get(targetId)!.delete(userId);
+
+  ctx.body = { following: false, followersCount: followers.get(targetId)?.size ?? 0 };
+});
+
+usersRouter.get("/follow/:targetId", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const targetId = ctx.params["targetId"]!;
+  const isFollowing = follows.get(userId)?.has(targetId) ?? false;
+  const followersCount = followers.get(targetId)?.size ?? 0;
+  const followingCount = follows.get(targetId)?.size ?? 0;
+
+  ctx.body = { isFollowing, followersCount, followingCount };
 });
 
 // ─── WebAuthn: Start registration ───────────────────────────────────────────

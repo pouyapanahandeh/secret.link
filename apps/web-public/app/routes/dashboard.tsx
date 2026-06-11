@@ -49,7 +49,7 @@ export default function Dashboard() {
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [passkeyError, setPasskeyError] = useState("");
   const [hasPasskey, setHasPasskey] = useState(user.hasPasskey);
-  const [activeTab, setActiveTab] = useState<"inbox" | "sent" | "profile">("inbox");
+  const [activeTab, setActiveTab] = useState<"inbox" | "sent" | "map" | "profile">("inbox");
   const [bio, setBio] = useState(user.bio ?? "");
   const [socials, setSocials] = useState<{ platform: string; url: string }[]>(user.socials ?? []);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -207,18 +207,18 @@ export default function Dashboard() {
         </div>
 
         {/* Tabs navigation */}
-        <div className="flex gap-1 mb-6 bg-surface-raised rounded-xl border border-border p-1">
-          {(["inbox", "sent", "profile"] as const).map((tab) => (
+        <div className="flex gap-1 mb-6 bg-surface-raised rounded-xl border border-border p-1 overflow-x-auto">
+          {(["inbox", "sent", "map", "profile"] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              onClick={() => tab === "map" ? window.location.href = "/map" : setActiveTab(tab)}
+              className={`flex-1 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === tab
                   ? "bg-accent text-black"
                   : "text-text-muted hover:text-text"
               }`}
             >
-              {tab === "inbox" ? `📥 Inbox${inbox.length > 0 ? ` (${inbox.length})` : ""}` : tab === "sent" ? "📤 Sent" : "✏️ Edit Profile"}
+              {tab === "inbox" ? `📥 Inbox${inbox.length > 0 ? ` (${inbox.length})` : ""}` : tab === "sent" ? "📤 Sent" : tab === "map" ? "🗺️ Map" : "✏️ Profile"}
             </button>
           ))}
         </div>
