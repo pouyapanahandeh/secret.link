@@ -32,6 +32,7 @@ export default function Index() {
           <div className="hidden sm:flex items-center gap-4">
             <a href="/about" className="text-sm text-text-muted hover:text-text transition-colors">About</a>
             <a href="/send" className="text-sm text-text-muted hover:text-text transition-colors">Send</a>
+            <a href="/map" className="text-sm text-text-muted hover:text-text transition-colors">🗺️ Map</a>
             <ThemeToggle />
             <a
               href="/login"
@@ -64,6 +65,7 @@ export default function Index() {
           <div className="sm:hidden border-t border-border/50 px-4 py-4 space-y-3 bg-surface/95 backdrop-blur-md">
             <a href="/about" className="block text-sm text-text-muted hover:text-text transition-colors py-2">About</a>
             <a href="/send" className="block text-sm text-text-muted hover:text-text transition-colors py-2">Send</a>
+            <a href="/map" className="block text-sm text-text-muted hover:text-text transition-colors py-2">🗺️ Map</a>
             <div className="flex items-center justify-between py-2">
               <span className="text-sm text-text-muted">Theme</span>
               <ThemeToggle />

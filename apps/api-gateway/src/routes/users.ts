@@ -15,6 +15,9 @@ interface StoredUser {
   email?: string;
   isPro: boolean;
   createdAt: string;
+  bio?: string;
+  avatarUrl?: string;
+  socials?: { platform: string; url: string }[];
   credentials: StoredCredential[];
   magicLinkToken?: string;
   magicLinkExpiresAt?: number;
@@ -101,7 +104,15 @@ usersRouter.get("/:handle", async (ctx: Context) => {
   }
 
   ctx.status = 200;
-  ctx.body = { handle: user.handle, isPro: user.isPro, createdAt: user.createdAt };
+  ctx.body = {
+    id: user.id,
+    handle: user.handle,
+    isPro: user.isPro,
+    createdAt: user.createdAt,
+    bio: user.bio ?? null,
+    avatarUrl: user.avatarUrl ?? null,
+    socials: user.socials ?? [],
+  };
 });
 
 // ─── Get current user (authenticated) ───────────────────────────────────────
@@ -123,6 +134,40 @@ usersRouter.get("/me/profile", requireAuth(), async (ctx: Context) => {
     isPro: user.isPro,
     createdAt: user.createdAt,
     hasPasskey: user.credentials.length > 0,
+    bio: user.bio ?? null,
+    avatarUrl: user.avatarUrl ?? null,
+    socials: user.socials ?? [],
+  };
+});
+
+// ─── Update profile ─────────────────────────────────────────────────────────
+usersRouter.patch("/me/profile", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const user = usersById.get(userId);
+  if (!user) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
+
+  const body = ctx.request.body as Record<string, unknown>;
+
+  if (typeof body.bio === "string") {
+    user.bio = body.bio.slice(0, 300);
+  }
+  if (typeof body.avatarUrl === "string") {
+    user.avatarUrl = body.avatarUrl.slice(0, 500);
+  }
+  if (Array.isArray(body.socials)) {
+    user.socials = (body.socials as any[]).slice(0, 10).map((s) => ({
+      platform: String(s.platform ?? "").slice(0, 30),
+      url: String(s.url ?? "").slice(0, 200),
+    }));
+  }
+
+  ctx.status = 200;
+  ctx.body = {
+    id: user.id,
+    handle: user.handle,
+    bio: user.bio,
+    avatarUrl: user.avatarUrl,
+    socials: user.socials,
   };
 });
 

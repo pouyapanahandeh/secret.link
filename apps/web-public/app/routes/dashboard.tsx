@@ -49,6 +49,11 @@ export default function Dashboard() {
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [passkeyError, setPasskeyError] = useState("");
   const [hasPasskey, setHasPasskey] = useState(user.hasPasskey);
+  const [activeTab, setActiveTab] = useState<"inbox" | "sent" | "profile">("inbox");
+  const [bio, setBio] = useState(user.bio ?? "");
+  const [socials, setSocials] = useState<{ platform: string; url: string }[]>(user.socials ?? []);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   async function handleAddPasskey() {
     setPasskeyStatus("loading");
@@ -92,6 +97,44 @@ export default function Dashboard() {
     }
   }
 
+  async function saveProfile() {
+    setProfileSaving(true);
+    setProfileSaved(false);
+    try {
+      const origin = window.location.origin;
+      const apiBase = window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
+
+      await fetch(`${apiBase}/v1/users/me/profile`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ bio, socials: socials.filter(s => s.url) }),
+      });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+    } catch (err) {
+      // silently fail
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  function addSocial() {
+    setSocials([...socials, { platform: "", url: "" }]);
+  }
+
+  function removeSocial(index: number) {
+    setSocials(socials.filter((_, i) => i !== index));
+  }
+
+  function updateSocial(index: number, field: "platform" | "url", value: string) {
+    const updated = [...socials];
+    updated[index] = { ...updated[index], [field]: value };
+    setSocials(updated);
+  }
+
   return (
     <main className="min-h-screen bg-surface">
       {/* Header */}
@@ -125,6 +168,12 @@ export default function Dashboard() {
             </div>
             <div className="flex gap-3">
               <a
+                href="/messages"
+                className="text-sm bg-surface border border-border text-text px-4 py-2 rounded-full hover:border-accent/50 transition-colors"
+              >
+                🔒 Messages
+              </a>
+              <a
                 href={`/${user.handle}`}
                 className="text-sm bg-accent/10 text-accent px-4 py-2 rounded-full hover:bg-accent/20 transition-colors"
               >
@@ -157,21 +206,29 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Inbox */}
-          <section>
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              📥 Inbox
-              {inbox.length > 0 && (
-                <span className="bg-accent text-black text-xs font-bold px-2 py-0.5 rounded-full">
-                  {inbox.length}
-                </span>
-              )}
-            </h2>
+        {/* Tabs navigation */}
+        <div className="flex gap-1 mb-6 bg-surface-raised rounded-xl border border-border p-1">
+          {(["inbox", "sent", "profile"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab
+                  ? "bg-accent text-black"
+                  : "text-text-muted hover:text-text"
+              }`}
+            >
+              {tab === "inbox" ? `📥 Inbox${inbox.length > 0 ? ` (${inbox.length})` : ""}` : tab === "sent" ? "📤 Sent" : "✏️ Edit Profile"}
+            </button>
+          ))}
+        </div>
 
+        {/* Tab content */}
+        {activeTab === "inbox" && (
+          <section>
             {inbox.length === 0 ? (
-              <div className="bg-surface-raised rounded-xl border border-border p-6 text-center">
+              <div className="bg-surface-raised rounded-xl border border-border p-8 text-center">
+                <span className="text-4xl block mb-3">📥</span>
                 <p className="text-text-muted">No secrets yet.</p>
                 <p className="text-xs text-text-muted mt-2">
                   Share your link to start receiving secrets!
@@ -202,13 +259,13 @@ export default function Dashboard() {
               </div>
             )}
           </section>
+        )}
 
-          {/* Sent */}
+        {activeTab === "sent" && (
           <section>
-            <h2 className="text-lg font-semibold mb-4">📤 Sent</h2>
-
             {sent.length === 0 ? (
-              <div className="bg-surface-raised rounded-xl border border-border p-6 text-center">
+              <div className="bg-surface-raised rounded-xl border border-border p-8 text-center">
+                <span className="text-4xl block mb-3">📤</span>
                 <p className="text-text-muted">No secrets sent yet.</p>
                 <Link to="/send" className="text-xs text-accent hover:text-accent/80 mt-2 inline-block">
                   Send your first secret →
@@ -242,7 +299,86 @@ export default function Dashboard() {
               </div>
             )}
           </section>
-        </div>
+        )}
+
+        {activeTab === "profile" && (
+          <section className="bg-surface-raised rounded-2xl border border-border p-6">
+            <h2 className="text-lg font-semibold mb-6">Edit your profile</h2>
+
+            <div className="space-y-6">
+              {/* Bio */}
+              <div>
+                <label className="block text-sm font-medium text-text/80 mb-2">Bio</label>
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  maxLength={300}
+                  rows={3}
+                  placeholder="Tell people about yourself..."
+                  className="w-full rounded-xl bg-surface border border-border px-4 py-3 text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
+                />
+                <p className="text-xs text-text-muted mt-1">{bio.length}/300</p>
+              </div>
+
+              {/* Social links */}
+              <div>
+                <label className="block text-sm font-medium text-text/80 mb-2">Social links</label>
+                <div className="space-y-3">
+                  {socials.map((s, i) => (
+                    <div key={i} className="flex gap-2">
+                      <select
+                        value={s.platform}
+                        onChange={(e) => updateSocial(i, "platform", e.target.value)}
+                        className="w-32 rounded-lg bg-surface border border-border px-3 py-2.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      >
+                        <option value="">Platform</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="twitter">Twitter/X</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="youtube">YouTube</option>
+                        <option value="github">GitHub</option>
+                        <option value="linkedin">LinkedIn</option>
+                        <option value="snapchat">Snapchat</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="website">Website</option>
+                      </select>
+                      <input
+                        type="url"
+                        value={s.url}
+                        onChange={(e) => updateSocial(i, "url", e.target.value)}
+                        placeholder="https://..."
+                        className="flex-1 rounded-lg bg-surface border border-border px-3 py-2.5 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      />
+                      <button
+                        onClick={() => removeSocial(i)}
+                        className="w-10 h-10 rounded-lg border border-border text-text-muted hover:text-red-400 hover:border-red-400/50 transition-colors flex items-center justify-center"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {socials.length < 10 && (
+                    <button
+                      onClick={addSocial}
+                      className="text-sm text-accent hover:text-accent-soft transition-colors"
+                    >
+                      + Add link
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Save */}
+              <button
+                onClick={saveProfile}
+                disabled={profileSaving}
+                className="rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all disabled:opacity-50"
+              >
+                {profileSaving ? "Saving..." : profileSaved ? "Saved ✓" : "Save profile"}
+              </button>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
