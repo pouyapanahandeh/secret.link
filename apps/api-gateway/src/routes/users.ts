@@ -33,6 +33,8 @@ interface StoredCredential {
 const users = new Map<string, StoredUser>();
 const usersById = new Map<string, StoredUser>();
 const challenges = new Map<string, string>();
+const follows = new Map<string, Set<string>>(); // userId -> set of followed userIds
+const followers = new Map<string, Set<string>>(); // userId -> set of follower userIds
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 const RP_NAME = "Secretlink.life";
@@ -94,7 +96,7 @@ usersRouter.post("/", async (ctx: Context) => {
 // ─── Get user profile (public) ──────────────────────────────────────────────
 usersRouter.get("/:handle", async (ctx: Context) => {
   const handle = ctx.params["handle"];
-  if (handle === "me") return; // skip, handled below
+  if (handle === "me" || handle === "search" || handle === "follow") return; // skip, handled by specific routes
   const user = users.get(handle!);
 
   if (!user) {
@@ -199,9 +201,6 @@ usersRouter.get("/search", async (ctx: Context) => {
 });
 
 // ─── Follow system ──────────────────────────────────────────────────────────
-const follows = new Map<string, Set<string>>(); // userId -> set of followed userIds
-const followers = new Map<string, Set<string>>(); // userId -> set of follower userIds
-
 usersRouter.post("/follow/:targetId", requireAuth(), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
   const targetId = ctx.params["targetId"]!;

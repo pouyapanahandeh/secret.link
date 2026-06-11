@@ -61,6 +61,34 @@ export default function ProfilePage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [charCount, setCharCount] = useState(0);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followersCount, setFollowersCount] = useState(profile?.followersCount ?? 0);
+
+  function getApiBase() {
+    if (typeof window === "undefined") return "";
+    const origin = window.location.origin;
+    return window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
+  }
+
+  function getToken() {
+    if (typeof document === "undefined") return "";
+    return document.cookie.match(/sl_token=([^;]+)/)?.[1] ?? "";
+  }
+
+  async function toggleFollow() {
+    const token = getToken();
+    if (!token || !profile?.id) { window.location.href = "/login"; return; }
+    const method = isFollowing ? "DELETE" : "POST";
+    const res = await fetch(`${getApiBase()}/v1/users/follow/${profile.id}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setIsFollowing(data.following);
+      setFollowersCount(data.followersCount);
+    }
+  }
 
   if (actionData?.sent) {
     return (
@@ -108,6 +136,24 @@ export default function ProfilePage() {
 
           {/* Handle */}
           <h1 className="text-2xl font-bold">@{handle}</h1>
+
+          {/* Follower counts */}
+          <div className="flex items-center justify-center gap-4 mt-2">
+            <span className="text-xs text-text-muted"><strong className="text-text">{followersCount}</strong> followers</span>
+            <span className="text-xs text-text-muted"><strong className="text-text">{profile?.followingCount ?? 0}</strong> following</span>
+          </div>
+
+          {/* Follow button */}
+          <button
+            onClick={toggleFollow}
+            className={`mt-3 text-xs px-5 py-2 rounded-full font-semibold transition-all ${
+              isFollowing
+                ? "bg-surface-raised border border-border text-text-muted hover:border-red-400/50 hover:text-red-400"
+                : "bg-accent text-black hover:scale-[1.02]"
+            }`}
+          >
+            {isFollowing ? "Following ✓" : "Follow"}
+          </button>
 
           {/* Bio */}
           {profile?.bio && (
