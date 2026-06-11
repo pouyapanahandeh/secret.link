@@ -1,11 +1,14 @@
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { useActionData } from "@remix-run/react";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 export const meta: MetaFunction = () => [
-  { title: "Sign Up — Secret.link" },
-  { name: "description", content: "Claim your @handle on Secret.link. Anonymous, encrypted, ephemeral." },
+  { title: "Sign Up — Secretlink.life" },
+  { name: "description", content: "Claim your @handle on Secretlink.life. Anonymous, encrypted, ephemeral." },
 ];
+
+const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
 
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
@@ -28,76 +31,118 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ errors, values: { handle, email } }, { status: 400 });
   }
 
-  // TODO: persist user to DB via API gateway
-  return redirect(`/@${handle}`);
+  // Create user via API
+  const res = await fetch(`${API_URL}/v1/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ handle, email: email || undefined }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    if (data.error === "handle_taken") {
+      return json({ errors: { handle: "This handle is already taken" }, values: { handle, email } }, { status: 400 });
+    }
+    return json({ errors: { handle: data.error ?? "Something went wrong" }, values: { handle, email } }, { status: 400 });
+  }
+
+  const { token } = await res.json();
+
+  // Set cookie and redirect to dashboard
+  return redirect("/dashboard", {
+    headers: {
+      "Set-Cookie": `sl_token=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`,
+    },
+  });
 }
 
 export default function Signup() {
   const actionData = useActionData<typeof action>();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="max-w-md w-full">
-        <h1 className="font-display text-4xl text-center mb-2">
-          Claim your <span className="text-blush">@handle</span>
-        </h1>
-        <p className="text-candle/60 text-center mb-8">
-          One link. Your whole identity. Drop it in your bio.
-        </p>
+    <main className="min-h-screen">
+      {/* Nav */}
+      <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
+        <a href="/" className="flex items-center gap-2">
+          <img src="/secretlink.png" alt="Secretlink.life" className="w-8 h-8" />
+          <span className="text-xl font-bold tracking-tight">
+            secretlink<span className="text-accent">.</span>life
+          </span>
+        </a>
+        <div className="flex items-center gap-4">
+          <a href="/login" className="text-sm text-text-muted hover:text-text transition-colors">Log in</a>
+          <ThemeToggle />
+        </div>
+      </nav>
 
-        <form method="post" className="space-y-4">
-          <div>
-            <label htmlFor="handle" className="block text-sm font-medium text-candle/80 mb-1">
-              Handle
-            </label>
-            <div className="flex items-center">
-              <span className="text-candle/40 mr-2">secret.link/@</span>
-              <input
-                id="handle"
-                name="handle"
-                type="text"
-                required
-                minLength={3}
-                maxLength={32}
-                pattern="[a-z0-9_-]+"
-                defaultValue={actionData?.values?.handle ?? ""}
-                placeholder="yourname"
-                className="flex-1 rounded-lg bg-midnight/50 border border-candle/20 px-4 py-3 text-candle placeholder:text-candle/30 focus:outline-none focus:ring-2 focus:ring-blush"
-              />
+      <div className="flex flex-col items-center justify-center min-h-screen px-4 pt-20">
+        <div className="max-w-md w-full">
+          <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mx-auto mb-4" />
+          <h1 className="font-display text-4xl text-center mb-2">
+            Claim your <span className="text-accent">@handle</span>
+          </h1>
+          <p className="text-text-muted text-center mb-8">
+            One link. Your whole identity. Drop it in your bio.
+          </p>
+
+          <form method="post" className="space-y-4">
+            <div>
+              <label htmlFor="handle" className="block text-sm font-medium text-text/80 mb-1">
+                Handle
+              </label>
+              <div className="flex items-center">
+                <span className="text-text-muted mr-2">secretlink.life/@</span>
+                <input
+                  id="handle"
+                  name="handle"
+                  type="text"
+                  required
+                  minLength={3}
+                  maxLength={32}
+                  pattern="[a-z0-9_-]+"
+                  defaultValue={actionData?.values?.handle ?? ""}
+                  placeholder="yourname"
+                  className="flex-1 rounded-lg bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+              {actionData?.errors?.handle && (
+                <p className="text-red-400 text-sm mt-1">{actionData.errors.handle}</p>
+              )}
             </div>
-            {actionData?.errors?.handle && (
-              <p className="text-blush text-sm mt-1">{actionData.errors.handle}</p>
-            )}
-          </div>
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-candle/80 mb-1">
-              Email <span className="text-candle/40">(optional, for Pro features)</span>
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              defaultValue={actionData?.values?.email ?? ""}
-              placeholder="you@example.com"
-              className="w-full rounded-lg bg-midnight/50 border border-candle/20 px-4 py-3 text-candle placeholder:text-candle/30 focus:outline-none focus:ring-2 focus:ring-blush"
-            />
-            {actionData?.errors?.email && (
-              <p className="text-blush text-sm mt-1">{actionData.errors.email}</p>
-            )}
-          </div>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-text/80 mb-1">
+                Email <span className="text-text-muted">(optional, for Pro features)</span>
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                defaultValue={actionData?.values?.email ?? ""}
+                placeholder="you@example.com"
+                className="w-full rounded-lg bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+              {actionData?.errors?.email && (
+                <p className="text-red-400 text-sm mt-1">{actionData.errors.email}</p>
+              )}
+            </div>
 
-          <button
-            type="submit"
-            className="w-full rounded-full bg-blush px-6 py-3 text-sm font-semibold text-midnight hover:bg-blush/90 transition-colors duration-200"
-          >
-            Claim @handle
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="w-full rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all duration-200"
+            >
+              Claim @handle
+            </button>
+          </form>
 
-        <p className="mt-6 text-xs text-candle/40 text-center">
-          No password needed. Authenticate with biometrics on your device.
-        </p>
+          <p className="mt-6 text-xs text-text-muted text-center">
+            No password needed. Authenticate with biometrics on your device.
+          </p>
+          <p className="mt-4 text-sm text-text-muted text-center">
+            Already have an account?{" "}
+            <a href="/login" className="text-accent hover:text-accent-soft transition-colors">Log in</a>
+          </p>
+        </div>
       </div>
     </main>
   );

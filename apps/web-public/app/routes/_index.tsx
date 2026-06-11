@@ -1,9 +1,10 @@
 import type { MetaFunction } from "@remix-run/node";
+import { useState } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Secret.link — Say what you really mean" },
+    { title: "Secretlink.life — Say what you really mean" },
     {
       name: "description",
       content:
@@ -13,24 +14,68 @@ export const meta: MetaFunction = () => {
 };
 
 export default function Index() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <main className="min-h-screen">
       {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
-        <a href="/" className="text-xl font-bold tracking-tight">
-          secret<span className="text-accent">.</span>link
-        </a>
-        <div className="flex items-center gap-4">
-          <a href="/about" className="text-sm text-text-muted hover:text-text transition-colors">About</a>
-          <a href="/send" className="text-sm text-text-muted hover:text-text transition-colors">Send</a>
-          <ThemeToggle />
-          <a
-            href="/signup"
-            className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-black hover:scale-[1.03] transition-all"
-          >
-            Sign up
+      <nav className="fixed top-0 left-0 right-0 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
+          <a href="/" className="flex items-center gap-2">
+            <img src="/secretlink.png" alt="Secretlink.life" className="w-7 h-7 sm:w-8 sm:h-8" />
+            <span className="text-lg sm:text-xl font-bold tracking-tight">
+              secretlink<span className="text-accent">.</span>life
+            </span>
           </a>
+
+          {/* Desktop nav */}
+          <div className="hidden sm:flex items-center gap-4">
+            <a href="/about" className="text-sm text-text-muted hover:text-text transition-colors">About</a>
+            <a href="/send" className="text-sm text-text-muted hover:text-text transition-colors">Send</a>
+            <ThemeToggle />
+            <a
+              href="/login"
+              className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-black hover:scale-[1.03] transition-all"
+            >
+              Sign in
+            </a>
+          </div>
+
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="sm:hidden flex items-center justify-center w-9 h-9 rounded-lg border border-border hover:border-accent/50 transition-colors"
+            aria-label="Toggle menu"
+          >
+            {menuOpen ? (
+              <svg className="w-5 h-5 text-text" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 text-text" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
         </div>
+
+        {/* Mobile menu */}
+        {menuOpen && (
+          <div className="sm:hidden border-t border-border/50 px-4 py-4 space-y-3 bg-surface/95 backdrop-blur-md">
+            <a href="/about" className="block text-sm text-text-muted hover:text-text transition-colors py-2">About</a>
+            <a href="/send" className="block text-sm text-text-muted hover:text-text transition-colors py-2">Send</a>
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm text-text-muted">Theme</span>
+              <ThemeToggle />
+            </div>
+            <a
+              href="/login"
+              className="block text-center rounded-full bg-accent px-4 py-2.5 text-sm font-bold text-black hover:scale-[1.02] transition-all"
+            >
+              Sign in
+            </a>
+          </div>
+        )}
       </nav>
 
       {/* Hero */}
@@ -39,8 +84,8 @@ export default function Index() {
         <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-accent/5 rounded-full blur-[100px] pointer-events-none" />
 
         <div className="relative max-w-2xl text-center">
-          {/* Ghost mascot */}
-          <div className="text-7xl mb-6">👻</div>
+          {/* Logo mascot */}
+          <img src="/secretlink.png" alt="Secretlink.life mascot" className="w-24 h-24 mx-auto mb-6" />
           <h1 className="text-4xl font-bold tracking-tight leading-[1.15] sm:text-6xl">
             Your secrets are<br />
             <span className="text-accent">safe with us</span>
@@ -166,9 +211,9 @@ export default function Index() {
       <footer className="border-t border-border/50 py-6 text-center text-xs text-text-muted">
         <a href="/about" className="hover:text-text transition-colors">About</a>
         {" · "}
-        <a href="https://teams.secret.link" className="hover:text-text transition-colors">For Teams</a>
+        <a href="https://teams.secretlink.life" className="hover:text-text transition-colors">For Teams</a>
         {" · "}
-        <span>© 2026 Secret.link</span>
+        <span>© 2026 Secretlink.life</span>
       </footer>
     </main>
   );

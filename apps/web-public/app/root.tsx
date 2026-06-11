@@ -10,6 +10,9 @@ import type { LinksFunction } from "@remix-run/node";
 import "./tailwind.css";
 
 export const links: LinksFunction = () => [
+  { rel: "icon", type: "image/png", sizes: "32x32", href: "/secretlink.png" },
+  { rel: "icon", type: "image/png", sizes: "16x16", href: "/secretlink.png" },
+  { rel: "apple-touch-icon", sizes: "180x180", href: "/secretlink.png" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
   {

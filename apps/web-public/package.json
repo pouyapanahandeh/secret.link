@@ -20,6 +20,7 @@
     "@secretlink/schemas": "workspace:*",
     "@secretlink/ui": "workspace:*",
     "@secretlink/ui-public": "workspace:*",
+    "@simplewebauthn/browser": "^13.3.0",
     "@vercel/remix": "^2.16.7",
     "isbot": "4",
     "react": "^19.0.0",

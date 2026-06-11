@@ -5,7 +5,13 @@ import type { SecretRecord, CreateSecretError } from "./types.js";
 
 export const CreateSecretInput = z.object({
   ciphertext: z.string().min(1),
-  ttlSeconds: z.number().int().min(60).max(60 * 60 * 24 * 30),
+  contentType: z.enum(["text", "image", "video", "file"]).default("text"),
+  blobPath: z.string().optional(),
+  blobSizeBytes: z.number().int().positive().optional(),
+  mimeType: z.string().optional(),
+  nonce: z.string().optional(),
+  viewDurationSeconds: z.number().int().min(5).max(300).optional(),
+  ttlSeconds: z.number().int().min(5).max(60 * 60 * 24 * 30),
   maxViews: z.number().int().min(1).max(10).default(1),
   workspaceId: z.string().uuid().optional(),
   recipientHandle: z.string().min(1).optional(),
@@ -35,6 +41,12 @@ export const createSecret =
     const record: SecretRecord = {
       id,
       ciphertext: parsed.data.ciphertext,
+      contentType: parsed.data.contentType,
+      blobPath: parsed.data.blobPath,
+      blobSizeBytes: parsed.data.blobSizeBytes,
+      mimeType: parsed.data.mimeType,
+      nonce: parsed.data.nonce,
+      viewDurationSeconds: parsed.data.viewDurationSeconds,
       maxViews: parsed.data.maxViews,
       viewCount: 0,
       createdAt: now,

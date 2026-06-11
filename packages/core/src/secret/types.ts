@@ -1,6 +1,14 @@
+export type ContentType = "text" | "image" | "video" | "file";
+
 export type SecretRecord = {
   readonly id: string;
   readonly ciphertext: string;
+  readonly contentType: ContentType;
+  readonly blobPath?: string;       // path/key in blob store for media
+  readonly blobSizeBytes?: number;
+  readonly mimeType?: string;       // original mime e.g. "image/png", "video/webm"
+  readonly nonce?: string;          // encryption nonce (base64url)
+  readonly viewDurationSeconds?: number; // how long receiver can view
   readonly maxViews: number;
   readonly viewCount: number;
   readonly createdAt: Date;

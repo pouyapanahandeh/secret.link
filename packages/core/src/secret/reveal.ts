@@ -1,6 +1,6 @@
 import { ok, err } from "neverthrow";
 import type { Result } from "neverthrow";
-import type { SecretRecord, RevealSecretError } from "./types.js";
+import type { SecretRecord, RevealSecretError, ContentType } from "./types.js";
 
 export type RevealSecretDeps = {
   readonly repo: {
@@ -11,9 +11,19 @@ export type RevealSecretDeps = {
   readonly clock: { now: () => Date };
 };
 
+export type RevealResult = {
+  ciphertext: string;
+  contentType: ContentType;
+  blobPath?: string;
+  mimeType?: string;
+  nonce?: string;
+  viewDurationSeconds?: number;
+  remainingViews: number;
+};
+
 export const revealSecret =
   (deps: RevealSecretDeps) =>
-  async (id: string): Promise<Result<{ ciphertext: string; remainingViews: number }, RevealSecretError>> => {
+  async (id: string): Promise<Result<RevealResult, RevealSecretError>> => {
     const record = await deps.repo.findById(id);
 
     if (!record) {
@@ -41,5 +51,13 @@ export const revealSecret =
       await deps.repo.burn(id);
     }
 
-    return ok({ ciphertext: record.ciphertext, remainingViews });
+    return ok({
+      ciphertext: record.ciphertext,
+      contentType: record.contentType,
+      blobPath: record.blobPath,
+      mimeType: record.mimeType,
+      nonce: record.nonce,
+      viewDurationSeconds: record.viewDurationSeconds,
+      remainingViews,
+    });
   };

@@ -12,7 +12,13 @@ const app = new Koa();
 // Security & parsing
 app.use(helmet());
 app.use(cors({ origin: process.env["CORS_ORIGIN"] ?? "*", credentials: true }));
-app.use(bodyParser({ jsonLimit: "1mb" }));
+app.use(async (ctx, next) => {
+  // Skip body parsing for blob upload (raw binary)
+  if (ctx.path === "/v1/secrets/blob" && ctx.method === "POST") {
+    return next();
+  }
+  return bodyParser({ jsonLimit: "1mb" })(ctx, next);
+});
 
 // Rate limiting, logging & error handling
 app.use(rateLimiter());

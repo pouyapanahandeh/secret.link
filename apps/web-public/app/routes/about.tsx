@@ -1,10 +1,10 @@
 import type { MetaFunction } from "@remix-run/node";
 
 export const meta: MetaFunction = () => [
-  { title: "About — Secret.link" },
+  { title: "About — Secretlink.life" },
   {
     name: "description",
-    content: "Secret.link is a privacy-first platform where every message self-destructs. End-to-end encrypted. Open about our limitations.",
+    content: "Secretlink.life is a privacy-first platform where every message self-destructs. End-to-end encrypted. Open about our limitations.",
   },
 ];
 
@@ -12,12 +12,13 @@ export default function About() {
   return (
     <main className="flex min-h-screen flex-col items-center py-16 px-4">
       <article className="max-w-2xl w-full prose-invert">
-        <h1 className="font-display text-4xl mb-6">About Secret.link</h1>
+        <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mb-4" />
+        <h1 className="font-display text-4xl mb-6">About Secretlink.life</h1>
 
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-blush mb-3">What is this?</h2>
           <p className="text-candle/80 leading-relaxed">
-            Secret.link is a social network for things you'd never post anywhere else.
+            Secretlink.life is a social network for things you'd never post anywhere else.
             Every message vanishes after one read. Every link burns. No screenshots,
             no screen recording, no re-sharing. Just you, one person, one moment.
           </p>
@@ -72,7 +73,7 @@ export default function About() {
 
         <footer className="border-t border-candle/10 pt-6 text-center">
           <p className="text-candle/40 text-sm">
-            Built with 🔐 by the Secret.link team
+            Built with 🔐 by the Secretlink.life team
           </p>
         </footer>
       </article>
