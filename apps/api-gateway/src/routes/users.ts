@@ -93,10 +93,35 @@ usersRouter.post("/", async (ctx: Context) => {
   ctx.body = { user: { id: user.id, handle: user.handle, email: user.email, isPro: user.isPro }, token };
 });
 
+// ─── Search users (must be before /:handle) ─────────────────────────────────
+usersRouter.get("/search", async (ctx: Context) => {
+  const q = String(ctx.query["q"] ?? "").trim().toLowerCase();
+  if (!q || q.length < 2) {
+    ctx.body = [];
+    return;
+  }
+
+  const results: { id: string; handle: string; bio: string | null; avatarUrl: string | null; isPro: boolean }[] = [];
+  for (const user of users.values()) {
+    if (user.handle.includes(q)) {
+      results.push({
+        id: user.id,
+        handle: user.handle,
+        bio: user.bio ?? null,
+        avatarUrl: user.avatarUrl ?? null,
+        isPro: user.isPro,
+      });
+    }
+    if (results.length >= 20) break;
+  }
+
+  ctx.body = results;
+});
+
 // ─── Get user profile (public) ──────────────────────────────────────────────
 usersRouter.get("/:handle", async (ctx: Context) => {
   const handle = ctx.params["handle"];
-  if (handle === "me" || handle === "search" || handle === "follow") return; // skip, handled by specific routes
+  if (handle === "me" || handle === "follow") return; // skip, handled by specific routes
   const user = users.get(handle!);
 
   if (!user) {
@@ -173,31 +198,6 @@ usersRouter.patch("/me/profile", requireAuth(), async (ctx: Context) => {
     avatarUrl: user.avatarUrl,
     socials: user.socials,
   };
-});
-
-// ─── Search users ───────────────────────────────────────────────────────────
-usersRouter.get("/search", async (ctx: Context) => {
-  const q = String(ctx.query["q"] ?? "").trim().toLowerCase();
-  if (!q || q.length < 2) {
-    ctx.body = [];
-    return;
-  }
-
-  const results: { id: string; handle: string; bio: string | null; avatarUrl: string | null; isPro: boolean }[] = [];
-  for (const user of users.values()) {
-    if (user.handle.includes(q)) {
-      results.push({
-        id: user.id,
-        handle: user.handle,
-        bio: user.bio ?? null,
-        avatarUrl: user.avatarUrl ?? null,
-        isPro: user.isPro,
-      });
-    }
-    if (results.length >= 20) break;
-  }
-
-  ctx.body = results;
 });
 
 // ─── Follow system ──────────────────────────────────────────────────────────
