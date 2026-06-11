@@ -73,6 +73,87 @@ secretsRouter.post("/", async (ctx: Context) => {
   );
 });
 
+// ─── Map Secrets (must be before /:id to avoid conflicts) ───────────────────
+interface MapSecret {
+  id: string;
+  message: string;
+  lat: number;
+  lng: number;
+  emoji: string;
+  createdAt: string;
+  expiresAt: string;
+  handle?: string;
+}
+
+const mapSecrets = new Map<string, MapSecret>();
+
+secretsRouter.post("/map", async (ctx: Context) => {
+  const body = ctx.request.body as Record<string, unknown>;
+  const message = String(body.message ?? "").trim();
+  const lat = Number(body.lat);
+  const lng = Number(body.lng);
+  const emoji = String(body.emoji ?? "💬").slice(0, 4);
+  const handle = body.handle ? String(body.handle) : undefined;
+  const ttlMinutes = Math.min(Math.max(Number(body.ttlMinutes) || 60, 5), 1440);
+
+  if (!message || message.length > 500) {
+    ctx.status = 400;
+    ctx.body = { error: "Message required (max 500 chars)" };
+    return;
+  }
+  if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    ctx.status = 400;
+    ctx.body = { error: "Invalid coordinates" };
+    return;
+  }
+
+  const id = nanoid();
+  const now = new Date();
+  const secret: MapSecret = {
+    id,
+    message,
+    lat,
+    lng,
+    emoji,
+    handle,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + ttlMinutes * 60 * 1000).toISOString(),
+  };
+
+  mapSecrets.set(id, secret);
+  ctx.status = 201;
+  ctx.body = secret;
+});
+
+secretsRouter.get("/map", async (ctx: Context) => {
+  const now = Date.now();
+  const results: MapSecret[] = [];
+
+  for (const s of mapSecrets.values()) {
+    if (new Date(s.expiresAt).getTime() > now) {
+      results.push(s);
+    } else {
+      mapSecrets.delete(s.id);
+    }
+  }
+
+  ctx.body = results;
+});
+
+secretsRouter.get("/map/:id", async (ctx: Context) => {
+  const id = ctx.params["id"];
+  const secret = mapSecrets.get(id!);
+
+  if (!secret || new Date(secret.expiresAt).getTime() < Date.now()) {
+    if (secret) mapSecrets.delete(id!);
+    ctx.status = 404;
+    ctx.body = { error: "Secret expired or not found" };
+    return;
+  }
+
+  ctx.body = secret;
+});
+
 secretsRouter.get("/:id", async (ctx: Context) => {
   const result = await revealSecret(deps)(ctx.params["id"]!);
   result.match(
@@ -189,88 +270,4 @@ secretsRouter.get("/sent/:userId", async (ctx: Context) => {
 
   secrets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   ctx.body = secrets;
-});
-
-// ─── Map Secrets ────────────────────────────────────────────────────────────
-interface MapSecret {
-  id: string;
-  message: string;
-  lat: number;
-  lng: number;
-  emoji: string;
-  createdAt: string;
-  expiresAt: string;
-  handle?: string;
-}
-
-const mapSecrets = new Map<string, MapSecret>();
-
-// Post a public secret on the map
-secretsRouter.post("/map", async (ctx: Context) => {
-  const body = ctx.request.body as Record<string, unknown>;
-  const message = String(body.message ?? "").trim();
-  const lat = Number(body.lat);
-  const lng = Number(body.lng);
-  const emoji = String(body.emoji ?? "💬").slice(0, 4);
-  const handle = body.handle ? String(body.handle) : undefined;
-  const ttlMinutes = Math.min(Math.max(Number(body.ttlMinutes) || 60, 5), 1440);
-
-  if (!message || message.length > 500) {
-    ctx.status = 400;
-    ctx.body = { error: "Message required (max 500 chars)" };
-    return;
-  }
-  if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    ctx.status = 400;
-    ctx.body = { error: "Invalid coordinates" };
-    return;
-  }
-
-  const id = nanoid();
-  const now = new Date();
-  const secret: MapSecret = {
-    id,
-    message,
-    lat,
-    lng,
-    emoji,
-    handle,
-    createdAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + ttlMinutes * 60 * 1000).toISOString(),
-  };
-
-  mapSecrets.set(id, secret);
-  ctx.status = 201;
-  ctx.body = secret;
-});
-
-// Get all active map secrets
-secretsRouter.get("/map", async (ctx: Context) => {
-  const now = Date.now();
-  const results: MapSecret[] = [];
-
-  for (const s of mapSecrets.values()) {
-    if (new Date(s.expiresAt).getTime() > now) {
-      results.push(s);
-    } else {
-      mapSecrets.delete(s.id);
-    }
-  }
-
-  ctx.body = results;
-});
-
-// Get a single map secret
-secretsRouter.get("/map/:id", async (ctx: Context) => {
-  const id = ctx.params["id"];
-  const secret = mapSecrets.get(id!);
-
-  if (!secret || new Date(secret.expiresAt).getTime() < Date.now()) {
-    if (secret) mapSecrets.delete(id!);
-    ctx.status = 404;
-    ctx.body = { error: "Secret expired or not found" };
-    return;
-  }
-
-  ctx.body = secret;
 });
