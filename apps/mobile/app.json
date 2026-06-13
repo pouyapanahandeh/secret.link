@@ -1,0 +1,108 @@
+{
+  "expo": {
+    "name": "Secretlink",
+    "slug": "secretlink",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "secretlink",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "backgroundColor": "#000000",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "life.secretlink.app",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": true
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "Secretlink uses the camera to capture photos and videos for encrypted secrets.",
+        "NSPhotoLibraryUsageDescription": "Secretlink needs access to your photo library to attach images to secrets.",
+        "NSLocationWhenInUseUsageDescription": "Secretlink uses your location to show nearby secrets on the map.",
+        "NSFaceIDUsageDescription": "Secretlink uses Face ID to secure your account.",
+        "ITSAppUsesNonExemptEncryption": true,
+        "ITSEncryptionExportComplianceCode": ""
+      },
+      "associatedDomains": [
+        "applinks:secretlink.life",
+        "webcredentials:secretlink.life"
+      ]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "life.secretlink.app",
+      "versionCode": 1,
+      "config": {},
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "secretlink.life",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FFFC00",
+          "sounds": []
+        }
+      ],
+      "expo-image-picker",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": false
+          },
+          "ios": {
+            "newArchEnabled": false
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": "https://secretlink.life"
+      },
+      "eas": {
+        "projectId": "b99ce94d-0800-4632-b340-1d42a0691af5"
+      }
+    },
+    "owner": "waactech"
+  }
+}
