@@ -33,6 +33,8 @@ export default function RevealSecret() {
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [viewDurationSeconds, setViewDurationSeconds] = useState(30);
+  const [remainingViews, setRemainingViews] = useState<number | null>(null);
+  const [maxViews, setMaxViews] = useState(1);
 
   const handleReveal = async () => {
     setRevealing(true);
@@ -66,6 +68,12 @@ export default function RevealSecret() {
       // Store sender-configured view duration
       if (data.viewDurationSeconds) {
         setViewDurationSeconds(data.viewDurationSeconds);
+      }
+      if (data.remainingViews !== undefined) {
+        setRemainingViews(data.remainingViews);
+      }
+      if (data.maxViews) {
+        setMaxViews(data.maxViews);
       }
 
       // If no key in URL, show raw (legacy secrets without encryption)
@@ -172,64 +180,68 @@ export default function RevealSecret() {
   }
 
   if (revealed && content) {
+    const isClicksMode = maxViews > 1;
     return (
       <main className="flex min-h-screen flex-col items-center justify-center px-4 pt-20 pb-10">
         <Nav />
         <div className="max-w-lg w-full">
           <p className="text-xs text-text-muted mb-4 text-center">
-            This secret has been revealed and is now destroyed
+            {isClicksMode
+              ? `${remainingViews ?? 0} reveal${(remainingViews ?? 0) === 1 ? "" : "s"} remaining`
+              : "This secret has been revealed and is now destroyed"
+            }
           </p>
 
-          <ProtectedViewer
-            autoHideSeconds={viewDurationSeconds}
-            onExpired={() => {
-              setExpired(true);
-              // Revoke object URLs to free memory
-              if (content.type !== "text" && "objectUrl" in content) {
-                URL.revokeObjectURL(content.objectUrl);
-              }
-              setContent(null);
-            }}
-          >
+          {isClicksMode ? (
             <div className="rounded-2xl border border-border bg-surface-raised p-6">
               {content.type === "text" && (
                 <p className="text-lg text-text leading-relaxed whitespace-pre-wrap">{content.text}</p>
               )}
               {content.type === "image" && (
-                <img
-                  src={content.objectUrl}
-                  alt="Secret"
-                  className="w-full rounded-xl"
-                  draggable={false}
-                />
+                <img src={content.objectUrl} alt="Secret" className="w-full rounded-xl" draggable={false} />
               )}
               {content.type === "video" && (
-                <video
-                  src={content.objectUrl}
-                  controls
-                  controlsList="nodownload noplaybackrate"
-                  disablePictureInPicture
-                  className="w-full rounded-xl"
-                  onContextMenu={(e) => e.preventDefault()}
-                />
+                <video src={content.objectUrl} controls controlsList="nodownload noplaybackrate" disablePictureInPicture className="w-full rounded-xl" onContextMenu={(e) => e.preventDefault()} />
               )}
               {content.type === "file" && (
                 <div className="text-center py-4">
                   <span className="text-4xl block mb-3">📄</span>
-                  <p className="text-sm text-text-muted mb-4">
-                    Encrypted file ({content.mimeType})
-                  </p>
-                  <a
-                    href={content.objectUrl}
-                    download="secret-file"
-                    className="inline-block rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black hover:scale-[1.03] transition-all"
-                  >
-                    Download file 📥
-                  </a>
+                  <p className="text-sm text-text-muted mb-4">Encrypted file ({content.mimeType})</p>
+                  <a href={content.objectUrl} download="secret-file" className="inline-block rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black hover:scale-[1.03] transition-all">Download file 📥</a>
                 </div>
               )}
             </div>
-          </ProtectedViewer>
+          ) : (
+            <ProtectedViewer
+              autoHideSeconds={viewDurationSeconds}
+              onExpired={() => {
+                setExpired(true);
+                if (content.type !== "text" && "objectUrl" in content) {
+                  URL.revokeObjectURL(content.objectUrl);
+                }
+                setContent(null);
+              }}
+            >
+              <div className="rounded-2xl border border-border bg-surface-raised p-6">
+                {content.type === "text" && (
+                  <p className="text-lg text-text leading-relaxed whitespace-pre-wrap">{content.text}</p>
+                )}
+                {content.type === "image" && (
+                  <img src={content.objectUrl} alt="Secret" className="w-full rounded-xl" draggable={false} />
+                )}
+                {content.type === "video" && (
+                  <video src={content.objectUrl} controls controlsList="nodownload noplaybackrate" disablePictureInPicture className="w-full rounded-xl" onContextMenu={(e) => e.preventDefault()} />
+                )}
+                {content.type === "file" && (
+                  <div className="text-center py-4">
+                    <span className="text-4xl block mb-3">📄</span>
+                    <p className="text-sm text-text-muted mb-4">Encrypted file ({content.mimeType})</p>
+                    <a href={content.objectUrl} download="secret-file" className="inline-block rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black hover:scale-[1.03] transition-all">Download file 📥</a>
+                  </div>
+                )}
+              </div>
+            </ProtectedViewer>
+          )}
 
           <p className="mt-6 text-xs text-text-muted text-center">
             👁 Capture-resistant, not capture-proof

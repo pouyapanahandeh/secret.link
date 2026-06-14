@@ -26,7 +26,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return redirect("/dashboard", {
     headers: {
-      "Set-Cookie": `sl_token=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`,
+      "Set-Cookie": `sl_token=${sessionToken}; Path=/; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`,
     },
   });
 }
