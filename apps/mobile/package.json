@@ -36,7 +36,7 @@
     "react-native-gesture-handler": "~2.28.0",
     "react-native-reanimated": "~3.18.0",
     "react-native-safe-area-context": "~5.4.0",
-    "react-native-screens": "~4.11.1",
+    "react-native-screens": "~4.25.0",
     "react-native-svg": "~15.14.0",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1"
