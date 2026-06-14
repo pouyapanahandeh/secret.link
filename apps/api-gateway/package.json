@@ -21,6 +21,7 @@
     "@secretlink/schemas": "workspace:*",
     "@secretlink/telemetry": "workspace:*",
     "@simplewebauthn/server": "^13.3.1",
+    "better-sqlite3": "^12.10.0",
     "jsonwebtoken": "^9.0.3",
     "koa": "^2.15.0",
     "koa-bodyparser": "^4.4.0",
@@ -35,6 +36,7 @@
   "devDependencies": {
     "@secretlink/config-eslint": "workspace:*",
     "@secretlink/config-tsconfig": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/koa": "^2.15.0",
     "@types/koa-bodyparser": "^4.3.0",

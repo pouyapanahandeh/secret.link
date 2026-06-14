@@ -5,52 +5,77 @@ import { nanoid } from "nanoid";
 import type { Context } from "koa";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import db from "../db.js";
 
 export const secretsRouter = new Router({ prefix: "/secrets" });
 
-// Local blob storage directory for development
+// Local blob storage directory
 const BLOB_DIR = path.resolve(process.cwd(), ".blobs");
 fs.mkdir(BLOB_DIR, { recursive: true }).catch(() => {});
 
-// In-memory store for development; replaced by Redis/Cloud SQL adapters in production
-const store = new Map<string, {
-  id: string;
-  ciphertext: string;
-  contentType: ContentType;
-  blobPath?: string;
-  blobSizeBytes?: number;
-  mimeType?: string;
-  nonce?: string;
-  viewDurationSeconds?: number;
-  maxViews: number;
-  viewCount: number;
-  createdAt: Date;
-  expiresAt: Date;
-  workspaceId?: string;
-  recipientHandle?: string;
-  burned: boolean;
-}>();
+// ─── SQLite-backed secret store ─────────────────────────────────────────────
+const secretStmts = {
+  insert: db.prepare(`INSERT INTO secrets (id, ciphertext, content_type, blob_path, blob_size_bytes, mime_type, nonce, view_duration_seconds, max_views, view_count, burned, recipient_handle, sender_id, workspace_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`),
+  findById: db.prepare(`SELECT * FROM secrets WHERE id = ?`),
+  incrementView: db.prepare(`UPDATE secrets SET view_count = view_count + 1 WHERE id = ?`),
+  burn: db.prepare(`UPDATE secrets SET burned = 1 WHERE id = ?`),
+  inbox: db.prepare(`SELECT id, content_type, created_at, view_count, max_views, burned FROM secrets WHERE recipient_handle = ? AND burned = 0 ORDER BY created_at DESC`),
+  sent: db.prepare(`SELECT id, content_type, recipient_handle, created_at, view_count, max_views, burned FROM secrets WHERE sender_id = ? ORDER BY created_at DESC`),
+};
+
+const mapStmts = {
+  insert: db.prepare(`INSERT INTO map_secrets (id, message, lat, lng, emoji, handle, media_path, media_type, reveal_mode, reveal_timer_seconds, max_clicks, click_count, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`),
+  getActive: db.prepare(`SELECT * FROM map_secrets WHERE expires_at > ?`),
+  getById: db.prepare(`SELECT * FROM map_secrets WHERE id = ? AND expires_at > ?`),
+  deleteExpired: db.prepare(`DELETE FROM map_secrets WHERE expires_at <= ?`),
+  incrementClicks: db.prepare(`UPDATE map_secrets SET click_count = click_count + 1 WHERE id = ?`),
+};
 
 const deps = {
   repo: {
-    save: async (record: Parameters<typeof store.set>[1]) => {
-      store.set(record.id, record);
+    save: async (record: any) => {
+      secretStmts.insert.run(
+        record.id, record.ciphertext, record.contentType,
+        record.blobPath ?? null, record.blobSizeBytes ?? null,
+        record.mimeType ?? null, record.nonce ?? null,
+        record.viewDurationSeconds ?? null, record.maxViews,
+        record.recipientHandle ?? null, record.senderId ?? null,
+        record.workspaceId ?? null,
+        record.createdAt instanceof Date ? record.createdAt.toISOString() : record.createdAt,
+        record.expiresAt instanceof Date ? record.expiresAt.toISOString() : record.expiresAt,
+      );
     },
-    findById: async (id: string) => store.get(id) ?? null,
+    findById: async (id: string) => {
+      const row = secretStmts.findById.get(id) as any;
+      if (!row) return null;
+      return {
+        id: row.id,
+        ciphertext: row.ciphertext,
+        contentType: row.content_type as ContentType,
+        blobPath: row.blob_path,
+        blobSizeBytes: row.blob_size_bytes,
+        mimeType: row.mime_type,
+        nonce: row.nonce,
+        viewDurationSeconds: row.view_duration_seconds,
+        maxViews: row.max_views,
+        viewCount: row.view_count,
+        createdAt: new Date(row.created_at),
+        expiresAt: new Date(row.expires_at),
+        workspaceId: row.workspace_id,
+        recipientHandle: row.recipient_handle,
+        burned: !!row.burned,
+      };
+    },
     incrementViewCount: async (id: string) => {
-      const r = store.get(id);
-      if (r) store.set(id, { ...r, viewCount: r.viewCount + 1 });
+      secretStmts.incrementView.run(id);
     },
     burn: async (id: string) => {
-      const r = store.get(id);
-      if (r) {
-        store.set(id, { ...r, burned: true });
-        // Delay blob deletion to give client time to download
-        if (r.blobPath) {
-          setTimeout(() => {
-            fs.unlink(path.join(BLOB_DIR, r.blobPath!)).catch(() => {});
-          }, 60_000); // 60 seconds grace period
-        }
+      const row = secretStmts.findById.get(id) as any;
+      secretStmts.burn.run(id);
+      if (row?.blob_path) {
+        setTimeout(() => {
+          fs.unlink(path.join(BLOB_DIR, row.blob_path)).catch(() => {});
+        }, 60_000);
       }
     },
   },
@@ -74,19 +99,6 @@ secretsRouter.post("/", async (ctx: Context) => {
 });
 
 // ─── Map Secrets (must be before /:id to avoid conflicts) ───────────────────
-interface MapSecret {
-  id: string;
-  message: string;
-  lat: number;
-  lng: number;
-  emoji: string;
-  createdAt: string;
-  expiresAt: string;
-  handle?: string;
-}
-
-const mapSecrets = new Map<string, MapSecret>();
-
 secretsRouter.post("/map", async (ctx: Context) => {
   const body = ctx.request.body as Record<string, unknown>;
   const message = String(body.message ?? "").trim();
@@ -109,49 +121,62 @@ secretsRouter.post("/map", async (ctx: Context) => {
 
   const id = nanoid();
   const now = new Date();
-  const secret: MapSecret = {
-    id,
-    message,
-    lat,
-    lng,
-    emoji,
-    handle,
-    createdAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + ttlMinutes * 60 * 1000).toISOString(),
-  };
+  const createdAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + ttlMinutes * 60 * 1000).toISOString();
 
-  mapSecrets.set(id, secret);
+  const mediaPath = body.mediaPath ? String(body.mediaPath) : null;
+  const mediaType = body.mediaType ? String(body.mediaType) : null;
+  const revealMode = body.revealMode === "clicks" ? "clicks" : "timer";
+  const revealTimerSeconds = Math.min(Math.max(Number(body.revealTimerSeconds) || 30, 5), 300);
+  const maxClicks = revealMode === "clicks" ? Math.min(Math.max(Number(body.maxClicks) || 1, 1), 100) : 0;
+
+  mapStmts.insert.run(id, message, lat, lng, emoji, handle ?? null, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks, createdAt, expiresAt);
+
   ctx.status = 201;
-  ctx.body = secret;
+  ctx.body = { id, message, lat, lng, emoji, handle, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks, clickCount: 0, createdAt, expiresAt };
 });
 
 secretsRouter.get("/map", async (ctx: Context) => {
-  const now = Date.now();
-  const results: MapSecret[] = [];
-
-  for (const s of mapSecrets.values()) {
-    if (new Date(s.expiresAt).getTime() > now) {
-      results.push(s);
-    } else {
-      mapSecrets.delete(s.id);
-    }
-  }
-
-  ctx.body = results;
+  // Clean up expired
+  mapStmts.deleteExpired.run(new Date().toISOString());
+  const rows = mapStmts.getActive.all(new Date().toISOString()) as any[];
+  ctx.body = rows;
 });
 
 secretsRouter.get("/map/:id", async (ctx: Context) => {
   const id = ctx.params["id"];
-  const secret = mapSecrets.get(id!);
+  const row = mapStmts.getById.get(id!, new Date().toISOString()) as any;
 
-  if (!secret || new Date(secret.expiresAt).getTime() < Date.now()) {
-    if (secret) mapSecrets.delete(id!);
+  if (!row) {
     ctx.status = 404;
     ctx.body = { error: "Secret expired or not found" };
     return;
   }
 
-  ctx.body = secret;
+  ctx.body = row;
+});
+
+secretsRouter.post("/map/:id/reveal", async (ctx: Context) => {
+  const id = ctx.params["id"];
+  const row = mapStmts.getById.get(id!, new Date().toISOString()) as any;
+
+  if (!row) {
+    ctx.status = 404;
+    ctx.body = { error: "Secret expired or not found" };
+    return;
+  }
+
+  if (row.reveal_mode === "clicks") {
+    if (row.click_count >= row.max_clicks) {
+      ctx.status = 403;
+      ctx.body = { error: "limit_reached", message: `This secret has reached its reveal limit (${row.max_clicks}).` };
+      return;
+    }
+    mapStmts.incrementClicks.run(id!);
+    row.click_count += 1;
+  }
+
+  ctx.body = row;
 });
 
 secretsRouter.get("/:id", async (ctx: Context) => {
@@ -229,45 +254,28 @@ secretsRouter.get("/blob/:path", async (ctx: Context) => {
 // ─── Inbox: Get secrets sent TO a handle ────────────────────────────────────
 secretsRouter.get("/inbox/:handle", async (ctx: Context) => {
   const handle = ctx.params["handle"];
-  const secrets: any[] = [];
-
-  for (const s of store.values()) {
-    if (s.recipientHandle === handle && !s.burned) {
-      secrets.push({
-        id: s.id,
-        contentType: s.contentType,
-        createdAt: s.createdAt,
-        viewCount: s.viewCount,
-        maxViews: s.maxViews,
-        burned: s.burned,
-      });
-    }
-  }
-
-  // Sort newest first
-  secrets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  ctx.body = secrets;
+  const rows = secretStmts.inbox.all(handle!) as any[];
+  ctx.body = rows.map(r => ({
+    id: r.id,
+    contentType: r.content_type,
+    createdAt: r.created_at,
+    viewCount: r.view_count,
+    maxViews: r.max_views,
+    burned: !!r.burned,
+  }));
 });
 
 // ─── Sent: Get secrets sent BY a user ───────────────────────────────────────
 secretsRouter.get("/sent/:userId", async (ctx: Context) => {
   const userId = ctx.params["userId"];
-  const secrets: any[] = [];
-
-  for (const s of store.values()) {
-    if ((s as any).senderId === userId) {
-      secrets.push({
-        id: s.id,
-        contentType: s.contentType,
-        recipientHandle: s.recipientHandle,
-        createdAt: s.createdAt,
-        viewCount: s.viewCount,
-        maxViews: s.maxViews,
-        burned: s.burned,
-      });
-    }
-  }
-
-  secrets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  ctx.body = secrets;
+  const rows = secretStmts.sent.all(userId!) as any[];
+  ctx.body = rows.map(r => ({
+    id: r.id,
+    contentType: r.content_type,
+    recipientHandle: r.recipient_handle,
+    createdAt: r.created_at,
+    viewCount: r.view_count,
+    maxViews: r.max_views,
+    burned: !!r.burned,
+  }));
 });

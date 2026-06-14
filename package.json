@@ -12,7 +12,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "postinstall": "node -e \"const fs=require('fs');const p='node_modules/react-native-reanimated/android/CMakeLists.txt';if(fs.existsSync(p)){let c=fs.readFileSync(p,'utf8');c=c.replace(/ -Werror/g,'');fs.writeFileSync(p,c)}\""
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",

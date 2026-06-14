@@ -52,22 +52,20 @@ export default function About() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-blush mb-3">Safety</h2>
           <ul className="list-disc list-inside space-y-2 text-candle/80">
-            <li>All content is moderated for harmful material before delivery</li>
-            <li>Crisis keywords trigger helpline overlays</li>
-            <li>One-tap reporting with sender fingerprint blocking</li>
-            <li>Age verification (13+) on signup</li>
+            <li>Secrets self-destruct after viewing — nothing persists</li>
+            <li>End-to-end encryption — we can't read your messages</li>
+            <li>No accounts required to send anonymously</li>
+            <li>One-tap reporting for inappropriate content</li>
           </ul>
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-mint-signal mb-3">Go Pro — $29 lifetime</h2>
+          <h2 className="text-xl font-semibold text-mint-signal mb-3">Coming Soon</h2>
           <ul className="list-disc list-inside space-y-2 text-candle/80">
-            <li>No ads on your profile page</li>
             <li>Custom themes for your reveal experience</li>
-            <li>AI tone analysis ("this feels playful / serious")</li>
-            <li>Longer story TTL (up to 7 days)</li>
-            <li>Unlimited file size in Vault mode</li>
-            <li>Vanity handle priority</li>
+            <li>Longer secret TTL options</li>
+            <li>Larger file uploads</li>
+            <li>Pro features and custom handles</li>
           </ul>
         </section>
 

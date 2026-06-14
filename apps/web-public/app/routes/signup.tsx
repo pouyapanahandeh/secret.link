@@ -135,7 +135,11 @@ export default function Signup() {
             </button>
           </form>
 
-          <p className="mt-6 text-xs text-text-muted text-center">
+          <p className="mt-4 text-xs text-text-muted text-center">
+            By signing up, you confirm you are 18+ and accept our{" "}
+            <a href="/privacy" className="text-accent hover:underline">Privacy Policy</a>.
+          </p>
+          <p className="mt-3 text-xs text-text-muted text-center">
             No password needed. Authenticate with biometrics on your device.
           </p>
           <p className="mt-4 text-sm text-text-muted text-center">

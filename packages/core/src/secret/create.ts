@@ -9,10 +9,10 @@ export const CreateSecretInput = z.object({
   blobPath: z.string().optional(),
   blobSizeBytes: z.number().int().positive().optional(),
   mimeType: z.string().optional(),
-  nonce: z.string().optional(),
+  nonce: z.string().nullable().optional(),
   viewDurationSeconds: z.number().int().min(5).max(300).optional(),
   ttlSeconds: z.number().int().min(5).max(60 * 60 * 24 * 30),
-  maxViews: z.number().int().min(1).max(10).default(1),
+  maxViews: z.number().int().min(1).max(100).default(1),
   workspaceId: z.string().uuid().optional(),
   recipientHandle: z.string().min(1).optional(),
 });

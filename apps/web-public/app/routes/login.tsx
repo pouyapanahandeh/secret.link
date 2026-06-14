@@ -22,11 +22,15 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Please enter a valid email address", method }, { status: 400 });
     }
 
-    await fetch(`${API_URL}/v1/users/auth/magic-link`, {
+    const res = await fetch(`${API_URL}/v1/users/auth/magic-link`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
+
+    if (!res.ok) {
+      return json({ error: "Failed to send magic link. Please try again.", method }, { status: 500 });
+    }
 
     return json({ sent: true, email, method });
   }

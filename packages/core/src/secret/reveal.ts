@@ -19,6 +19,7 @@ export type RevealResult = {
   nonce?: string;
   viewDurationSeconds?: number;
   remainingViews: number;
+  maxViews: number;
 };
 
 export const revealSecret =
@@ -59,5 +60,6 @@ export const revealSecret =
       nonce: record.nonce,
       viewDurationSeconds: record.viewDurationSeconds,
       remainingViews,
+      maxViews: record.maxViews,
     });
   };
