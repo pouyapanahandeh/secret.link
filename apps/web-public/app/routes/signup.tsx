@@ -1,14 +1,14 @@
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useActionData } from "@remix-run/react";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { AppNav } from "../components/AppNav";
+import { createSessionRedirect } from "../lib/session.server";
+import { API_URL } from "../lib/api.server";
 
 export const meta: MetaFunction = () => [
   { title: "Sign Up — Secretlink.life" },
   { name: "description", content: "Claim your @handle on Secretlink.life. Anonymous, encrypted, ephemeral." },
 ];
-
-const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
 
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
@@ -48,32 +48,16 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const { token } = await res.json();
 
-  // Set cookie and redirect to dashboard
-  return redirect("/dashboard", {
-    headers: {
-      "Set-Cookie": `sl_token=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`,
-    },
-  });
+  // Set secure cookie and redirect to dashboard
+  return createSessionRedirect(token, "/dashboard");
 }
 
 export default function Signup() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof action>() as { errors?: Record<string, string>; values?: { handle: string; email: string } } | undefined;
 
   return (
     <main className="min-h-screen">
-      {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
-        <a href="/" className="flex items-center gap-2">
-          <img src="/secretlink.png" alt="Secretlink.life" className="w-8 h-8" />
-          <span className="text-xl font-bold tracking-tight">
-            secretlink<span className="text-accent">.</span>life
-          </span>
-        </a>
-        <div className="flex items-center gap-4">
-          <a href="/login" className="text-sm text-text-muted hover:text-text transition-colors">Log in</a>
-          <ThemeToggle />
-        </div>
-      </nav>
+      <AppNav authLinks="login" />
 
       <div className="flex flex-col items-center justify-center min-h-screen px-4 pt-20">
         <div className="max-w-md w-full">

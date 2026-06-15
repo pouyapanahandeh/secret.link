@@ -2,8 +2,9 @@ import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useState } from "react";
-import { ThemeToggle } from "../components/ThemeToggle";
 import { ProtectedViewer } from "../components/ProtectedViewer";
+import { AppNav } from "../components/AppNav";
+import { getApiBase } from "../lib/api.client";
 
 export const meta: MetaFunction = () => [
   { title: "Reveal Secret — Secretlink.life" },
@@ -14,10 +15,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const secretId = params["id"];
   return json({ secretId });
 }
-
-const API_URL = typeof window !== "undefined"
-  ? (window.location.port === "3000" ? window.location.origin.replace(":3000", ":4000") : window.location.origin)
-  : "http://localhost:4000";
 
 type RevealedContent =
   | { type: "text"; text: string }
@@ -40,12 +37,13 @@ export default function RevealSecret() {
     setRevealing(true);
 
     try {
+      const apiBase = getApiBase();
       // Get the encryption key from URL fragment
       const fragment = window.location.hash;
       const keyParam = fragment.match(/k=([A-Za-z0-9_-]+)/)?.[1];
 
       // Fetch secret metadata from API
-      const res = await fetch(`${API_URL}/v1/secrets/${secretId}`);
+      const res = await fetch(`${apiBase}/v1/secrets/${secretId}`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         const errorKind = body?.error ?? "unknown";
@@ -104,7 +102,7 @@ export default function RevealSecret() {
         setContent({ type: "text", text });
       } else {
         // Fetch encrypted blob
-        const blobRes = await fetch(`${API_URL}/v1/secrets/blob/${data.blobPath}`);
+        const blobRes = await fetch(`${apiBase}/v1/secrets/blob/${data.blobPath}`);
         if (!blobRes.ok) {
           setError("Failed to download encrypted file.");
           return;
@@ -113,7 +111,7 @@ export default function RevealSecret() {
         const decrypted = await decryptBlob(encryptedBlob, nonce, key);
 
         const mimeType = data.mimeType ?? "application/octet-stream";
-        const blob = new Blob([decrypted], { type: mimeType });
+        const blob = new Blob([decrypted as BlobPart], { type: mimeType });
         const objectUrl = URL.createObjectURL(blob);
 
         if (contentType === "image") {
@@ -134,22 +132,10 @@ export default function RevealSecret() {
     }
   };
 
-  const Nav = () => (
-    <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
-      <a href="/" className="flex items-center gap-2">
-        <img src="/secretlink.png" alt="Secretlink.life" className="w-8 h-8" />
-        <span className="text-xl font-bold tracking-tight">
-          secretlink<span className="text-accent">.</span>life
-        </span>
-      </a>
-      <ThemeToggle />
-    </nav>
-  );
-
   if (error) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center px-4">
-        <Nav />
+        <AppNav />
         <div className="max-w-md w-full text-center">
           <h1 className="text-3xl font-bold mb-4 text-text/60">Gone.</h1>
           <p className="text-text-muted">{error}</p>
@@ -164,7 +150,7 @@ export default function RevealSecret() {
   if (expired) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center px-4">
-        <Nav />
+        <AppNav />
         <div className="max-w-md w-full text-center">
           <span className="text-4xl block mb-4">💨</span>
           <h1 className="text-2xl font-bold mb-3">Content destroyed</h1>
@@ -183,7 +169,7 @@ export default function RevealSecret() {
     const isClicksMode = maxViews > 1;
     return (
       <main className="flex min-h-screen flex-col items-center justify-center px-4 pt-20 pb-10">
-        <Nav />
+        <AppNav />
         <div className="max-w-lg w-full">
           <p className="text-xs text-text-muted mb-4 text-center">
             {isClicksMode
@@ -258,7 +244,7 @@ export default function RevealSecret() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4">
-      <Nav />
+      <AppNav />
       <div className="max-w-md w-full text-center">
         <h1 className="text-4xl font-bold mb-2">You have a secret</h1>
         <p className="text-text-muted mb-8">Tap the button to reveal. Once seen, it's gone.</p>

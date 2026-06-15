@@ -1,7 +1,8 @@
 import type { MetaFunction } from "@remix-run/node";
 import { useState, useRef } from "react";
-import { ThemeToggle } from "../components/ThemeToggle";
 import { CameraCapture } from "../components/CameraCapture";
+import { AppNav } from "../components/AppNav";
+import { getApiBase } from "../lib/api.client";
 
 export const meta: MetaFunction = () => [
   { title: "Send a Secret — Secretlink.life" },
@@ -9,10 +10,6 @@ export const meta: MetaFunction = () => [
 ];
 
 type Tab = "text" | "file" | "camera";
-
-const API_URL = typeof window !== "undefined"
-  ? (window.location.port === "3000" ? window.location.origin.replace(":3000", ":4000") : window.location.origin)
-  : "http://localhost:4000";
 
 async function encryptAndUpload(
   data: Uint8Array,
@@ -23,6 +20,7 @@ async function encryptAndUpload(
   maxViews: number = 1,
 ): Promise<{ link: string } | { error: string }> {
   const { encryptBlob, generateKeyBase64 } = await import("../lib/crypto");
+  const apiBase = getApiBase();
 
   // 1. Generate encryption key
   const { key, keyBase64 } = await generateKeyBase64();
@@ -35,10 +33,10 @@ async function encryptAndUpload(
 
   if (contentType !== "text") {
     // 3. Upload encrypted blob
-    const uploadRes = await fetch(`${API_URL}/v1/secrets/blob`, {
+    const uploadRes = await fetch(`${apiBase}/v1/secrets/blob`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
-      body: encryptedData,
+      body: encryptedData as unknown as BodyInit,
     });
 
     if (!uploadRes.ok) return { error: "Failed to upload file" };
@@ -53,7 +51,7 @@ async function encryptAndUpload(
     // Encode encrypted bytes as base64 for storage
     let binary = "";
     for (let i = 0; i < encryptedData.length; i++) {
-      binary += String.fromCharCode(encryptedData[i]);
+      binary += String.fromCharCode(encryptedData[i]!);
     }
     ciphertextStr = btoa(binary);
   } else {
@@ -72,7 +70,7 @@ async function encryptAndUpload(
   if (blobPath) payload.blobPath = blobPath;
   if (blobSizeBytes) payload.blobSizeBytes = blobSizeBytes;
 
-  const res = await fetch(`${API_URL}/v1/secrets`, {
+  const res = await fetch(`${apiBase}/v1/secrets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -204,19 +202,7 @@ export default function Send() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 pt-20 pb-10">
-      {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
-        <a href="/" className="flex items-center gap-2">
-          <img src="/secretlink.png" alt="Secretlink.life" className="w-8 h-8" />
-          <span className="text-xl font-bold tracking-tight">
-            secretlink<span className="text-accent">.</span>life
-          </span>
-        </a>
-        <div className="flex items-center gap-4">
-          <a href="/" className="text-sm text-text-muted hover:text-text transition-colors">Home</a>
-          <ThemeToggle />
-        </div>
-      </nav>
+      <AppNav />
 
       <div className="max-w-md w-full">
         {link ? (

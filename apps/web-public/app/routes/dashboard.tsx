@@ -4,63 +4,16 @@ import { useLoaderData, Link } from "@remix-run/react";
 import { useState, useEffect, useRef } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { MessagingPanel } from "../components/MessagingPanel";
-
-// ─── DM Crypto helpers ────────────────────────────────────────────────────────
-async function dmGenerateKeyPair(): Promise<{ publicKey: string; privateKey: string }> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "X25519" } as any, true, ["deriveBits"]
-  );
-  const pubRaw = await crypto.subtle.exportKey("raw", keyPair.publicKey);
-  const privRaw = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
-  return {
-    publicKey: btoa(String.fromCharCode(...new Uint8Array(pubRaw))),
-    privateKey: btoa(String.fromCharCode(...new Uint8Array(privRaw))),
-  };
-}
-
-async function dmDeriveSharedKey(privateKeyB64: string, publicKeyB64: string): Promise<CryptoKey> {
-  const privBytes = Uint8Array.from(atob(privateKeyB64), c => c.charCodeAt(0));
-  const pubBytes = Uint8Array.from(atob(publicKeyB64), c => c.charCodeAt(0));
-  const privateKey = await crypto.subtle.importKey("pkcs8", privBytes, { name: "X25519" } as any, false, ["deriveBits"]);
-  const publicKey = await crypto.subtle.importKey("raw", pubBytes, { name: "X25519" } as any, false, []);
-  const sharedBits = await crypto.subtle.deriveBits({ name: "X25519", public: publicKey } as any, privateKey, 256);
-  return crypto.subtle.importKey("raw", sharedBits, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
-}
-
-async function dmEncrypt(text: string, sharedKey: CryptoKey): Promise<{ encrypted: string; nonce: string }> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(text);
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, sharedKey, encoded);
-  return {
-    encrypted: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
-    nonce: btoa(String.fromCharCode(...iv)),
-  };
-}
-
-async function dmDecrypt(encryptedB64: string, nonceB64: string, sharedKey: CryptoKey): Promise<string> {
-  try {
-    const ciphertext = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
-    const iv = Uint8Array.from(atob(nonceB64), c => c.charCodeAt(0));
-    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, sharedKey, ciphertext);
-    return new TextDecoder().decode(decrypted);
-  } catch {
-    return encryptedB64; // fallback for legacy plaintext messages
-  }
-}
+import { requireToken } from "../lib/session.server";
+import { API_URL } from "../lib/api.server";
+import { getApiBase } from "../lib/api.client";
 
 export const meta: MetaFunction = () => [
   { title: "Dashboard — Secretlink.life" },
 ];
 
-const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
-
 export async function loader({ request }: LoaderFunctionArgs) {
-  const cookieHeader = request.headers.get("Cookie") ?? "";
-  const token = cookieHeader.match(/sl_token=([^;]+)/)?.[1];
-
-  if (!token) {
-    return redirect("/login");
-  }
+  const token = await requireToken(request);
 
   const profileRes = await fetch(`${API_URL}/v1/users/me/profile`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -133,24 +86,6 @@ export default function Dashboard() {
   const [mapMaxClicks, setMapMaxClicks] = useState(3);
   const [revealCountdown, setRevealCountdown] = useState<number | null>(null);
   const revealTimerRef = useRef<any>(null);
-
-  // DM state
-  const [dmConversations, setDmConversations] = useState<any[]>([]);
-  const [dmActiveConv, setDmActiveConv] = useState<any>(null);
-  const [dmMessages, setDmMessages] = useState<any[]>([]);
-  const [dmDecrypted, setDmDecrypted] = useState<Map<string, string>>(new Map());
-  const [dmNewMessage, setDmNewMessage] = useState("");
-  const [dmSending, setDmSending] = useState(false);
-  const [dmNewConvHandle, setDmNewConvHandle] = useState("");
-  const [dmShowNewConv, setDmShowNewConv] = useState(false);
-  const [dmLoaded, setDmLoaded] = useState(false);
-  const [dmSharedKey, setDmSharedKey] = useState<CryptoKey | null>(null);
-  const dmMessagesEndRef = useRef<HTMLDivElement>(null);
-
-  function getApiBase() {
-    const origin = window.location.origin;
-    return window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
-  }
 
   async function searchUsers(q: string) {
     if (q.length < 2) { setSearchResults([]); return; }
@@ -250,7 +185,7 @@ export default function Dashboard() {
   function removeSocial(i: number) { setSocials(socials.filter((_, idx) => idx !== i)); }
   function updateSocial(i: number, field: "platform" | "url", value: string) {
     const updated = [...socials];
-    updated[i] = { ...updated[i], [field]: value };
+    updated[i] = { ...updated[i]!, [field]: value };
     setSocials(updated);
   }
 
@@ -269,28 +204,17 @@ export default function Dashboard() {
   useEffect(() => {
     if (activeTab !== "map") return;
 
-    // Load Leaflet dynamically
-    const existingLink = document.querySelector('link[href*="leaflet"]');
-    if (!existingLink) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-    }
+    let cancelled = false;
 
-    const existingScript = document.querySelector('script[src*="leaflet"]');
-    if (existingScript) {
-      // Small delay to ensure DOM is ready
-      setTimeout(() => initMapTab(), 50);
-    } else {
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload = () => initMapTab();
-      document.head.appendChild(script);
-    }
+    import("../lib/leaflet.client").then(({ loadLeaflet }) =>
+      loadLeaflet()
+    ).then((L) => {
+      if (cancelled) return;
+      initMapTab(L);
+    });
 
     return () => {
-      // Destroy map when leaving tab so it re-inits fresh next time
+      cancelled = true;
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -298,8 +222,7 @@ export default function Dashboard() {
     };
   }, [activeTab]);
 
-  function initMapTab() {
-    const L = (window as any).L;
+  function initMapTab(L?: any) {
     if (!L || !mapContainerRef.current) return;
 
     const map = L.map(mapContainerRef.current, { zoomControl: false }).setView([51.505, -0.09], 3);
@@ -436,125 +359,6 @@ export default function Dashboard() {
     const mins = Math.floor(ms / 60000);
     if (mins < 60) return `${mins}m left`;
     return `${Math.floor(mins / 60)}h ${mins % 60}m left`;
-  }
-
-  // ─── DM functions ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (activeTab !== "messages" || dmLoaded) return;
-    loadDmConversations();
-    setDmLoaded(true);
-  }, [activeTab]);
-
-  useEffect(() => {
-    dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [dmMessages]);
-
-  async function loadDmConversations() {
-    try {
-      const res = await fetch(`${getApiBase()}/v1/dms/conversations`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) setDmConversations(await res.json());
-    } catch {}
-  }
-
-  async function openDmConversation(conv: any) {
-    setDmActiveConv(conv);
-    setDmDecrypted(new Map());
-    try {
-      // Ensure we have a keypair
-      let keyPairStr = localStorage.getItem("sl_dm_keys");
-      if (!keyPairStr) {
-        const keys = await dmGenerateKeyPair();
-        localStorage.setItem("sl_dm_keys", JSON.stringify(keys));
-        keyPairStr = JSON.stringify(keys);
-        await fetch(`${getApiBase()}/v1/dms/keys`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ publicKey: keys.publicKey }),
-        });
-      }
-      const keyPair = JSON.parse(keyPairStr);
-
-      // Get other participant's public key
-      const otherId = conv.participantIds.find((id: string) => id !== user.id);
-      const keyRes = await fetch(`${getApiBase()}/v1/dms/keys/${otherId}`);
-      let sk: CryptoKey | null = null;
-      if (keyRes.ok) {
-        const { publicKey: otherPubKey } = await keyRes.json();
-        sk = await dmDeriveSharedKey(keyPair.privateKey, otherPubKey);
-        setDmSharedKey(sk);
-      }
-
-      // Load messages
-      const res = await fetch(`${getApiBase()}/v1/dms/conversations/${conv.id}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const msgs = await res.json();
-        setDmMessages(msgs);
-        // Decrypt all messages
-        if (sk) {
-          const decMap = new Map<string, string>();
-          for (const m of msgs) {
-            const text = await dmDecrypt(m.encryptedContent, m.nonce, sk);
-            decMap.set(m.id, text);
-          }
-          setDmDecrypted(decMap);
-        }
-      }
-    } catch {}
-  }
-
-  async function sendDmMessage() {
-    if (!dmActiveConv || !dmNewMessage.trim()) return;
-    setDmSending(true);
-    try {
-      let encryptedContent = dmNewMessage.trim();
-      let nonce = "plain";
-
-      if (dmSharedKey) {
-        const encrypted = await dmEncrypt(dmNewMessage.trim(), dmSharedKey);
-        encryptedContent = encrypted.encrypted;
-        nonce = encrypted.nonce;
-      }
-
-      const res = await fetch(`${getApiBase()}/v1/dms/conversations/${dmActiveConv.id}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ encryptedContent, nonce, ttlMinutes: 60 }),
-      });
-      if (res.ok) {
-        setDmNewMessage("");
-        openDmConversation(dmActiveConv);
-      }
-    } finally {
-      setDmSending(false);
-    }
-  }
-
-  async function startNewDmConversation() {
-    if (!dmNewConvHandle.trim()) return;
-    const handle = dmNewConvHandle.trim().replace(/^@/, "").toLowerCase();
-    try {
-      // First get the user
-      const userRes = await fetch(`${getApiBase()}/v1/users/${handle}`);
-      if (!userRes.ok) return;
-      const targetUser = await userRes.json();
-
-      const res = await fetch(`${getApiBase()}/v1/dms/conversations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ recipientId: targetUser.id, recipientHandle: targetUser.handle }),
-      });
-      if (res.ok) {
-        const conv = await res.json();
-        setDmShowNewConv(false);
-        setDmNewConvHandle("");
-        loadDmConversations();
-        openDmConversation(conv);
-      }
-    } catch {}
   }
 
   return (
@@ -793,148 +597,6 @@ export default function Dashboard() {
           )}
 
 
-
-          {/* ─── MESSAGES TAB ─── (rendered outside this container) */}
-
-          {false && (
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold">💬 Messages</h2>
-                <button
-                  onClick={() => setDmShowNewConv(true)}
-                  className="text-xs bg-accent/10 text-accent px-3 py-1.5 rounded-full hover:bg-accent/20"
-                >
-                  + New
-                </button>
-              </div>
-
-              {/* New conversation input */}
-              {dmShowNewConv && (
-                <div className="mb-4 bg-surface-raised rounded-xl border border-border p-3">
-                  <p className="text-xs text-text-muted mb-2">Start a conversation</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={dmNewConvHandle}
-                      onChange={(e) => setDmNewConvHandle(e.target.value)}
-                      placeholder="@username"
-                      className="flex-1 rounded-lg bg-surface border border-border px-3 py-2 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
-                      onKeyDown={(e) => { if (e.key === "Enter") startNewDmConversation(); }}
-                    />
-                    <button
-                      onClick={startNewDmConversation}
-                      className="px-3 py-2 bg-accent text-black text-sm font-medium rounded-lg"
-                    >
-                      Start
-                    </button>
-                    <button
-                      onClick={() => { setDmShowNewConv(false); setDmNewConvHandle(""); }}
-                      className="px-2 py-2 text-text-muted hover:text-text"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Active conversation */}
-              {dmActiveConv ? (
-                <div className="bg-surface-raised rounded-2xl border border-border overflow-hidden">
-                  {/* Conversation header */}
-                  <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50">
-                    <button onClick={() => { setDmActiveConv(null); setDmMessages([]); }} className="text-text-muted hover:text-text">
-                      ←
-                    </button>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        @{dmActiveConv.participantHandles.find((h: string) => h !== user.handle) ?? dmActiveConv.participantHandles[1]}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Messages */}
-                  <div className="h-72 overflow-y-auto px-4 py-3 space-y-3">
-                    {dmMessages.length === 0 && (
-                      <p className="text-center text-xs text-text-muted py-8">No messages yet. Say hi!</p>
-                    )}
-                    {dmMessages.map((m: any) => (
-                      <div
-                        key={m.id}
-                        className={`flex ${m.senderId === user.id ? "justify-end" : "justify-start"}`}
-                      >
-                        <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
-                          m.senderId === user.id
-                            ? "bg-accent text-black rounded-br-md"
-                            : "bg-surface border border-border rounded-bl-md"
-                        }`}>
-                          <p className="break-words">{dmDecrypted.get(m.id) ?? m.encryptedContent}</p>
-                          <p className={`text-[10px] mt-1 ${m.senderId === user.id ? "text-black/50" : "text-text-muted"}`}>
-                            {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={dmMessagesEndRef} />
-                  </div>
-
-                  {/* Input */}
-                  <div className="border-t border-border/50 px-3 py-3 flex gap-2">
-                    <input
-                      type="text"
-                      value={dmNewMessage}
-                      onChange={(e) => setDmNewMessage(e.target.value)}
-                      placeholder="Type a message..."
-                      className="flex-1 rounded-full bg-surface border border-border px-4 py-2 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDmMessage(); } }}
-                    />
-                    <button
-                      onClick={sendDmMessage}
-                      disabled={dmSending || !dmNewMessage.trim()}
-                      className="w-9 h-9 rounded-full bg-accent flex items-center justify-center text-black disabled:opacity-50"
-                    >
-                      ↑
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Conversation list */
-                <div className="space-y-2">
-                  {dmConversations.length === 0 && !dmShowNewConv && (
-                    <div className="bg-surface-raised rounded-xl border border-border p-8 text-center">
-                      <span className="text-3xl block mb-2">💬</span>
-                      <p className="text-sm text-text-muted">No conversations yet</p>
-                      <button
-                        onClick={() => setDmShowNewConv(true)}
-                        className="text-xs text-accent mt-2"
-                      >
-                        Start a conversation →
-                      </button>
-                    </div>
-                  )}
-                  {dmConversations.map((conv: any) => {
-                    const otherHandle = conv.participantHandles.find((h: string) => h !== user.handle) ?? conv.participantHandles[1];
-                    return (
-                      <button
-                        key={conv.id}
-                        onClick={() => openDmConversation(conv)}
-                        className="w-full flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3 hover:border-accent/50 transition-colors text-left"
-                      >
-                        <div className="w-10 h-10 rounded-full bg-accent/20 border border-accent/50 flex items-center justify-center shrink-0">
-                          <span className="text-sm font-bold text-accent">{otherHandle[0]?.toUpperCase()}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">@{otherHandle}</p>
-                          <p className="text-xs text-text-muted">
-                            {new Date(conv.lastMessageAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          )}
 
           {/* ─── PROFILE TAB ─── */}
           {activeTab === "profile" && (

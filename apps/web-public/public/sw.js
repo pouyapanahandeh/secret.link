@@ -1,4 +1,4 @@
-const CACHE_NAME = "secretlink-v4";
+const CACHE_NAME = "secretlink-v5";
 const PRECACHE_URLS = ["/secretlink.png"];
 
 self.addEventListener("install", (event) => {

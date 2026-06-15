@@ -1,13 +1,12 @@
 import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { MessagingPanel } from "../components/MessagingPanel";
+import { requireToken } from "../lib/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const cookieHeader = request.headers.get("Cookie") ?? "";
-  const token = cookieHeader.match(/sl_token=([^;]+)/)?.[1];
-  if (!token) return redirect("/login");
+  const token = await requireToken(request);
   return json({ token });
 }
 

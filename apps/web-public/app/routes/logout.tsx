@@ -1,12 +1,9 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
+import { destroySessionRedirect } from "../lib/session.server";
 
-export async function action({ request: _request }: ActionFunctionArgs) {
-  return redirect("/", {
-    headers: {
-      "Set-Cookie": "sl_token=; Path=/; SameSite=Lax; Max-Age=0",
-    },
-  });
+export async function action({ request }: ActionFunctionArgs) {
+  return destroySessionRedirect(request, "/");
 }
 
 export async function loader() {

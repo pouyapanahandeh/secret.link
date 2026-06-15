@@ -13,6 +13,11 @@
   --color-border: #2A2A2A;
   --color-card: #141414;
 
+  /* Legacy semantic colors (about/privacy pages) */
+  --color-blush: #FF6B6B;
+  --color-candle: #FFF3CD;
+  --color-mint-signal: #4ADE80;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Caveat", cursive;
 }

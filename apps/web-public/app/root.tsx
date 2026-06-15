@@ -4,6 +4,8 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteError,
+  isRouteErrorResponse,
 } from "@remix-run/react";
 import type { LinksFunction } from "@remix-run/node";
 import { PwaInstallBanner } from "./components/PwaInstallBanner";
@@ -55,6 +57,41 @@ export default function App() {
         <ScrollRestoration />
         <Scripts />
         <script dangerouslySetInnerHTML={{ __html: swScript }} />
+      </body>
+    </html>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+
+  let title = "Something went wrong";
+  let message = "An unexpected error occurred.";
+
+  if (isRouteErrorResponse(error)) {
+    title = `${error.status} ${error.statusText}`;
+    message = error.status === 404
+      ? "The page you're looking for doesn't exist."
+      : error.data?.message || message;
+  }
+
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <Meta />
+        <Links />
+      </head>
+      <body className="bg-surface text-text font-sans antialiased min-h-screen flex items-center justify-center">
+        <div className="text-center px-6">
+          <h1 className="text-4xl font-bold text-accent mb-4">{title}</h1>
+          <p className="text-text-muted mb-6">{message}</p>
+          <a href="/" className="text-accent underline hover:no-underline">
+            Go home
+          </a>
+        </div>
+        <Scripts />
       </body>
     </html>
   );

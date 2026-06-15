@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-
-const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
+import { createSessionRedirect } from "../lib/session.server";
+import { API_URL } from "../lib/api.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -24,11 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const { token: sessionToken } = await res.json();
 
-  return redirect("/dashboard", {
-    headers: {
-      "Set-Cookie": `sl_token=${sessionToken}; Path=/; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`,
-    },
-  });
+  return createSessionRedirect(sessionToken, "/dashboard");
 }
 
 export default function AuthVerify() {
