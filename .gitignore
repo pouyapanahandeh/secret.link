@@ -6,6 +6,7 @@ dist/
 build/
 .next/
 .turbo/
+*.tsbuildinfo
 
 # Environment
 .env
@@ -26,6 +27,7 @@ infra/terraform/.terraform/
 infra/terraform/*.tfstate
 infra/terraform/*.tfstate.backup
 infra/terraform/tfplan
+infra/terraform/terraform.tfvars
 
 # Logs
 *.log
@@ -33,3 +35,14 @@ infra/terraform/tfplan
 # Coverage
 coverage/
 .vercel
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Expo
+apps/mobile/.expo/
+apps/mobile-public/.expo/
+apps/mobile-teams/.expo/
