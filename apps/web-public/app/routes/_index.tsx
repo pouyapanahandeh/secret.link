@@ -2,10 +2,10 @@ import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { useState, useEffect, useRef } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { getToken } from "../lib/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const cookieHeader = request.headers.get("Cookie") ?? "";
-  const token = cookieHeader.match(/sl_token=([^;]+)/)?.[1];
+  const token = await getToken(request);
   if (token) {
     return redirect("/dashboard");
   }
@@ -290,18 +290,12 @@ function LandingMap() {
   useEffect(() => {
     if (mapRef.current) return;
 
-    const existingLink = document.querySelector('link[href*="leaflet"]');
-    if (!existingLink) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-    }
+    let cancelled = false;
 
-    const existingScript = document.querySelector('script[src*="leaflet"]');
-    const initMap = () => {
-      const L = (window as any).L;
-      if (!L || !mapContainerRef.current || mapRef.current) return;
+    import("../lib/leaflet.client").then(({ loadLeaflet }) =>
+      loadLeaflet()
+    ).then((L) => {
+      if (cancelled || !mapContainerRef.current || mapRef.current) return;
 
       const map = L.map(mapContainerRef.current, { zoomControl: false }).setView([51.505, -0.09], 3);
       mapRef.current = map;
@@ -326,7 +320,6 @@ function LandingMap() {
         setSelectedSecret(null);
         setSecretRevealed(false);
         setPosted(false);
-        // Show pin on map
         if (pinMarkerRef.current) map.removeLayer(pinMarkerRef.current);
         const icon = L.divIcon({
           html: '<div style="font-size:28px;text-align:center;line-height:34px;">📍</div>',
@@ -338,16 +331,9 @@ function LandingMap() {
       });
 
       loadSecrets(map, L);
-    };
+    });
 
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload = initMap;
-      document.body.appendChild(script);
-    } else {
-      setTimeout(initMap, 100);
-    }
+    return () => { cancelled = true; };
   }, []);
 
   async function loadSecrets(map?: any, leaflet?: any) {

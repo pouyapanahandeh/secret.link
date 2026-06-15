@@ -1,4 +1,13 @@
 import { useEffect, useState, useRef } from "react";
+import {
+  ensureKeyPair,
+  generateAndStoreKeyPair,
+  deriveSharedKey,
+  encryptMessage,
+  decryptMessage,
+  type StoredKeyPair,
+} from "../lib/dm-crypto";
+import { getApiBase } from "../lib/api.client";
 
 interface Conversation {
   id: string;
@@ -16,119 +25,6 @@ interface DmMessage {
   createdAt: string;
   expiresAt: string;
   readAt?: string;
-}
-
-// ─── IndexedDB helpers for secure key storage ───────────────────────────────
-const IDB_NAME = "sl_crypto";
-const IDB_STORE = "keys";
-
-function openKeyStore(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function getStoredKeyPair(): Promise<{ privateKey: CryptoKey; publicKey: CryptoKey; publicKeyB64: string } | null> {
-  try {
-    const idb = await openKeyStore();
-    return new Promise((resolve, reject) => {
-      const tx = idb.transaction(IDB_STORE, "readonly");
-      const store = tx.objectStore(IDB_STORE);
-      const req = store.get("dm_keypair");
-      req.onsuccess = () => resolve(req.result ?? null);
-      req.onerror = () => reject(req.error);
-    });
-  } catch {
-    return null;
-  }
-}
-
-async function storeKeyPair(data: { privateKey: CryptoKey; publicKey: CryptoKey; publicKeyB64: string }): Promise<void> {
-  const idb = await openKeyStore();
-  return new Promise((resolve, reject) => {
-    const tx = idb.transaction(IDB_STORE, "readwrite");
-    const store = tx.objectStore(IDB_STORE);
-    const req = store.put(data, "dm_keypair");
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function generateAndStoreKeyPair(): Promise<{ privateKey: CryptoKey; publicKey: CryptoKey; publicKeyB64: string }> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "X25519" } as any,
-    false,
-    ["deriveBits"]
-  );
-  const pubRaw = await crypto.subtle.exportKey("raw", keyPair.publicKey);
-  const publicKeyB64 = btoa(String.fromCharCode(...new Uint8Array(pubRaw)));
-  const data = { privateKey: keyPair.privateKey, publicKey: keyPair.publicKey, publicKeyB64 };
-  await storeKeyPair(data);
-  return data;
-}
-
-async function migrateFromLocalStorage(): Promise<{ privateKey: CryptoKey; publicKey: CryptoKey; publicKeyB64: string } | null> {
-  const raw = localStorage.getItem("sl_dm_keys");
-  if (!raw) return null;
-  try {
-    const { privateKey: privB64, publicKey: pubB64 } = JSON.parse(raw);
-    const privBytes = Uint8Array.from(atob(privB64), c => c.charCodeAt(0));
-    const pubBytes = Uint8Array.from(atob(pubB64), c => c.charCodeAt(0));
-
-    const privateKey = await crypto.subtle.importKey(
-      "pkcs8", privBytes, { name: "X25519" } as any, false, ["deriveBits"]
-    );
-    const publicKey = await crypto.subtle.importKey(
-      "raw", pubBytes, { name: "X25519" } as any, true, []
-    );
-    const data = { privateKey, publicKey, publicKeyB64: pubB64 };
-    await storeKeyPair(data);
-    localStorage.removeItem("sl_dm_keys");
-    return data;
-  } catch {
-    localStorage.removeItem("sl_dm_keys");
-    return null;
-  }
-}
-
-async function deriveSharedKeyFromCryptoKey(privateKey: CryptoKey, publicKeyB64: string): Promise<CryptoKey> {
-  const pubBytes = Uint8Array.from(atob(publicKeyB64), c => c.charCodeAt(0));
-  const publicKey = await crypto.subtle.importKey(
-    "raw", pubBytes, { name: "X25519" } as any, false, []
-  );
-  const sharedBits = await crypto.subtle.deriveBits(
-    { name: "X25519", public: publicKey } as any, privateKey, 256
-  );
-  return crypto.subtle.importKey("raw", sharedBits, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
-}
-
-async function encryptMessage(text: string, sharedKey: CryptoKey): Promise<{ encrypted: string; nonce: string }> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(text);
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, sharedKey, encoded);
-  return {
-    encrypted: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
-    nonce: btoa(String.fromCharCode(...iv)),
-  };
-}
-
-async function decryptMessage(encryptedB64: string, nonceB64: string, sharedKey: CryptoKey): Promise<string> {
-  const ciphertext = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
-  const iv = Uint8Array.from(atob(nonceB64), c => c.charCodeAt(0));
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, sharedKey, ciphertext);
-  const text = new TextDecoder().decode(decrypted);
-  if (text.length > 8 && /^[A-Za-z0-9+/=]{8,}$/.test(text) && !text.includes(" ")) {
-    throw new Error("Decryption produced invalid output");
-  }
-  return text;
-}
-
-function getApiBase() {
-  const origin = window.location.origin;
-  return window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
 }
 
 interface MessagingPanelProps {
@@ -150,6 +46,9 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
   const [sharedKey, setSharedKey] = useState<CryptoKey | null>(null);
   const [newConvHandle, setNewConvHandle] = useState("");
   const [showNewConv, setShowNewConv] = useState(false);
+  const [searchResults, setSearchResults] = useState<{ id: string; handle: string; bio: string | null }[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [unreadCount, setUnreadCount] = useState(0);
   const [keyWarning, setKeyWarning] = useState("");
   const [hasMore, setHasMore] = useState(false);
@@ -160,7 +59,7 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasAutoOpenedRef = useRef(false);
   const lastFetchedAtRef = useRef<string | null>(null);
-  const myKeyPairRef = useRef<{ privateKey: CryptoKey; publicKey: CryptoKey; publicKeyB64: string } | null>(null);
+  const myKeyPairRef = useRef<StoredKeyPair | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef(0);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
@@ -224,13 +123,7 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     setMyUserId(data.id);
     setMyHandle(data.handle);
 
-    let kp = await getStoredKeyPair();
-    if (!kp) {
-      kp = await migrateFromLocalStorage();
-    }
-    if (!kp) {
-      kp = await generateAndStoreKeyPair();
-    }
+    const kp = await ensureKeyPair();
     // Always ensure server has our current public key
     await fetch(`${getApiBase()}/v1/dms/keys`, {
       method: "POST",
@@ -334,7 +227,7 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     const { publicKey: otherPubKey } = await keyRes.json();
     let sk: CryptoKey;
     try {
-      sk = await deriveSharedKeyFromCryptoKey(myKeyPairRef.current.privateKey, otherPubKey);
+      sk = await deriveSharedKey(myKeyPairRef.current.privateKey, otherPubKey);
     } catch {
       setKeyWarning("Key mismatch — cannot derive shared secret. The other user may have rotated their key.");
       return;
@@ -382,14 +275,14 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     }
 
     if (msgs.length > 0) {
-      lastFetchedAtRef.current = msgs[msgs.length - 1].createdAt;
+      lastFetchedAtRef.current = msgs[msgs.length - 1]!.createdAt;
     }
   }
 
   async function loadOlderMessages() {
     if (!activeConv || !sharedKey || loadingMore || messages.length === 0) return;
     setLoadingMore(true);
-    const oldest = messages[0].createdAt;
+    const oldest = messages[0]!.createdAt;
     const params = new URLSearchParams({ before: oldest, limit: String(PAGE_SIZE) });
     const res = await fetch(`${getApiBase()}/v1/dms/conversations/${activeConv.id}/messages?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -475,9 +368,37 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
       const conv = await res.json();
       setShowNewConv(false);
       setNewConvHandle("");
+      setSearchResults([]);
       loadConversations();
       openConversation(conv);
     }
+  }
+
+  function handleSearchInput(value: string) {
+    setNewConvHandle(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    const q = value.trim().replace(/^@/, "");
+    if (q.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${getApiBase()}/v1/users/search?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          const results = await res.json();
+          setSearchResults(results.filter((r: any) => r.handle !== myHandle));
+        }
+      } catch { /* ignore */ }
+      setSearchLoading(false);
+    }, 300);
+  }
+
+  function selectSearchResult(handle: string) {
+    setNewConvHandle(handle);
+    setSearchResults([]);
   }
 
   async function loadUnreadCount() {
@@ -563,14 +484,41 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
             <input
               type="text"
               value={newConvHandle}
-              onChange={(e) => setNewConvHandle(e.target.value)}
-              placeholder="@handle"
+              onChange={(e) => handleSearchInput(e.target.value)}
+              placeholder="Search @handle..."
               onKeyDown={(e) => e.key === "Enter" && startNewConversation()}
               className="w-full rounded-lg bg-surface-raised border border-border px-3 py-2 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
+              autoFocus
             />
+            {searchLoading && (
+              <p className="text-xs text-text-muted mt-1.5 px-1">Searching...</p>
+            )}
+            {!searchLoading && newConvHandle.trim().replace(/^@/, "").length >= 2 && searchResults.length === 0 && (
+              <p className="text-xs text-text-muted mt-1.5 px-1">No users found</p>
+            )}
+            {searchResults.length > 0 && (
+              <div className="mt-1.5 max-h-36 overflow-y-auto rounded-lg border border-border bg-surface">
+                {searchResults.map((user) => (
+                  <button
+                    key={user.id}
+                    onClick={() => selectSearchResult(user.handle)}
+                    className="w-full text-left px-3 py-2 hover:bg-surface-raised transition-colors flex items-center gap-2"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/50 flex items-center justify-center shrink-0">
+                      <span className="text-xs font-bold text-accent">{user.handle[0]?.toUpperCase()}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">@{user.handle}</p>
+                      {user.bio && <p className="text-xs text-text-muted truncate">{user.bio}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               onClick={startNewConversation}
-              className="w-full mt-2 text-xs bg-accent text-black rounded-lg py-1.5 font-semibold"
+              disabled={!newConvHandle.trim()}
+              className="w-full mt-2 text-xs bg-accent text-black rounded-lg py-1.5 font-semibold disabled:opacity-50"
             >
               Start Chat
             </button>

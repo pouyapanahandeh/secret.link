@@ -12,7 +12,7 @@ export async function generateKeyBase64(): Promise<{ key: CryptoKey; keyBase64: 
 
 export async function keyFromBase64(keyBase64: string): Promise<CryptoKey> {
   const rawKey = base64UrlToUint8(keyBase64);
-  return crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["decrypt"]);
+  return crypto.subtle.importKey("raw", rawKey as BufferSource, "AES-GCM", false, ["decrypt"]);
 }
 
 export async function encryptBlob(
@@ -20,7 +20,7 @@ export async function encryptBlob(
   key: CryptoKey,
 ): Promise<{ ciphertext: Uint8Array; nonce: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for AES-GCM
-  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data as BufferSource);
   return {
     ciphertext: new Uint8Array(encrypted),
     nonce: uint8ToBase64Url(iv),
@@ -33,7 +33,7 @@ export async function decryptBlob(
   key: CryptoKey,
 ): Promise<Uint8Array> {
   const iv = base64UrlToUint8(nonce);
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, ciphertext as BufferSource);
   return new Uint8Array(decrypted);
 }
 
@@ -42,7 +42,7 @@ export async function decryptBlob(
 function uint8ToBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    binary += String.fromCharCode(bytes[i]!);
   }
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

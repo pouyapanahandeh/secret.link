@@ -1,6 +1,7 @@
 import type { MetaFunction } from "@remix-run/node";
 import { useEffect, useState, useRef } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { getApiBase } from "../lib/api.client";
 
 export const meta: MetaFunction = () => [
   { title: "Secret Map — Secretlink.life" },
@@ -19,7 +20,7 @@ interface MapSecret {
 }
 
 export default function MapPage() {
-  const [secrets, setSecrets] = useState<MapSecret[]>([]);
+  const [_secrets, setSecrets] = useState<MapSecret[]>([]);
   const [selectedSecret, setSelectedSecret] = useState<MapSecret | null>(null);
   const [showPost, setShowPost] = useState(false);
   const [posting, setPosting] = useState(false);
@@ -31,24 +32,22 @@ export default function MapPage() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Load Leaflet dynamically (client-only)
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    document.head.appendChild(link);
+    let cancelled = false;
 
-    const script = document.createElement("script");
-    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    script.onload = () => initMap();
-    document.head.appendChild(script);
+    import("../lib/leaflet.client").then(({ loadLeaflet }) =>
+      loadLeaflet()
+    ).then((L) => {
+      if (cancelled || !mapContainerRef.current) return;
+      initMap(L);
+    });
 
     return () => {
+      cancelled = true;
       if (mapRef.current) mapRef.current.remove();
     };
   }, []);
 
-  function initMap() {
-    const L = (window as any).L;
+  function initMap(L?: any) {
     if (!L || !mapContainerRef.current) return;
 
     const map = L.map(mapContainerRef.current).setView([51.505, -0.09], 3);
@@ -83,8 +82,7 @@ export default function MapPage() {
     const L = (window as any).L;
     if (!L || !m) return;
 
-    const origin = window.location.origin;
-    const apiBase = window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
+    const apiBase = getApiBase();
 
     try {
       const res = await fetch(`${apiBase}/v1/secrets/map`);
@@ -121,8 +119,7 @@ export default function MapPage() {
     if (!clickedPos || !message.trim()) return;
     setPosting(true);
 
-    const origin = window.location.origin;
-    const apiBase = window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
+    const apiBase = getApiBase();
 
     try {
       const res = await fetch(`${apiBase}/v1/secrets/map`, {

@@ -1,10 +1,11 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, useNavigation } from "@remix-run/react";
+import { useLoaderData, useActionData, useFetcher } from "@remix-run/react";
 import { useState, useEffect } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
-
-const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
+import { getToken } from "../lib/session.server";
+import { API_URL } from "../lib/api.server";
+import { getApiBase } from "../lib/api.client";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -26,8 +27,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const handle = rawHandle.replace(/^@/, "");
   const res = await fetch(`${API_URL}/v1/users/${handle}`);
   const profile = res.ok ? await res.json() : null;
-  const cookieHeader = request.headers.get("Cookie") ?? "";
-  const token = cookieHeader.match(/sl_token=([^;]+)/)?.[1];
+  const token = await getToken(request);
   const isLoggedIn = !!token;
 
   let isOwnProfile = false;
@@ -46,24 +46,24 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const form = await request.formData();
-  const message = String(form.get("message") ?? "").trim();
+  const ciphertext = String(form.get("ciphertext") ?? "").trim();
+  const nonce = String(form.get("nonce") ?? "").trim();
   const handle = (params["handle"] ?? "").replace(/^@/, "");
   const linkExpiry = Number(form.get("linkExpiry")) || 86400;
   const viewDuration = Number(form.get("viewDuration")) || 30;
+  const keyBase64 = String(form.get("keyBase64") ?? "").trim();
 
-  if (!message) {
-    return json({ error: "Secret cannot be empty", sent: false });
-  }
-  if (message.length > 10000) {
-    return json({ error: "Secret too long (max 10,000 characters)", sent: false });
+  if (!ciphertext || !nonce || !keyBase64) {
+    return json({ error: "Encryption failed. Please try again.", sent: false });
   }
 
   const res = await fetch(`${API_URL}/v1/secrets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      ciphertext: message,
+      ciphertext,
       contentType: "text",
+      nonce,
       ttlSeconds: linkExpiry,
       maxViews: 1,
       mimeType: "text/plain",
@@ -76,7 +76,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return json({ error: "Failed to send secret. Try again.", sent: false });
   }
 
-  return json({ error: null, sent: true, handle });
+  const secretData = await res.json();
+  return json({ error: null, sent: true, handle, secretId: secretData.id, keyBase64 });
 }
 
 const SOCIAL_ICONS: Record<string, string> = {
@@ -94,17 +95,69 @@ const SOCIAL_ICONS: Record<string, string> = {
 export default function ProfilePage() {
   const { handle, profile, isLoggedIn, isOwnProfile, token } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const navigation = useNavigation();
+  const fetcher = useFetcher<typeof action>();
   const [charCount, setCharCount] = useState(0);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersCount, setFollowersCount] = useState(profile?.followersCount ?? 0);
+  const [encrypting, setEncrypting] = useState(false);
+  const [encryptError, setEncryptError] = useState<string | null>(null);
+
+  const fetcherData = fetcher.data;
+  const isSent = fetcherData?.sent || actionData?.sent;
+  const formError = fetcherData?.error || actionData?.error || encryptError;
+
+  async function handleSecretSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setEncryptError(null);
+    setEncrypting(true);
+
+    try {
+      const formEl = e.currentTarget;
+      const formData = new FormData(formEl);
+      const message = String(formData.get("message") ?? "").trim();
+
+      if (!message) {
+        setEncryptError("Secret cannot be empty");
+        setEncrypting(false);
+        return;
+      }
+      if (message.length > 10000) {
+        setEncryptError("Secret too long (max 10,000 characters)");
+        setEncrypting(false);
+        return;
+      }
+
+      const { encryptBlob, generateKeyBase64 } = await import("../lib/crypto");
+      const { key, keyBase64 } = await generateKeyBase64();
+      const encoder = new TextEncoder();
+      const data = encoder.encode(message);
+      const { ciphertext, nonce } = await encryptBlob(data, key);
+
+      // Encode encrypted bytes as base64
+      let binary = "";
+      for (let i = 0; i < ciphertext.length; i++) {
+        binary += String.fromCharCode(ciphertext[i]!);
+      }
+      const ciphertextB64 = btoa(binary);
+
+      const submitData = new FormData();
+      submitData.append("ciphertext", ciphertextB64);
+      submitData.append("nonce", nonce);
+      submitData.append("keyBase64", keyBase64);
+      submitData.append("linkExpiry", String(formData.get("linkExpiry") ?? "86400"));
+      submitData.append("viewDuration", String(formData.get("viewDuration") ?? "30"));
+
+      fetcher.submit(submitData, { method: "post" });
+    } catch {
+      setEncryptError("Encryption failed. Please try again.");
+    } finally {
+      setEncrypting(false);
+    }
+  }
 
   useEffect(() => {
     if (!token || !profile?.id || isOwnProfile) return;
-    const base = typeof window !== "undefined"
-      ? window.location.port === "3000" ? window.location.origin.replace(":3000", ":4000") : window.location.origin
-      : "";
-    fetch(`${base}/v1/users/follow/${profile.id}`, {
+    fetch(`${getApiBase()}/v1/users/follow/${profile.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)
@@ -116,12 +169,6 @@ export default function ProfilePage() {
       })
       .catch(() => {});
   }, [token, profile?.id, isOwnProfile]);
-
-  function getApiBase() {
-    if (typeof window === "undefined") return "";
-    const origin = window.location.origin;
-    return window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
-  }
 
   async function toggleFollow() {
     if (!token || !profile?.id) { window.location.href = "/login"; return; }
@@ -137,7 +184,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (actionData?.sent) {
+  if (isSent) {
     return (
       <main className={isLoggedIn ? "h-screen flex flex-col sm:flex-row bg-surface" : "min-h-screen"}>
         {isLoggedIn ? <Sidebar /> : <Nav isLoggedIn={isLoggedIn} handle={handle} />}
@@ -285,7 +332,7 @@ export default function ProfilePage() {
             <h2 className="font-semibold text-sm">Send an anonymous secret</h2>
           </div>
 
-          <form method="post" className="space-y-4">
+          <form onSubmit={handleSecretSubmit} className="space-y-4">
             <div className="relative">
               <textarea
                 name="message"
@@ -331,16 +378,16 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {actionData?.error && (
-              <p className="text-red-400 text-sm">{actionData.error}</p>
+            {formError && (
+              <p className="text-red-400 text-sm">{formError}</p>
             )}
 
             <button
               type="submit"
-              disabled={navigation.state === "submitting"}
+              disabled={encrypting || fetcher.state === "submitting"}
               className="w-full rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all duration-200 disabled:opacity-50"
             >
-              {navigation.state === "submitting" ? "Encrypting..." : "Send anonymously 🤫"}
+              {encrypting || fetcher.state === "submitting" ? "Encrypting..." : "Send anonymously 🤫"}
             </button>
           </form>
 
@@ -436,7 +483,7 @@ function MobileBottomNav({ handle }: { handle: string }) {
   );
 }
 
-function Nav({ isLoggedIn, handle }: { isLoggedIn: boolean; handle: string }) {
+function Nav({ isLoggedIn, handle: _handle }: { isLoggedIn: boolean; handle: string }) {
   return (
     <nav className={`${isLoggedIn ? "sm:hidden" : ""} fixed top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50`}>
       <a href="/" className="flex items-center gap-2">

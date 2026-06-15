@@ -1,21 +1,30 @@
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useActionData } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { AppNav } from "../components/AppNav";
+import { createSessionRedirect } from "../lib/session.server";
+import { API_URL } from "../lib/api.server";
 
 export const meta: MetaFunction = () => [
   { title: "Log In — Secretlink.life" },
   { name: "description", content: "Log in to your Secretlink.life account." },
 ];
 
-const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
-
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const method = String(form.get("method") ?? "magic-link");
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const handle = String(form.get("handle") ?? "").trim().toLowerCase();
+
+  // Passkey token exchange — client posts token after WebAuthn ceremony
+  if (method === "passkey-token") {
+    const token = String(form.get("token") ?? "").trim();
+    if (!token) {
+      return json({ error: "Missing token", method }, { status: 400 });
+    }
+    return createSessionRedirect(token, "/dashboard");
+  }
 
   if (method === "magic-link") {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -93,9 +102,16 @@ export default function Login() {
 
       const { token } = await verifyRes.json();
 
-      // 4. Set cookie and redirect
-      document.cookie = `sl_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`;
-      window.location.href = "/dashboard";
+      // 4. Post token to server action to set secure HttpOnly cookie
+      const form = new FormData();
+      form.append("method", "passkey-token");
+      form.append("token", token);
+      const setCookieRes = await fetch("/login", { method: "POST", body: form, redirect: "follow" });
+      if (setCookieRes.redirected) {
+        window.location.href = setCookieRes.url;
+      } else {
+        window.location.href = "/dashboard";
+      }
     } catch (err: any) {
       setPasskeyStatus("error");
       setPasskeyError(err?.message ?? "Something went wrong");
@@ -105,15 +121,7 @@ export default function Login() {
   if (actionData && "sent" in actionData && actionData.sent) {
     return (
       <main className="min-h-screen">
-        <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
-          <a href="/" className="flex items-center gap-2">
-            <img src="/secretlink.png" alt="Secretlink.life" className="w-8 h-8" />
-            <span className="text-xl font-bold tracking-tight">
-              secretlink<span className="text-accent">.</span>life
-            </span>
-          </a>
-          <ThemeToggle />
-        </nav>
+        <AppNav />
         <div className="flex flex-col items-center justify-center min-h-screen px-4">
           <div className="max-w-md w-full text-center">
             <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mx-auto mb-4" />
@@ -133,19 +141,7 @@ export default function Login() {
 
   return (
     <main className="min-h-screen">
-      {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
-        <a href="/" className="flex items-center gap-2">
-          <img src="/secretlink.png" alt="Secretlink.life" className="w-8 h-8" />
-          <span className="text-xl font-bold tracking-tight">
-            secretlink<span className="text-accent">.</span>life
-          </span>
-        </a>
-        <div className="flex items-center gap-4">
-          <a href="/signup" className="text-sm text-text-muted hover:text-text transition-colors">Sign up</a>
-          <ThemeToggle />
-        </div>
-      </nav>
+      <AppNav authLinks="signup" />
 
       <div className="flex flex-col items-center justify-center min-h-screen px-4 pt-20">
         <div className="max-w-md w-full">

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 
 type CameraCaptureProps = {
   onCapture: (blob: Blob, mimeType: string) => void;
@@ -15,7 +15,7 @@ export function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
   const [recordingTime, setRecordingTime] = useState(0);
   const [captureType, setCaptureType] = useState<"photo" | "video">("photo");
   const [videoReady, setVideoReady] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   // Attach stream to video element whenever the video ref becomes available
   const attachStream = useCallback((el: HTMLVideoElement | null) => {
@@ -98,7 +98,7 @@ export function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType });
       stopCamera();
-      onCapture(blob, mimeType.split(";")[0]);
+      onCapture(blob, mimeType.split(";")[0] ?? mimeType);
     };
 
     recorder.start(1000);
