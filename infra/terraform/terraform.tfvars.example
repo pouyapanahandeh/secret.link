@@ -1,4 +1,0 @@
-# Copy this file to terraform.tfvars and fill in values
-project_id  = "secretlink-prod"
-region      = "us-central1"
-environment = "prod"
