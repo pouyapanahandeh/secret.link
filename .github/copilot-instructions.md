@@ -1,6 +1,6 @@
 # Secret.link — Project Skill
 
-> One brand. Two products. One monorepo. One GCP project.
+> One brand. Two products. One monorepo.
 
 ## Monorepo Overview
 
@@ -68,17 +68,11 @@ pnpm typecheck        # Type-check single app
 
 ## Infrastructure
 
-- **Cloud provider**: Google Cloud Platform (GCP)
-- **Container registry**: Artifact Registry
-- **Compute**: Cloud Run (api-gateway, web-public, web-teams)
-- **Database**: Cloud SQL Postgres (planned; live code uses embedded SQLite)
-- **Cache**: Memorystore Redis (secret TTL store)
-- **Storage**: Cloud Storage (encrypted blobs, CMEK)
-- **KMS**: Cloud KMS (per-workspace KEKs, envelope encryption)
-- **Pub/Sub**: moderation, ai_analysis, audit topics
-- **Analytics**: BigQuery (append-only audit)
-- **IaC**: Terraform in `infra/terraform/`
-- **Dockerfiles**: `infra/docker/{api-gateway,web-public,web-teams}.Dockerfile` (node:22-slim, multi-stage)
+- **Cloud provider**: TBD (GCP Terraform + Dockerfiles removed; deployment strategy pending)
+- **Database**: Embedded SQLite (live); Postgres migration planned
+- **Workers**: `ai-worker` and `moderation-worker` use `@google-cloud/pubsub` + `@google-cloud/vertexai`
+- **Email**: AWS SES (legacy, api-gateway)
+- **Mobile builds**: EAS (Expo Application Services)
 
 ## Code Conventions
 
@@ -96,15 +90,23 @@ pnpm typecheck        # Type-check single app
 - Accent: `#FFFC00`
 - Text: `#FFFFFF`
 
+## Security Hardening (applied)
+
+- Centralized session via `createCookieSessionStorage` (`app/lib/session.server.ts`) — HttpOnly, Secure, SameSite=Lax
+- Passkey login POSTs token to server action (no more `document.cookie` XSS vector)
+- `entry.server.tsx` sets HSTS, X-Frame-Options, X-Content-Type-Options headers
+- Leaflet installed as npm dep (no unpkg CDN)
+- Shared modules: `api.server.ts`, `api.client.ts`, `dm-crypto.ts`, `leaflet.client.ts`, `AppNav.tsx`
+
 ## Known Issues / Architecture Debt
 
-- API gateway uses embedded SQLite; Terraform provisions Cloud SQL Postgres (migration pending)
+- API gateway uses embedded SQLite; Postgres migration planned
 - Crypto docs reference XChaCha20-Poly1305 but implementation uses AES-GCM
 - `packages/schemas` and `packages/core` have overlapping validation (dedup needed)
 - Web apps have zero test coverage
-- Cookie security: inconsistent HttpOnly/Secure flags; passkey login sets JWT via `document.cookie`
 - CORS uses wildcard origin with credentials (fix before production)
 - JWT passed in SSE query string for DM streaming (move to cookie or header)
+- No deployment pipeline yet (Dockerfiles + Terraform removed; CI/CD to be set up)
 
 ## Environment Variables
 
