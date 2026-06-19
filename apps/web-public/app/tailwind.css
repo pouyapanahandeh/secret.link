@@ -35,3 +35,12 @@
   --color-border: #E5E5E5;
   --color-card: #FFFFFF;
 }
+
+/* Hide scrollbars for horizontal scroll rows (stories) while keeping scroll. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

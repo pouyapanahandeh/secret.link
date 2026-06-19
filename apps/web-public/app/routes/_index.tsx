@@ -1,6 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { useState, useEffect, useRef } from "react";
+import { Link, useRouteError, isRouteErrorResponse } from "@remix-run/react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { getToken } from "../lib/session.server";
 
@@ -305,6 +306,10 @@ function LandingMap() {
         maxZoom: 19,
       }).addTo(map);
       map.attributionControl.remove();
+
+      // Fix partial tile rendering when container isn't fully laid out yet
+      setTimeout(() => map.invalidateSize(), 100);
+      setTimeout(() => map.invalidateSize(), 500);
 
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -697,5 +702,24 @@ function LandingMap() {
         </div>
       )}
     </div>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  return (
+    <main className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-center max-w-md">
+        <h1 className="text-2xl font-bold mb-2">
+          {isRouteErrorResponse(error) ? `${error.status} — ${error.statusText}` : "Something went wrong"}
+        </h1>
+        <p className="text-text-muted mb-6">
+          {isRouteErrorResponse(error) ? error.data : "An unexpected error occurred."}
+        </p>
+        <Link to="/" className="rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black">
+          Go home
+        </Link>
+      </div>
+    </main>
   );
 }

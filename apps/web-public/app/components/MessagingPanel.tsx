@@ -123,14 +123,19 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     setMyUserId(data.id);
     setMyHandle(data.handle);
 
-    const kp = await ensureKeyPair();
-    // Always ensure server has our current public key
-    await fetch(`${getApiBase()}/v1/dms/keys`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
-    });
-    myKeyPairRef.current = kp;
+    try {
+      const kp = await ensureKeyPair();
+      // Always ensure server has our current public key
+      await fetch(`${getApiBase()}/v1/dms/keys`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
+      });
+      myKeyPairRef.current = kp;
+    } catch (err) {
+      console.warn("[DM] Key setup failed (X25519 may not be supported):", err);
+      setKeyWarning("End-to-end encryption unavailable on this browser. Messages cannot be sent or decrypted.");
+    }
   }
 
   async function loadConversations() {
@@ -144,9 +149,20 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     if (sseRef.current) sseRef.current.close();
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
 
-    const url = `${getApiBase()}/v1/dms/stream?token=${encodeURIComponent(token)}&conversationId=${convId}`;
-    const sse = new EventSource(url);
-    sseRef.current = sse;
+    // Get a short-lived ticket via API directly (client has the token)
+    (async () => {
+      try {
+        const ticketRes = await fetch(`${getApiBase()}/v1/dms/stream-ticket`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ conversationId: convId }),
+        });
+        if (!ticketRes.ok) throw new Error("Failed to get stream ticket");
+        const { ticket } = await ticketRes.json();
+
+        const url = `${getApiBase()}/v1/dms/stream?ticket=${encodeURIComponent(ticket)}`;
+        const sse = new EventSource(url);
+        sseRef.current = sse;
 
     sse.addEventListener("new_message", async (e) => {
       try {
@@ -201,6 +217,13 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
         pollRef.current = setInterval(() => loadMessages(convId, key, true), 3000);
       }
     };
+      } catch {
+        // Fallback to polling if ticket fetch fails
+        if (!pollRef.current && !document.hidden) {
+          pollRef.current = setInterval(() => loadMessages(convId, key, true), 3000);
+        }
+      }
+    })();
   }
 
   async function openConversation(conv: Conversation) {

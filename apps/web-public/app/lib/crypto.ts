@@ -3,15 +3,20 @@
  * No WASM, no dependencies — works everywhere.
  */
 
-export async function generateKeyBase64(): Promise<{ key: CryptoKey; keyBase64: string }> {
+export async function generateKeyBase64(): Promise<{ key: CryptoKey; keyBase64: string; rawKey: Uint8Array }> {
   const rawKey = crypto.getRandomValues(new Uint8Array(32));
   const keyBase64 = uint8ToBase64Url(rawKey);
   const key = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);
-  return { key, keyBase64 };
+  return { key, keyBase64, rawKey };
 }
 
 export async function keyFromBase64(keyBase64: string): Promise<CryptoKey> {
   const rawKey = base64UrlToUint8(keyBase64);
+  return crypto.subtle.importKey("raw", rawKey as BufferSource, "AES-GCM", false, ["decrypt"]);
+}
+
+/** Import a raw 32-byte AES key (e.g. obtained by unwrapping) for decryption. */
+export async function keyFromRawBytes(rawKey: Uint8Array): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", rawKey as BufferSource, "AES-GCM", false, ["decrypt"]);
 }
 

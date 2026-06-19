@@ -81,6 +81,12 @@
       ],
       "expo-image-picker",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Secretlink uses your location to show nearby secrets on the map."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

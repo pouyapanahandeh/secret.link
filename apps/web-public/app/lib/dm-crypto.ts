@@ -110,6 +110,29 @@ export async function ensureKeyPair(): Promise<StoredKeyPair> {
   return kp;
 }
 
+/**
+ * Ensures a local keypair exists and publishes the public key to the server.
+ * Idempotent — safe to call on every app load so any user can receive
+ * E2E-wrapped secrets/DMs. Returns the keypair, or null if X25519 is
+ * unsupported in this browser.
+ */
+export async function ensureAndPublishKey(
+  apiBase: string,
+  token: string,
+): Promise<StoredKeyPair | null> {
+  try {
+    const kp = await ensureKeyPair();
+    await fetch(`${apiBase}/v1/dms/keys`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
+    });
+    return kp;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Key Derivation & Encryption ────────────────────────────────────────────
 
 export async function deriveSharedKey(
@@ -157,4 +180,56 @@ export async function decryptMessage(
   const iv = Uint8Array.from(atob(nonceB64), (c) => c.charCodeAt(0));
   const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, sharedKey, ciphertext);
   return new TextDecoder().decode(decrypted);
+}
+
+// ─── ECIES key wrapping (deliver a secret's AES key to a recipient) ──────────
+// Used by profile-addressed secrets: instead of putting the AES key in the URL
+// fragment, we wrap it for the recipient's published X25519 public key. Only
+// the recipient (holding the matching private key) can unwrap it. The server
+// stores opaque ciphertext and never sees the key (zero-knowledge preserved).
+
+export interface WrappedKey {
+  wrappedKey: string; // base64 AES-GCM ciphertext of the raw 32-byte key
+  wrapNonce: string; // base64 AES-GCM IV
+  wrapEpk: string; // base64 ephemeral X25519 public key
+}
+
+/** Wrap raw key bytes for a recipient using an ephemeral X25519 keypair (ECIES). */
+export async function wrapKeyForRecipient(
+  rawKey: Uint8Array,
+  recipientPublicKeyB64: string,
+): Promise<WrappedKey> {
+  const ephemeral = await crypto.subtle.generateKey(
+    { name: "X25519" } as any,
+    false,
+    ["deriveBits"],
+  );
+  const sharedKey = await deriveSharedKey(ephemeral.privateKey, recipientPublicKeyB64);
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    sharedKey,
+    rawKey as BufferSource,
+  );
+
+  const epkRaw = await crypto.subtle.exportKey("raw", ephemeral.publicKey);
+
+  return {
+    wrappedKey: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+    wrapNonce: btoa(String.fromCharCode(...iv)),
+    wrapEpk: btoa(String.fromCharCode(...new Uint8Array(epkRaw))),
+  };
+}
+
+/** Unwrap a secret's raw key bytes using the recipient's private key. */
+export async function unwrapKeyFromSender(
+  wrapped: WrappedKey,
+  recipientPrivateKey: CryptoKey,
+): Promise<Uint8Array> {
+  const sharedKey = await deriveSharedKey(recipientPrivateKey, wrapped.wrapEpk);
+  const ciphertext = Uint8Array.from(atob(wrapped.wrappedKey), (c) => c.charCodeAt(0));
+  const iv = Uint8Array.from(atob(wrapped.wrapNonce), (c) => c.charCodeAt(0));
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, sharedKey, ciphertext);
+  return new Uint8Array(decrypted);
 }

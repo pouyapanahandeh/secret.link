@@ -2,15 +2,22 @@ import Router from "@koa/router";
 import type { Context } from "koa";
 import { nanoid } from "nanoid";
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from "@simplewebauthn/server";
-import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import { signToken, requireAuth, type AuthPayload } from "../middleware/auth.js";
 import db from "../db.js";
+import { createNotification } from "../notifications.js";
 
 export const usersRouter = new Router({ prefix: "/users" });
 
-// Challenges are ephemeral — fine to keep in-memory
-const challenges = new Map<string, string>();
+// Challenge storage in SQLite (survives restarts)
+const challengeStmts = {
+  set: db.prepare(`INSERT INTO challenges (user_id, challenge, expires_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET challenge = excluded.challenge, expires_at = excluded.expires_at`),
+  get: db.prepare(`SELECT challenge FROM challenges WHERE user_id = ? AND expires_at > ?`),
+  del: db.prepare(`DELETE FROM challenges WHERE user_id = ?`),
+  cleanup: db.prepare(`DELETE FROM challenges WHERE expires_at < ?`),
+};
+// Clean expired challenges periodically
+setInterval(() => { challengeStmts.cleanup.run(Date.now()); }, 60_000);
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 const RP_NAME = "Secretlink.life";
@@ -39,6 +46,20 @@ const stmts = {
   isFollowing: db.prepare(`SELECT 1 FROM follows WHERE follower_id = ? AND following_id = ?`),
   countFollowers: db.prepare(`SELECT COUNT(*) as count FROM follows WHERE following_id = ?`),
   countFollowing: db.prepare(`SELECT COUNT(*) as count FROM follows WHERE follower_id = ?`),
+  followingIdsOf: db.prepare(`SELECT following_id FROM follows WHERE follower_id = ?`),
+  // Users who follow :userId (most recent first)
+  listFollowers: db.prepare(
+    `SELECT u.id, u.handle, u.bio, u.avatar_url, u.is_pro
+     FROM follows f JOIN users u ON u.id = f.follower_id
+     WHERE f.following_id = ? ORDER BY f.created_at DESC`,
+  ),
+  // Users :userId follows (most recent first)
+  listFollowing: db.prepare(
+    `SELECT u.id, u.handle, u.bio, u.avatar_url, u.is_pro
+     FROM follows f JOIN users u ON u.id = f.following_id
+     WHERE f.follower_id = ? ORDER BY f.created_at DESC`,
+  ),
+  getDmKey: db.prepare(`SELECT public_key FROM dm_keys WHERE user_id = ?`),
 };
 
 function dbUserToPublic(row: any) {
@@ -92,7 +113,7 @@ usersRouter.post("/", async (ctx: Context) => {
   });
 
   ctx.status = 201;
-  ctx.body = { user: { id, handle, email, isPro: false }, token };
+  ctx.body = { token, user: { id, handle, email, isPro: false } };
 });
 
 // ─── Search users (must be before /:handle) ─────────────────────────────────
@@ -104,12 +125,23 @@ usersRouter.get("/search", async (ctx: Context) => {
   }
 
   const rows = stmts.searchUsers.all(`%${q}%`) as any[];
+
+  // Resolve follow state for the requesting user in a single query (no N+1).
+  const requester = ctx.state.user as AuthPayload | undefined;
+  let followingSet = new Set<string>();
+  if (requester) {
+    const ids = stmts.followingIdsOf.all(requester.userId) as Array<{ following_id: string }>;
+    followingSet = new Set(ids.map(r => r.following_id));
+  }
+
   ctx.body = rows.map(r => ({
     id: r.id,
     handle: r.handle,
     bio: r.bio ?? null,
     avatarUrl: r.avatar_url ?? null,
     isPro: !!r.is_pro,
+    isSelf: requester ? r.id === requester.userId : false,
+    isFollowing: followingSet.has(r.id),
   }));
 });
 
@@ -127,6 +159,11 @@ usersRouter.get("/:handle", async (ctx: Context) => {
 
   const followersCount = (stmts.countFollowers.get(row.id) as any)?.count ?? 0;
   const followingCount = (stmts.countFollowing.get(row.id) as any)?.count ?? 0;
+  const dmKey = stmts.getDmKey.get(row.id) as any;
+
+  // Follower/following counts are private — only the profile owner sees them.
+  const requester = ctx.state.user as AuthPayload | undefined;
+  const isOwner = requester?.userId === row.id;
 
   ctx.status = 200;
   ctx.body = {
@@ -137,8 +174,9 @@ usersRouter.get("/:handle", async (ctx: Context) => {
     bio: row.bio ?? null,
     avatarUrl: row.avatar_url ?? null,
     socials: row.socials ? JSON.parse(row.socials) : [],
-    followersCount,
-    followingCount,
+    followersCount: isOwner ? followersCount : null,
+    followingCount: isOwner ? followingCount : null,
+    dmPublicKey: dmKey?.public_key ?? null,
   };
 });
 
@@ -154,12 +192,46 @@ usersRouter.get("/me/profile", requireAuth(), async (ctx: Context) => {
   }
 
   const creds = stmts.getCredentials.all(userId) as any[];
+  const followersCount = (stmts.countFollowers.get(userId) as any)?.count ?? 0;
+  const followingCount = (stmts.countFollowing.get(userId) as any)?.count ?? 0;
 
   ctx.status = 200;
   ctx.body = {
     ...dbUserToPublic(row),
     hasPasskey: creds.length > 0,
+    followersCount,
+    followingCount,
   };
+});
+
+// ─── Followers / Following lists (own account only) ─────────────────────────
+// Resolve which of the listed users the requester already follows, so the UI
+// can render a correct Follow/Following state without an N+1 round-trip.
+function withFollowState(rows: any[], requesterId: string) {
+  const followingSet = new Set(
+    (stmts.followingIdsOf.all(requesterId) as Array<{ following_id: string }>).map((r) => r.following_id),
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    handle: r.handle,
+    bio: r.bio ?? null,
+    avatarUrl: r.avatar_url ?? null,
+    isPro: !!r.is_pro,
+    isSelf: r.id === requesterId,
+    isFollowing: followingSet.has(r.id),
+  }));
+}
+
+usersRouter.get("/me/followers", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const rows = stmts.listFollowers.all(userId) as any[];
+  ctx.body = withFollowState(rows, userId);
+});
+
+usersRouter.get("/me/following", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const rows = stmts.listFollowing.all(userId) as any[];
+  ctx.body = withFollowState(rows, userId);
 });
 
 // ─── Update profile ─────────────────────────────────────────────────────────
@@ -207,6 +279,17 @@ usersRouter.post("/follow/:targetId", requireAuth(), async (ctx: Context) => {
 
   stmts.insertFollow.run(userId, targetId, new Date().toISOString());
   const followersCount = (stmts.countFollowers.get(targetId) as any)?.count ?? 0;
+
+  // Notify the followed user
+  const { handle } = ctx.state.user as AuthPayload;
+  createNotification({
+    userId: targetId,
+    type: "follow",
+    actorId: userId,
+    actorHandle: handle,
+    entityId: userId,
+  });
+
   ctx.body = { following: true, followersCount };
 });
 
@@ -251,7 +334,7 @@ usersRouter.post("/me/passkey/register-options", requireAuth(), async (ctx: Cont
     },
   });
 
-  challenges.set(userId, options.challenge);
+  challengeStmts.set.run(userId, options.challenge, Date.now() + 5 * 60_000);
   ctx.body = options;
 });
 
@@ -261,8 +344,9 @@ usersRouter.post("/me/passkey/register-verify", requireAuth(), async (ctx: Conte
   const row = stmts.getUserById.get(userId) as any;
   if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
 
-  const expectedChallenge = challenges.get(userId);
-  if (!expectedChallenge) { ctx.status = 400; ctx.body = { error: "no_challenge" }; return; }
+  const challengeRow = challengeStmts.get.get(userId, Date.now()) as any;
+  if (!challengeRow) { ctx.status = 400; ctx.body = { error: "no_challenge" }; return; }
+  const expectedChallenge = challengeRow.challenge;
 
   const body = ctx.request.body as any;
 
@@ -288,7 +372,7 @@ usersRouter.post("/me/passkey/register-verify", requireAuth(), async (ctx: Conte
     JSON.stringify(body.response?.transports ?? []),
   );
 
-  challenges.delete(userId);
+  challengeStmts.del.run(userId);
   ctx.body = { verified: true };
 });
 
@@ -312,7 +396,7 @@ usersRouter.post("/auth/passkey/login-options", async (ctx: Context) => {
     userVerification: "preferred",
   });
 
-  challenges.set(row.id, options.challenge);
+  challengeStmts.set.run(row.id, options.challenge, Date.now() + 5 * 60_000);
   ctx.body = options;
 });
 
@@ -324,8 +408,9 @@ usersRouter.post("/auth/passkey/login-verify", async (ctx: Context) => {
 
   if (!row) { ctx.status = 400; ctx.body = { error: "user_not_found" }; return; }
 
-  const expectedChallenge = challenges.get(row.id);
-  if (!expectedChallenge) { ctx.status = 400; ctx.body = { error: "no_challenge" }; return; }
+  const challengeRow = challengeStmts.get.get(row.id, Date.now()) as any;
+  if (!challengeRow) { ctx.status = 400; ctx.body = { error: "no_challenge" }; return; }
+  const expectedChallenge = challengeRow.challenge;
 
   const creds = stmts.getCredentials.all(row.id) as any[];
   const credential = creds.find((c) => c.id === (body.credential as any)?.id);
@@ -351,7 +436,7 @@ usersRouter.post("/auth/passkey/login-verify", async (ctx: Context) => {
   }
 
   stmts.updateCredentialCounter.run(verification.authenticationInfo.newCounter, credential.id);
-  challenges.delete(row.id);
+  challengeStmts.del.run(row.id);
 
   const token = signToken({ userId: row.id, handle: row.handle });
   ctx.cookies.set("sl_token", token, {

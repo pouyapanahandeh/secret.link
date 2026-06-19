@@ -1,16 +1,95 @@
-import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, Link } from "@remix-run/react";
+import { useLoaderData, Link, useRouteError, isRouteErrorResponse, useFetcher, useNavigate, useRevalidator } from "@remix-run/react";
 import { useState, useEffect, useRef } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { MessagingPanel } from "../components/MessagingPanel";
+import { MapTab } from "../components/MapTab";
+import { NotificationBell } from "../components/NotificationBell";
+import { NotificationPrompt } from "../components/NotificationPrompt";
+import { StoriesRow } from "../components/StoriesRow";
+import { StoryViewer } from "../components/StoryViewer";
+import { StoryComposer } from "../components/StoryComposer";
+import { ProfileActionSheet } from "../components/ProfileActionSheet";
+import type { UserLite } from "../lib/users";
 import { requireToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 import { getApiBase } from "../lib/api.client";
+import { getViewedStoryIds, computeViewedHandles } from "../lib/story-views";
+import { getSocialMeta, detectPlatform, SOCIAL_META, SOCIAL_PLATFORMS } from "../lib/socials";
 
 export const meta: MetaFunction = () => [
   { title: "Dashboard — Secretlink.life" },
 ];
+
+export async function action({ request }: ActionFunctionArgs) {
+  const token = await requireToken(request);
+  const form = await request.formData();
+  const intent = form.get("intent");
+
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+  switch (intent) {
+    case "search": {
+      const q = String(form.get("q") ?? "");
+      const res = await fetch(`${API_URL}/v1/users/search?q=${encodeURIComponent(q)}`, { headers });
+      return json(await res.json());
+    }
+    case "follow": {
+      const targetId = String(form.get("targetId") ?? "");
+      const res = await fetch(`${API_URL}/v1/users/follow/${targetId}`, { method: "POST", headers });
+      return json(await res.json());
+    }
+    case "unfollow": {
+      const targetId = String(form.get("targetId") ?? "");
+      const res = await fetch(`${API_URL}/v1/users/follow/${targetId}`, { method: "DELETE", headers });
+      return json(await res.json());
+    }
+    case "follow-status": {
+      const targetId = String(form.get("targetId") ?? "");
+      const res = await fetch(`${API_URL}/v1/users/follow/${targetId}`, { headers });
+      return json(await res.json());
+    }
+    case "save-profile": {
+      const bio = String(form.get("bio") ?? "");
+      const socials = JSON.parse(String(form.get("socials") ?? "[]"));
+      const res = await fetch(`${API_URL}/v1/users/me/profile`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ bio, socials }),
+      });
+      return json(await res.json());
+    }
+    case "passkey-register-options": {
+      const res = await fetch(`${API_URL}/v1/users/me/passkey/register-options`, { method: "POST", headers });
+      return json(await res.json());
+    }
+    case "passkey-register-verify": {
+      const credential = String(form.get("credential") ?? "");
+      const res = await fetch(`${API_URL}/v1/users/me/passkey/register-verify`, {
+        method: "POST",
+        headers,
+        body: credential,
+      });
+      return json(await res.json());
+    }
+    case "stream-ticket": {
+      const conversationId = String(form.get("conversationId") ?? "");
+      const res = await fetch(`${API_URL}/v1/dms/stream-ticket`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ conversationId }),
+      });
+      return json(await res.json());
+    }
+    case "get-api-token": {
+      // Return the token for client-side DM operations (E2E encryption requires client-side API calls)
+      return json({ token });
+    }
+    default:
+      return json({ error: "unknown_intent" }, { status: 400 });
+  }
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = await requireToken(request);
@@ -35,19 +114,67 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   const sent = sentRes.ok ? await sentRes.json() : [];
 
-  return json({ user, inbox, sent, token });
+  // People the user follows (for the stories row) + which of them currently
+  // have an active map secret ("story"). Both are best-effort.
+  const followingRes = await fetch(`${API_URL}/v1/users/me/following`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const following = followingRes.ok ? await followingRes.json() : [];
+
+  const mapRes = await fetch(`${API_URL}/v1/secrets/map`);
+  const mapSecrets = mapRes.ok ? await mapRes.json() : [];
+  const storyHandles: string[] = Array.from(
+    new Set(
+      (mapSecrets as Array<{ handle?: string }>)
+        .map((m) => (m.handle ?? "").replace(/^@/, "").toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+  // Map of handle → active story IDs, so the client can dim rings whose stories
+  // have all been viewed (viewed-state lives in the browser's localStorage).
+  const storyIdsByHandle: Record<string, string[]> = {};
+  for (const m of mapSecrets as Array<{ id?: string; handle?: string }>) {
+    const h = (m.handle ?? "").replace(/^@/, "").toLowerCase();
+    if (!h || !m.id) continue;
+    (storyIdsByHandle[h] ??= []).push(String(m.id));
+  }
+
+  return json({ user, inbox, sent, token, following, storyHandles, storyIdsByHandle });
 }
 
 export default function Dashboard() {
-  const { user, inbox, sent, token } = useLoaderData<typeof loader>();
+  const { user, inbox, sent, token, following, storyHandles, storyIdsByHandle } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [activeTab, setActiveTab] = useState<"inbox" | "map" | "messages" | "profile">("inbox");
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [passkeyError, setPasskeyError] = useState("");
   const [hasPasskey, setHasPasskey] = useState(user.hasPasskey);
   const [bio, setBio] = useState(user.bio ?? "");
   const [socials, setSocials] = useState<{ platform: string; url: string }[]>(user.socials ?? []);
-  const [profileSaving, setProfileSaving] = useState(false);
+  // Idiomatic Remix data flow: fetchers run actions and auto-revalidate the loader.
+  const searchFetcher = useFetcher<any[]>();
+  const followFetcher = useFetcher<{ following: boolean; followersCount: number }>();
+  const profileFetcher = useFetcher<{ error?: string }>();
+  const profileSaving = profileFetcher.state !== "idle";
   const [profileSaved, setProfileSaved] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+
+  // Stories + profile action sheet (home tab social features)
+  const storyHandleSet = new Set<string>(storyHandles);
+  const [storyViewer, setStoryViewer] = useState<UserLite | null>(null);
+  const [sheetUser, setSheetUser] = useState<{ user: UserLite; hasStory: boolean } | null>(null);
+
+  // Viewed-story tracking (localStorage) → dims rings once watched.
+  const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setViewedStoryIds(getViewedStoryIds());
+  }, [storyIdsByHandle]);
+  const viewedHandles = computeViewedHandles(storyIdsByHandle, viewedStoryIds);
+
+  // Home "+" action button (post story / secret / pin on map).
+  const [fabOpen, setFabOpen] = useState(false);
+  const [showStoryComposer, setShowStoryComposer] = useState(false);
 
   // Read tab from URL hash on mount
   useEffect(() => {
@@ -57,82 +184,75 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Search state
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
-
-  // Follow state
-  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
-
-  // Map state
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const mapPinMarkerRef = useRef<any>(null);
-  const [mapSecrets, setMapSecrets] = useState<any[]>([]);
-  const [selectedMapSecret, setSelectedMapSecret] = useState<any>(null);
-  const [mapSecretRevealed, setMapSecretRevealed] = useState(false);
-  const [showMapPost, setShowMapPost] = useState(false);
-  const [mapClickedPos, setMapClickedPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapMessage, setMapMessage] = useState("");
-  const [mapEmoji, setMapEmoji] = useState("💬");
-  const [mapTtl, setMapTtl] = useState(60);
-  const [mapPosting, setMapPosting] = useState(false);
-  const [mapFile, setMapFile] = useState<File | null>(null);
-  const [mapFilePreview, setMapFilePreview] = useState<string | null>(null);
-  const mapFileInputRef = useRef<HTMLInputElement>(null);
-  const [mapRevealMode, setMapRevealMode] = useState<"timer" | "clicks">("timer");
-  const [mapRevealTimer, setMapRevealTimer] = useState(30);
-  const [mapMaxClicks, setMapMaxClicks] = useState(3);
-  const [revealCountdown, setRevealCountdown] = useState<number | null>(null);
-  const revealTimerRef = useRef<any>(null);
-
-  async function searchUsers(q: string) {
-    if (q.length < 2) { setSearchResults([]); return; }
-    setSearching(true);
-    try {
-      const res = await fetch(`${getApiBase()}/v1/users/search?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
-        const results = await res.json();
-        setSearchResults(results);
-        // Check follow status for each result
-        const followMap: Record<string, boolean> = {};
-        await Promise.all(results.map(async (u: any) => {
-          if (u.id === user.id) return;
-          try {
-            const fRes = await fetch(`${getApiBase()}/v1/users/follow/${u.id}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (fRes.ok) {
-              const fData = await fRes.json();
-              followMap[u.id] = fData.isFollowing;
-            }
-          } catch {}
-        }));
-        setFollowingMap(prev => ({ ...prev, ...followMap }));
-      }
-    } finally {
-      setSearching(false);
-    }
-  }
-
+  // Ensure this user has a published X25519 key so they can receive
+  // E2E-wrapped secrets sent from their profile (and DMs).
   useEffect(() => {
-    const timer = setTimeout(() => { if (searchQuery) searchUsers(searchQuery); }, 300);
+    if (!token) return;
+    import("../lib/dm-crypto").then(({ ensureAndPublishKey }) =>
+      ensureAndPublishKey(getApiBase(), token),
+    ).catch(() => {});
+  }, [token]);
+
+  // Subscribe this device to Web Push so notifications reach the lock screen /
+  // browser even when the app is closed.
+  useEffect(() => {
+    if (!token) return;
+    import("../lib/push.client").then(({ ensurePushSubscription }) =>
+      ensurePushSubscription(token),
+    ).catch(() => {});
+  }, [token]);
+
+  // Search state — results come from the search fetcher (idiomatic Remix data flow)
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchResults = (Array.isArray(searchFetcher.data) ? searchFetcher.data : []) as any[];
+  const searching = searchFetcher.state !== "idle";
+
+  // Follow state (optimistic overlay, seeded from search results)
+  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
+  const lastFollowRef = useRef<string | null>(null);
+
+  // Debounced search via fetcher. The action proxies to the API with the
+  // server-side token and returns JSON (incl. per-row isFollowing → no N+1).
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) return;
+    const timer = setTimeout(() => {
+      searchFetcher.submit({ intent: "search", q }, { method: "post" });
+    }, 300);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
-  async function toggleFollow(targetId: string) {
-    const isFollowing = followingMap[targetId];
-    const method = isFollowing ? "DELETE" : "POST";
-    const res = await fetch(`${getApiBase()}/v1/users/follow/${targetId}`, {
-      method,
-      headers: { Authorization: `Bearer ${token}` },
+  // Seed follow state from search results (server is the source of truth).
+  useEffect(() => {
+    if (!Array.isArray(searchFetcher.data)) return;
+    setFollowingMap(prev => {
+      const next = { ...prev };
+      for (const u of searchFetcher.data as any[]) {
+        if (!(u.id in next)) next[u.id] = !!u.isFollowing;
+      }
+      return next;
     });
-    if (res.ok) {
-      const data = await res.json();
-      setFollowingMap(prev => ({ ...prev, [targetId]: data.following }));
-    }
+  }, [searchFetcher.data]);
+
+  function toggleFollow(targetId: string) {
+    const next = !followingMap[targetId];
+    lastFollowRef.current = targetId;
+    setFollowingMap(prev => ({ ...prev, [targetId]: next })); // optimistic
+    followFetcher.submit(
+      { intent: next ? "follow" : "unfollow", targetId },
+      { method: "post" },
+    );
   }
+
+  // Reconcile follow state with the server response.
+  useEffect(() => {
+    if (followFetcher.state === "idle" && followFetcher.data && lastFollowRef.current) {
+      const id = lastFollowRef.current;
+      setFollowingMap(prev => ({ ...prev, [id]: !!followFetcher.data!.following }));
+      lastFollowRef.current = null;
+    }
+  }, [followFetcher.state, followFetcher.data]);
 
   async function handleAddPasskey() {
     setPasskeyStatus("loading");
@@ -140,16 +260,18 @@ export default function Dashboard() {
     try {
       const { startRegistration } = await import("@simplewebauthn/browser");
       const apiBase = getApiBase();
+      const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+      // Get options directly from the API (client token, mirrors DM flow).
       const optionsRes = await fetch(`${apiBase}/v1/users/me/passkey/register-options`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders,
       });
       if (!optionsRes.ok) throw new Error("Failed to get registration options");
       const options = await optionsRes.json();
       const credential = await startRegistration({ optionsJSON: options });
       const verifyRes = await fetch(`${apiBase}/v1/users/me/passkey/register-verify`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: authHeaders,
         body: JSON.stringify(credential),
       });
       if (!verifyRes.ok) throw new Error("Passkey verification failed");
@@ -161,31 +283,53 @@ export default function Dashboard() {
     }
   }
 
-  async function saveProfile() {
-    setProfileSaving(true);
+  function saveProfile() {
     setProfileSaved(false);
-    try {
-      const res = await fetch(`${getApiBase()}/v1/users/me/profile`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ bio, socials: socials.filter(s => s.url) }),
-      });
-      if (res.ok) {
-        setProfileSaved(true);
-        setTimeout(() => setProfileSaved(false), 3000);
-      } else {
-        alert("Failed to save profile. Please try again.");
-      }
-    } finally {
-      setProfileSaving(false);
+    profileFetcher.submit(
+      {
+        intent: "save-profile",
+        bio,
+        socials: JSON.stringify(socials.filter(s => s.url)),
+      },
+      { method: "post" },
+    );
+  }
+
+  // On successful save, exit edit mode. The fetcher auto-revalidates the loader,
+  // so view mode (which reads user.*) reflects the persisted profile.
+  useEffect(() => {
+    if (profileFetcher.state === "idle" && profileFetcher.data && !profileFetcher.data.error) {
+      setEditingProfile(false);
+      setProfileSaved(true);
+      const t = setTimeout(() => setProfileSaved(false), 3000);
+      return () => clearTimeout(t);
     }
+    return undefined;
+  }, [profileFetcher.state, profileFetcher.data]);
+
+  function startEditProfile() {
+    setBio(user.bio ?? "");
+    setSocials(user.socials ?? []);
+    setEditingProfile(true);
+  }
+
+  function cancelEditProfile() {
+    setBio(user.bio ?? "");
+    setSocials(user.socials ?? []);
+    setEditingProfile(false);
   }
 
   function addSocial() { setSocials([...socials, { platform: "", url: "" }]); }
   function removeSocial(i: number) { setSocials(socials.filter((_, idx) => idx !== i)); }
   function updateSocial(i: number, field: "platform" | "url", value: string) {
     const updated = [...socials];
-    updated[i] = { ...updated[i]!, [field]: value };
+    if (field === "url") {
+      // Auto-detect platform from the URL (unless user manually overrode it)
+      const detected = detectPlatform(value);
+      updated[i] = { ...updated[i]!, url: value, platform: detected || updated[i]!.platform };
+    } else {
+      updated[i] = { ...updated[i]!, [field]: value };
+    }
     setSocials(updated);
   }
 
@@ -198,167 +342,6 @@ export default function Dashboard() {
 
   function handleNavClick(id: string) {
     setActiveTab(id as any);
-  }
-
-  // ─── Map functions ────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (activeTab !== "map") return;
-
-    let cancelled = false;
-
-    import("../lib/leaflet.client").then(({ loadLeaflet }) =>
-      loadLeaflet()
-    ).then((L) => {
-      if (cancelled) return;
-      initMapTab(L);
-    });
-
-    return () => {
-      cancelled = true;
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [activeTab]);
-
-  function initMapTab(L?: any) {
-    if (!L || !mapContainerRef.current) return;
-
-    const map = L.map(mapContainerRef.current, { zoomControl: false }).setView([51.505, -0.09], 3);
-    mapInstanceRef.current = map;
-
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: '',
-      maxZoom: 19,
-    }).addTo(map);
-
-    map.attributionControl.remove();
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], 13),
-        () => {}
-      );
-    }
-
-    map.on("click", (e: any) => {
-      setMapClickedPos({ lat: e.latlng.lat, lng: e.latlng.lng });
-      setShowMapPost(true);
-      setSelectedMapSecret(null);
-      // Show pin marker
-      const L = (window as any).L;
-      if (mapPinMarkerRef.current) map.removeLayer(mapPinMarkerRef.current);
-      const pinIcon = L.divIcon({
-        html: '<div style="font-size:28px;text-align:center;line-height:34px;">📍</div>',
-        className: "",
-        iconSize: [34, 34],
-        iconAnchor: [17, 34],
-      });
-      mapPinMarkerRef.current = L.marker([e.latlng.lat, e.latlng.lng], { icon: pinIcon }).addTo(map);
-    });
-
-    loadMapSecrets(map);
-  }
-
-  async function loadMapSecrets(map?: any) {
-    const m = map || mapInstanceRef.current;
-    const L = (window as any).L;
-    if (!L || !m) return;
-
-    try {
-      const res = await fetch(`${getApiBase()}/v1/secrets/map`);
-      if (!res.ok) return;
-      const data = await res.json();
-      setMapSecrets(data);
-
-      m.eachLayer((layer: any) => { if (layer._isSecretMarker) m.removeLayer(layer); });
-
-      data.forEach((s: any) => {
-        const icon = L.divIcon({
-          className: "secret-marker",
-          html: `<div style="font-size:24px;cursor:pointer;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))">${s.emoji}</div>`,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15],
-        });
-        const marker = L.marker([s.lat, s.lng], { icon }).addTo(m);
-        marker._isSecretMarker = true;
-        marker.on("click", () => { setSelectedMapSecret(s); setMapSecretRevealed(false); setShowMapPost(false); });
-      });
-    } catch {}
-  }
-
-  async function postMapSecret() {
-    if (!mapClickedPos || !mapMessage.trim()) return;
-    setMapPosting(true);
-    try {
-      let mediaPath: string | null = null;
-      let mediaType: string | null = null;
-
-      // Upload file first if attached
-      if (mapFile) {
-        const uploadRes = await fetch(`${getApiBase()}/v1/secrets/blob`, {
-          method: "POST",
-          body: mapFile,
-        });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          mediaPath = uploadData.blobPath;
-          mediaType = mapFile.type;
-        }
-      }
-
-      const res = await fetch(`${getApiBase()}/v1/secrets/map`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: mapMessage.trim(),
-          lat: mapClickedPos.lat,
-          lng: mapClickedPos.lng,
-          emoji: mapEmoji,
-          ttlMinutes: mapTtl,
-          handle: user.handle,
-          mediaPath,
-          mediaType,
-          revealMode: mapRevealMode,
-          revealTimerSeconds: mapRevealMode === "timer" ? mapRevealTimer : undefined,
-          maxClicks: mapRevealMode === "clicks" ? mapMaxClicks : undefined,
-        }),
-      });
-      if (res.ok) {
-        setMapMessage("");
-        setShowMapPost(false);
-        setMapClickedPos(null);
-        setMapFile(null);
-        setMapFilePreview(null);
-        if (mapPinMarkerRef.current && mapInstanceRef.current) { mapInstanceRef.current.removeLayer(mapPinMarkerRef.current); mapPinMarkerRef.current = null; }
-        loadMapSecrets();
-      }
-    } finally {
-      setMapPosting(false);
-    }
-  }
-
-  function handleMapFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setMapFile(file);
-    if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-      setMapFilePreview(URL.createObjectURL(file));
-    } else {
-      setMapFilePreview(null);
-    }
-  }
-
-  function mapTimeRemaining(expiresAt: string) {
-    if (!expiresAt) return "Unknown";
-    // Handle SQLite datetime format (YYYY-MM-DD HH:MM:SS) by adding T separator
-    const normalized = expiresAt.includes("T") ? expiresAt : expiresAt.replace(" ", "T") + "Z";
-    const ms = new Date(normalized).getTime() - Date.now();
-    if (isNaN(ms) || ms <= 0) return "Expired";
-    const mins = Math.floor(ms / 60000);
-    if (mins < 60) return `${mins}m left`;
-    return `${Math.floor(mins / 60)}h ${mins % 60}m left`;
   }
 
   return (
@@ -399,6 +382,7 @@ export default function Dashboard() {
         {/* Bottom of sidebar */}
         <div className="px-3 py-4 border-t border-border/50 space-y-2">
           <div className="flex items-center justify-between px-3">
+            <NotificationBell token={token} onNavigate={handleNavClick} />
             <ThemeToggle />
             <form method="post" action="/logout">
               <button type="submit" className="text-xs text-text-muted hover:text-text">
@@ -416,6 +400,7 @@ export default function Dashboard() {
           <img src="/secretlink.png" alt="" className="w-6 h-6" />
         </a>
         <div className="flex items-center gap-2">
+          <NotificationBell token={token} onNavigate={handleNavClick} />
           <ThemeToggle />
           <form method="post" action="/logout">
             <button type="submit" className="text-xs text-text-muted hover:text-text">
@@ -438,6 +423,9 @@ export default function Dashboard() {
           {/* ─── INBOX TAB ─── */}
           {activeTab === "inbox" && (
             <section>
+              {/* Notification permission CTA (visible when off / blocked) */}
+              <NotificationPrompt token={token} />
+
               {/* Profile summary card */}
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center shrink-0">
@@ -465,6 +453,14 @@ export default function Dashboard() {
                   Copy
                 </button>
               </div>
+
+              {/* Stories — people you follow (above the search bar) */}
+              <StoriesRow
+                users={following as UserLite[]}
+                storyHandles={storyHandleSet}
+                viewedHandles={viewedHandles}
+                onSelect={(u, hasStory) => setSheetUser({ user: u, hasStory })}
+              />
 
               {/* Search */}
               <div className="mb-6">
@@ -504,6 +500,20 @@ export default function Dashboard() {
                             }`}
                           >
                             {followingMap[u.id] ? "Following" : "Follow"}
+                          </button>
+                        )}
+                        {u.id !== user.id && (
+                          <button
+                            onClick={() =>
+                              setSheetUser({
+                                user: { id: u.id, handle: u.handle, avatarUrl: u.avatarUrl, bio: u.bio, isPro: u.isPro },
+                                hasStory: storyHandleSet.has(u.handle.toLowerCase()),
+                              })
+                            }
+                            aria-label={`Actions for @${u.handle}`}
+                            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-text-muted hover:bg-surface hover:text-text transition-colors"
+                          >
+                            ⋯
                           </button>
                         )}
                       </div>
@@ -609,9 +619,14 @@ export default function Dashboard() {
                 <h2 className="text-lg font-bold">@{user.handle}</h2>
                 <p className="text-xs text-text-muted mt-1">{user.email ?? "No email set"}</p>
                 {hasPasskey && <span className="inline-block text-xs bg-success/10 text-success px-2 py-0.5 rounded-full mt-2">🔑 Passkey active</span>}
+                <div className="flex items-center justify-center gap-4 mt-3">
+                  <span className="text-xs text-text-muted"><strong className="text-text">{user.followersCount ?? 0}</strong> followers</span>
+                  <span className="text-xs text-text-muted"><strong className="text-text">{user.followingCount ?? 0}</strong> following</span>
+                </div>
               </div>
 
               {/* Edit form */}
+              {editingProfile ? (
               <div className="bg-surface-raised rounded-2xl border border-border p-4 sm:p-6 space-y-5">
                 <div>
                   <label className="block text-xs font-medium text-text-muted mb-1.5">Bio</label>
@@ -628,32 +643,39 @@ export default function Dashboard() {
 
                 <div>
                   <label className="block text-xs font-medium text-text-muted mb-1.5">Social links</label>
+                  <p className="text-xs text-text-muted/70 mb-2">Paste a link — we'll detect the platform automatically.</p>
                   <div className="space-y-2">
-                    {socials.map((s, i) => (
-                      <div key={i} className="flex gap-2">
-                        <select
-                          value={s.platform}
-                          onChange={(e) => updateSocial(i, "platform", e.target.value)}
-                          className="w-24 sm:w-32 rounded-lg bg-surface border border-border px-2 py-2 text-xs sm:text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/50"
-                        >
-                          <option value="">Platform</option>
-                          <option value="instagram">Instagram</option>
-                          <option value="twitter">Twitter/X</option>
-                          <option value="tiktok">TikTok</option>
-                          <option value="youtube">YouTube</option>
-                          <option value="github">GitHub</option>
-                          <option value="linkedin">LinkedIn</option>
-                          <option value="snapchat">Snapchat</option>
-                          <option value="telegram">Telegram</option>
-                          <option value="website">Website</option>
-                        </select>
-                        <input
-                          type="url"
-                          value={s.url}
-                          onChange={(e) => updateSocial(i, "url", e.target.value)}
-                          placeholder="https://..."
-                          className="flex-1 min-w-0 rounded-lg bg-surface border border-border px-2 py-2 text-xs sm:text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
-                        />
+                    {socials.map((s, i) => {
+                      const meta = getSocialMeta(s.platform);
+                      return (
+                      <div key={i} className="flex gap-2 items-center">
+                        <div className="w-9 h-9 shrink-0 rounded-lg bg-surface border border-border flex items-center justify-center text-base" title={meta.label}>
+                          {s.url ? meta.icon : "🔗"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <input
+                            type="url"
+                            value={s.url}
+                            onChange={(e) => updateSocial(i, "url", e.target.value)}
+                            placeholder="https://instagram.com/yourname"
+                            className="w-full rounded-lg bg-surface border border-border px-2.5 py-2 text-xs sm:text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
+                          />
+                          {s.url && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-xs text-text-muted">{meta.label}</span>
+                              <select
+                                value={s.platform}
+                                onChange={(e) => updateSocial(i, "platform", e.target.value)}
+                                className="text-xs bg-transparent text-text-muted/60 border-none focus:outline-none cursor-pointer hover:text-accent"
+                                title="Change platform"
+                              >
+                                {SOCIAL_PLATFORMS.map((p) => (
+                                  <option key={p} value={p}>{SOCIAL_META[p]!.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
                         <button
                           onClick={() => removeSocial(i)}
                           className="w-8 h-8 rounded-lg border border-border text-text-muted hover:text-red-400 hover:border-red-400/50 transition-colors flex items-center justify-center shrink-0 text-sm"
@@ -661,21 +683,77 @@ export default function Dashboard() {
                           ×
                         </button>
                       </div>
-                    ))}
+                      );
+                    })}
                     {socials.length < 10 && (
                       <button onClick={addSocial} className="text-xs text-accent">+ Add link</button>
                     )}
                   </div>
                 </div>
 
+                <div className="flex gap-2">
+                  <button
+                    onClick={cancelEditProfile}
+                    disabled={profileSaving}
+                    className="flex-1 rounded-xl bg-surface border border-border px-4 py-3 text-sm font-bold text-text hover:border-accent/50 transition-all disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveProfile}
+                    disabled={profileSaving}
+                    className="flex-1 rounded-xl bg-accent px-4 py-3 text-sm font-bold text-black hover:scale-[1.01] transition-all disabled:opacity-50"
+                  >
+                    {profileSaving ? "Saving..." : "Save profile"}
+                  </button>
+                </div>
+              </div>
+              ) : (
+              /* View mode */
+              <div className="bg-surface-raised rounded-2xl border border-border p-4 sm:p-6 space-y-5">
+                <div>
+                  <h3 className="text-xs font-medium text-text-muted mb-1.5">Bio</h3>
+                  {user.bio ? (
+                    <p className="text-sm text-text whitespace-pre-wrap leading-relaxed">{user.bio}</p>
+                  ) : (
+                    <p className="text-sm text-text-muted/50 italic">No bio yet</p>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-medium text-text-muted mb-2">Social links</h3>
+                  {(user.socials?.length ?? 0) > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {user.socials.map((s: { platform: string; url: string }, i: number) => {
+                        const meta = getSocialMeta(s.platform);
+                        return (
+                          <a
+                            key={i}
+                            href={s.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 rounded-full bg-surface border border-border px-3 py-1.5 text-sm text-text hover:border-accent/50 hover:scale-[1.03] transition-all"
+                            title={s.url}
+                          >
+                            <span className="text-base">{meta.icon}</span>
+                            <span className="text-xs font-medium">{meta.label}</span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-text-muted/50 italic">No social links yet</p>
+                  )}
+                </div>
+
                 <button
-                  onClick={saveProfile}
-                  disabled={profileSaving}
-                  className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-bold text-black hover:scale-[1.01] transition-all disabled:opacity-50"
+                  onClick={startEditProfile}
+                  className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-bold text-black hover:scale-[1.01] transition-all"
                 >
-                  {profileSaving ? "Saving..." : profileSaved ? "Saved ✓" : "Save profile"}
+                  {profileSaved ? "Saved ✓" : "Edit profile"}
                 </button>
               </div>
+              )}
 
               {/* Passkey section */}
               {!hasPasskey && (
@@ -693,350 +771,52 @@ export default function Dashboard() {
 
           {/* ─── MAP TAB ─── */}
           {activeTab === "map" && (
-            <section>
-              <h2 className="text-lg font-bold mb-4">🗺️ Secret Map</h2>
-              <p className="text-xs text-text-muted mb-4">Tap anywhere on the map to drop a secret</p>
-
-              {/* Map container */}
-              <div className="relative rounded-2xl border border-border overflow-hidden" style={{ height: "400px" }}>
-                <div ref={mapContainerRef} className="w-full h-full" />
-                {/* Locate me button */}
-                <button
-                  onClick={() => {
-                    if (navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                          const map = mapInstanceRef.current;
-                          const L = (window as any).L;
-                          if (map && L) {
-                            map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-                            const marker = L.circleMarker([pos.coords.latitude, pos.coords.longitude], {
-                              radius: 8, fillColor: '#facc15', fillOpacity: 1, color: '#fff', weight: 2
-                            }).addTo(map);
-                            setTimeout(() => map.removeLayer(marker), 5000);
-                          }
-                        },
-                        () => {}
-                      );
-                    }
-                  }}
-                  className="absolute bottom-4 right-4 z-[1000] w-10 h-10 rounded-full bg-surface-raised border border-border shadow-lg flex items-center justify-center hover:border-accent/50 transition-colors"
-                  aria-label="Locate me"
-                >
-                  <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.364-6.364l-1.414 1.414M7.05 16.95l-1.414 1.414m12.728 0l-1.414-1.414M7.05 7.05L5.636 5.636M12 8a4 4 0 100 8 4 4 0 000-8z" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Selected secret popup (outside map container so it's not clipped) */}
-              {selectedMapSecret && (
-                <div className="mt-4 bg-surface-raised rounded-xl border border-border p-4 relative">
-                  <button onClick={() => { setSelectedMapSecret(null); setMapSecretRevealed(false); setRevealCountdown(null); if (revealTimerRef.current) clearInterval(revealTimerRef.current); }} className="absolute top-2 right-3 text-text-muted hover:text-text text-lg">×</button>
-
-                  {!mapSecretRevealed ? (
-                    /* Tap to reveal state */
-                    <div className="text-center py-4">
-                      <span className="text-4xl block mb-3">{selectedMapSecret.emoji}</span>
-                      <p className="text-sm text-text-muted mb-1">
-                        {selectedMapSecret.handle ? `@${selectedMapSecret.handle} dropped a secret` : "Someone dropped a secret"}
-                      </p>
-                      <p className="text-xs text-text-muted mb-2">⏳ {mapTimeRemaining(selectedMapSecret.expires_at || selectedMapSecret.expiresAt)}</p>
-                      <p className="text-xs text-text-muted mb-4">
-                        {(selectedMapSecret.reveal_mode || selectedMapSecret.revealMode) === "clicks"
-                          ? `👆 ${selectedMapSecret.click_count ?? selectedMapSecret.clickCount ?? 0}/${selectedMapSecret.max_clicks ?? selectedMapSecret.maxClicks ?? "?"} reveals used`
-                          : `⏱️ Disappears ${selectedMapSecret.reveal_timer_seconds ?? selectedMapSecret.revealTimerSeconds ?? 30}s after reveal`
-                        }
-                      </p>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const res = await fetch(`${getApiBase()}/v1/secrets/map/${selectedMapSecret.id}/reveal`, { method: "POST" });
-                            const data = await res.json();
-                            if (!res.ok) {
-                              if (data.error === "limit_reached") {
-                                setSelectedMapSecret({ ...selectedMapSecret, _limitReached: true, _limitMessage: data.message });
-                                setMapSecretRevealed(true);
-                              }
-                              return;
-                            }
-                            setSelectedMapSecret({ ...selectedMapSecret, ...data });
-                            setMapSecretRevealed(true);
-                            // Start countdown for timer mode
-                            const mode = data.reveal_mode || data.revealMode || "timer";
-                            if (mode === "timer") {
-                              const secs = data.reveal_timer_seconds ?? data.revealTimerSeconds ?? 30;
-                              setRevealCountdown(secs);
-                              if (revealTimerRef.current) clearInterval(revealTimerRef.current);
-                              revealTimerRef.current = setInterval(() => {
-                                setRevealCountdown((prev: number | null) => {
-                                  if (prev === null || prev <= 1) {
-                                    clearInterval(revealTimerRef.current);
-                                    setMapSecretRevealed(false);
-                                    setSelectedMapSecret(null);
-                                    return null;
-                                  }
-                                  return prev - 1;
-                                });
-                              }, 1000);
-                            }
-                          } catch {}
-                        }}
-                        className="rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black hover:scale-[1.03] transition-all"
-                      >
-                        Tap to reveal 👁️
-                      </button>
-                    </div>
-                  ) : selectedMapSecret._limitReached ? (
-                    /* Limit reached state */
-                    <div className="text-center py-6">
-                      <span className="text-4xl block mb-3">🚫</span>
-                      <p className="text-sm text-text font-medium">{selectedMapSecret._limitMessage || "This secret has reached its reveal limit."}</p>
-                      <p className="text-xs text-text-muted mt-2">No more reveals available</p>
-                    </div>
-                  ) : (
-                    /* Revealed state */
-                    <div className="flex flex-col gap-3">
-                      {/* Timer countdown bar */}
-                      {revealCountdown !== null && (
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-accent rounded-full transition-all duration-1000"
-                              style={{ width: `${(revealCountdown / (selectedMapSecret.reveal_timer_seconds ?? selectedMapSecret.revealTimerSeconds ?? 30)) * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-accent font-mono">{revealCountdown}s</span>
-                        </div>
-                      )}
-                      {/* Click count badge */}
-                      {(selectedMapSecret.reveal_mode || selectedMapSecret.revealMode) === "clicks" && (
-                        <div className="text-xs text-text-muted">
-                          👆 {selectedMapSecret.click_count ?? selectedMapSecret.clickCount}/{selectedMapSecret.max_clicks ?? selectedMapSecret.maxClicks} reveals used
-                        </div>
-                      )}
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl">{selectedMapSecret.emoji}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-text text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMapSecret.message}</p>
-                          <div className="flex items-center gap-2 mt-3">
-                            {selectedMapSecret.handle && (
-                              <a href={`/${selectedMapSecret.handle}`} className="text-xs text-accent">@{selectedMapSecret.handle}</a>
-                            )}
-                            <span className="text-xs text-text-muted">⏳ {mapTimeRemaining(selectedMapSecret.expires_at || selectedMapSecret.expiresAt)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      {/* Media attachment */}
-                      {(selectedMapSecret.media_path || selectedMapSecret.mediaPath) && (
-                        <div className="mt-2">
-                          {(selectedMapSecret.media_type || selectedMapSecret.mediaType || "").startsWith("image/") ? (
-                            <img
-                              src={`${getApiBase()}/v1/secrets/blob/${selectedMapSecret.media_path || selectedMapSecret.mediaPath}`}
-                              alt="Attached image"
-                              className="max-w-full max-h-64 rounded-xl border border-border"
-                            />
-                          ) : (selectedMapSecret.media_type || selectedMapSecret.mediaType || "").startsWith("video/") ? (
-                            <video
-                              src={`${getApiBase()}/v1/secrets/blob/${selectedMapSecret.media_path || selectedMapSecret.mediaPath}`}
-                              controls
-                              className="max-w-full max-h-64 rounded-xl border border-border"
-                            />
-                          ) : (
-                            <a
-                              href={`${getApiBase()}/v1/secrets/blob/${selectedMapSecret.media_path || selectedMapSecret.mediaPath}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 text-sm text-accent bg-accent/10 px-4 py-2 rounded-lg hover:bg-accent/20 transition-colors"
-                            >
-                              📎 Download attachment
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Post form (shown when map is clicked) */}
-              {showMapPost && mapClickedPos && (
-                <div className="mt-4 bg-surface-raised rounded-2xl border border-border p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold">Drop a secret here</h3>
-                    <button onClick={() => { setShowMapPost(false); setMapClickedPos(null); if (mapPinMarkerRef.current && mapInstanceRef.current) { mapInstanceRef.current.removeLayer(mapPinMarkerRef.current); mapPinMarkerRef.current = null; } }} className="text-text-muted hover:text-text text-lg">×</button>
-                  </div>
-
-                  {/* Message input */}
-                  <textarea
-                    value={mapMessage}
-                    onChange={(e) => setMapMessage(e.target.value)}
-                    maxLength={500}
-                    rows={3}
-                    placeholder="Write your secret..."
-                    className="w-full rounded-xl bg-surface border border-border px-3 py-2.5 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
-                  />
-
-                  {/* File preview */}
-                  {mapFilePreview && mapFile && (
-                    <div className="mt-2 relative inline-block">
-                      {mapFile.type.startsWith("image/") ? (
-                        <img src={mapFilePreview} alt="preview" className="max-h-24 rounded-lg border border-border" />
-                      ) : mapFile.type.startsWith("video/") ? (
-                        <video src={mapFilePreview} className="max-h-24 rounded-lg border border-border" controls />
-                      ) : null}
-                      <button
-                        onClick={() => { setMapFile(null); setMapFilePreview(null); }}
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
-                      >×</button>
-                    </div>
-                  )}
-                  {mapFile && !mapFilePreview && (
-                    <div className="mt-2 flex items-center gap-2 text-xs text-text-muted bg-surface rounded-lg border border-border px-3 py-2">
-                      <span>📎</span>
-                      <span className="truncate">{mapFile.name}</span>
-                      <button onClick={() => { setMapFile(null); setMapFilePreview(null); }} className="text-red-400 ml-auto">×</button>
-                    </div>
-                  )}
-
-                  {/* Attachments row */}
-                  <input ref={mapFileInputRef} type="file" accept="image/*,video/*,.pdf,.txt,.doc,.docx" className="hidden" onChange={handleMapFileSelect} />
-                  <div className="flex items-center gap-1.5 mt-3">
-                    <button
-                      onClick={() => mapFileInputRef.current?.click()}
-                      className="flex items-center gap-1 text-xs text-text-muted bg-surface border border-border rounded-lg px-2 py-1.5 hover:border-accent/50 transition-colors"
-                    >📎</button>
-                    <button
-                      onClick={() => { if (mapFileInputRef.current) { mapFileInputRef.current.accept = "image/*"; mapFileInputRef.current.click(); mapFileInputRef.current.accept = "image/*,video/*,.pdf,.txt,.doc,.docx"; } }}
-                      className="flex items-center gap-1 text-xs text-text-muted bg-surface border border-border rounded-lg px-2 py-1.5 hover:border-accent/50 transition-colors"
-                    >📸</button>
-                    <button
-                      onClick={() => { if (mapFileInputRef.current) { mapFileInputRef.current.accept = "video/*"; mapFileInputRef.current.click(); mapFileInputRef.current.accept = "image/*,video/*,.pdf,.txt,.doc,.docx"; } }}
-                      className="flex items-center gap-1 text-xs text-text-muted bg-surface border border-border rounded-lg px-2 py-1.5 hover:border-accent/50 transition-colors"
-                    >🎬</button>
-                    <div className="flex-1" />
-                    {/* Emoji selector */}
-                    {["💬", "❤️", "🔥", "👀", "🤫", "💀", "🎉", "😂"].map((e) => (
-                      <button
-                        key={e}
-                        onClick={() => setMapEmoji(e)}
-                        className={`w-6 h-6 rounded flex items-center justify-center text-xs transition-all ${
-                          mapEmoji === e ? "bg-accent/20 scale-110 ring-1 ring-accent" : "hover:bg-surface-raised"
-                        }`}
-                      >
-                        {e}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Settings grid */}
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {/* Pin expires */}
-                    <div>
-                      <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Pin expires</label>
-                      <select
-                        value={mapTtl}
-                        onChange={(e) => setMapTtl(Number(e.target.value))}
-                        className="w-full text-xs bg-surface border border-border rounded-lg px-2 py-1.5 text-text"
-                      >
-                        <option value={5}>5 min</option>
-                        <option value={30}>30 min</option>
-                        <option value={60}>1 hour</option>
-                        <option value={360}>6 hours</option>
-                        <option value={1440}>24 hours</option>
-                      </select>
-                    </div>
-
-                    {/* Reveal mode */}
-                    <div>
-                      <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Reveal mode</label>
-                      <div className="flex rounded-lg border border-border overflow-hidden">
-                        <button
-                          onClick={() => setMapRevealMode("timer")}
-                          className={`flex-1 text-xs py-1.5 transition-colors ${
-                            mapRevealMode === "timer" ? "bg-accent text-black font-medium" : "bg-surface text-text-muted"
-                          }`}
-                        >⏱️</button>
-                        <button
-                          onClick={() => setMapRevealMode("clicks")}
-                          className={`flex-1 text-xs py-1.5 transition-colors ${
-                            mapRevealMode === "clicks" ? "bg-accent text-black font-medium" : "bg-surface text-text-muted"
-                          }`}
-                        >👆</button>
-                      </div>
-                    </div>
-
-                    {/* Timer / clicks value */}
-                    <div className="col-span-2">
-                      {mapRevealMode === "timer" ? (
-                        <div>
-                          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">View time</label>
-                          <select
-                            value={mapRevealTimer}
-                            onChange={(e) => setMapRevealTimer(Number(e.target.value))}
-                            className="w-full text-xs bg-surface border border-border rounded-lg px-2 py-1.5 text-text"
-                          >
-                            <option value={5}>5 seconds</option>
-                            <option value={10}>10 seconds</option>
-                            <option value={15}>15 seconds</option>
-                            <option value={30}>30 seconds</option>
-                            <option value={60}>1 minute</option>
-                            <option value={120}>2 minutes</option>
-                          </select>
-                        </div>
-                      ) : (
-                        <div>
-                          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Max reveals</label>
-                          <select
-                            value={mapMaxClicks}
-                            onChange={(e) => setMapMaxClicks(Number(e.target.value))}
-                            className="w-full text-xs bg-surface border border-border rounded-lg px-2 py-1.5 text-text"
-                          >
-                            <option value={1}>1 reveal only</option>
-                            <option value={3}>3 reveals</option>
-                            <option value={5}>5 reveals</option>
-                            <option value={10}>10 reveals</option>
-                            <option value={25}>25 reveals</option>
-                            <option value={50}>50 reveals</option>
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={postMapSecret}
-                    disabled={mapPosting || !mapMessage.trim()}
-                    className="w-full mt-4 rounded-full bg-accent px-4 py-2.5 text-sm font-bold text-black hover:scale-[1.02] transition-all disabled:opacity-50"
-                  >
-                    {mapPosting ? "Dropping..." : "Drop secret 📍"}
-                  </button>
-                </div>
-              )}
-
-              {/* Recent secrets list */}
-              {mapSecrets.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-sm font-semibold mb-3">Recent drops</h3>
-                  <div className="space-y-2">
-                    {mapSecrets.slice(0, 10).map((s: any) => (
-                      <div key={s.id} className="flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3">
-                        <span className="text-lg">{s.emoji}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm truncate">{s.message}</p>
-                          <p className="text-xs text-text-muted">
-                            {s.handle && `@${s.handle} · `}⏳ {mapTimeRemaining(s.expires_at || s.expiresAt)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
+            <MapTab user={user} following={following as Array<{ handle?: string; avatarUrl?: string | null }>} />
           )}
         </div>
       </div>
+      )}
+
+      {/* ─── Home create button (post story / secret / pin on map) ─── */}
+      {activeTab === "inbox" && (
+        <>
+          {fabOpen && (
+            <button
+              aria-label="Close menu"
+              className="fixed inset-0 z-40 bg-black/40"
+              onClick={() => setFabOpen(false)}
+            />
+          )}
+          <div className="fixed right-4 bottom-20 sm:bottom-6 z-50 flex flex-col items-end gap-3">
+            {fabOpen && (
+              <div className="flex flex-col items-end gap-3 mb-1">
+                {[
+                  { label: "Post story", emoji: "✨", onClick: () => { setFabOpen(false); setShowStoryComposer(true); } },
+                  { label: "Post secret", emoji: "🔐", onClick: () => { setFabOpen(false); navigate("/send"); } },
+                  { label: "Pin on map", emoji: "📍", onClick: () => { setFabOpen(false); setActiveTab("map"); } },
+                ].map((a) => (
+                  <button key={a.label} onClick={a.onClick} className="flex items-center gap-2">
+                    <span className="text-xs font-medium bg-surface-raised border border-border rounded-full px-3 py-1.5 shadow-lg">
+                      {a.label}
+                    </span>
+                    <span className="w-11 h-11 rounded-full bg-surface-raised border border-border flex items-center justify-center text-lg shadow-lg">
+                      {a.emoji}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setFabOpen((o) => !o)}
+              aria-label="Create"
+              className={`w-14 h-14 rounded-full bg-accent text-black shadow-lg flex items-center justify-center transition-transform ${fabOpen ? "rotate-45" : ""}`}
+            >
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+            </button>
+          </div>
+        </>
       )}
 
       {/* ─── Bottom Navigation (mobile only) ─── */}
@@ -1060,6 +840,54 @@ export default function Dashboard() {
         </div>
       </nav>
       )}
+
+      {/* Profile action sheet (from stories row / search results) */}
+      {sheetUser && (
+        <ProfileActionSheet
+          user={sheetUser.user}
+          hasStory={sheetUser.hasStory}
+          onViewStory={() => setStoryViewer(sheetUser.user)}
+          onClose={() => setSheetUser(null)}
+        />
+      )}
+
+      {/* Instagram-style story viewer */}
+      {storyViewer && (
+        <StoryViewer
+          handle={storyViewer.handle}
+          avatarUrl={storyViewer.avatarUrl}
+          onClose={() => setStoryViewer(null)}
+          onViewed={(id) => setViewedStoryIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))}
+        />
+      )}
+
+      {/* Quick "add to your story" composer (current-location) */}
+      {showStoryComposer && (
+        <StoryComposer
+          handle={user.handle}
+          onClose={() => setShowStoryComposer(false)}
+          onPosted={() => revalidator.revalidate()}
+        />
+      )}
+    </main>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  return (
+    <main className="min-h-screen flex items-center justify-center px-4 bg-surface">
+      <div className="text-center max-w-md">
+        <h1 className="text-2xl font-bold mb-2">
+          {isRouteErrorResponse(error) ? `${error.status} — ${error.statusText}` : "Dashboard Error"}
+        </h1>
+        <p className="text-text-muted mb-6">
+          {isRouteErrorResponse(error) ? error.data : "Something went wrong loading your dashboard."}
+        </p>
+        <Link to="/login" className="rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black">
+          Back to login
+        </Link>
+      </div>
     </main>
   );
 }

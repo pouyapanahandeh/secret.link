@@ -9,12 +9,16 @@ export const CreateSecretInput = z.object({
   blobPath: z.string().optional(),
   blobSizeBytes: z.number().int().positive().optional(),
   mimeType: z.string().optional(),
-  nonce: z.string().nullable().optional(),
+  nonce: z.string().nullish().transform(v => v ?? undefined),
   viewDurationSeconds: z.number().int().min(5).max(300).optional(),
   ttlSeconds: z.number().int().min(5).max(60 * 60 * 24 * 30),
   maxViews: z.number().int().min(1).max(100).default(1),
   workspaceId: z.string().uuid().optional(),
+  senderId: z.string().min(1).optional(),
   recipientHandle: z.string().min(1).optional(),
+  wrappedKey: z.string().min(1).optional(),
+  wrapNonce: z.string().min(1).optional(),
+  wrapEpk: z.string().min(1).optional(),
 });
 
 export type CreateSecretInput = z.infer<typeof CreateSecretInput>;
@@ -52,7 +56,11 @@ export const createSecret =
       createdAt: now,
       expiresAt,
       workspaceId: parsed.data.workspaceId,
+      senderId: parsed.data.senderId,
       recipientHandle: parsed.data.recipientHandle,
+      wrappedKey: parsed.data.wrappedKey,
+      wrapNonce: parsed.data.wrapNonce,
+      wrapEpk: parsed.data.wrapEpk,
       burned: false,
     };
 

@@ -4,8 +4,20 @@ import { nanoid } from "nanoid";
 import { requireAuth, verifyToken, type AuthPayload } from "../middleware/auth.js";
 import { dmRateLimiter } from "../middleware/rate-limiter.js";
 import db from "../db.js";
+import { createNotification } from "../notifications.js";
 
 export const dmsRouter = new Router({ prefix: "/dms" });
+
+// ─── SSE ticket management (short-lived tokens for EventSource) ─────────────
+const sseTickets = new Map<string, { userId: string; conversationId: string; expiresAt: number }>();
+
+// Clean expired tickets periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of sseTickets) {
+    if (now > val.expiresAt) sseTickets.delete(key);
+  }
+}, 60_000);
 
 // ─── SSE client management ──────────────────────────────────────────────────
 interface SSEClient {
@@ -162,6 +174,15 @@ dmsRouter.post("/conversations/:id/messages", requireAuth(), dmRateLimiter(), as
   // Notify SSE clients
   notifyConversation(convId, "new_message", msgResponse);
 
+  // Persist a notification for the recipient (live push + history)
+  createNotification({
+    userId: recipientId,
+    type: "message",
+    actorId: auth.userId,
+    actorHandle: auth.handle,
+    entityId: convId,
+  });
+
   ctx.status = 201;
   ctx.body = msgResponse;
 });
@@ -192,6 +213,18 @@ dmsRouter.get("/conversations/:id/messages", requireAuth(), async (ctx: Context)
   if (unreadBefore.length > 0) {
     const messageIds = unreadBefore.map((r: any) => r.id);
     notifyConversation(convId, "messages_read", { messageIds, readAt: now }, auth.userId);
+
+    // Notify each distinct sender that their message(s) were read
+    const senderIds = [...new Set(unreadBefore.map((r: any) => r.sender_id as string))];
+    for (const senderId of senderIds) {
+      createNotification({
+        userId: senderId,
+        type: "message_read",
+        actorId: auth.userId,
+        actorHandle: auth.handle,
+        entityId: convId,
+      });
+    }
   }
 
   let rows: any[];
@@ -297,26 +330,74 @@ dmsRouter.post("/conversations/:id/typing", requireAuth(), async (ctx: Context) 
 });
 
 // ─── SSE Stream ─────────────────────────────────────────────────────────────
-dmsRouter.get("/stream", async (ctx: Context) => {
-  // Auth via query param (EventSource can't set headers)
-  const tokenParam = ctx.query["token"] as string;
-  const conversationId = ctx.query["conversationId"] as string;
-  if (!tokenParam || !conversationId) {
+// Issue a short-lived ticket for SSE (since EventSource can't set headers)
+dmsRouter.post("/stream-ticket", requireAuth(), async (ctx: Context) => {
+  const auth = ctx.state.user as AuthPayload;
+  const body = ctx.request.body as Record<string, unknown>;
+  const conversationId = String(body.conversationId ?? "").trim();
+
+  if (!conversationId) {
     ctx.status = 400;
-    ctx.body = { error: "token and conversationId required" };
+    ctx.body = { error: "conversationId required" };
     return;
   }
 
-  const payload = verifyToken(tokenParam);
-  if (!payload) {
-    ctx.status = 401;
-    ctx.body = { error: "invalid_token" };
+  // Verify user is participant
+  const conv = stmts.getConversation.get(conversationId) as any;
+  if (!conv || (conv.participant1_id !== auth.userId && conv.participant2_id !== auth.userId)) {
+    ctx.status = 404;
+    ctx.body = { error: "Conversation not found" };
+    return;
+  }
+
+  const ticket = nanoid(32);
+  sseTickets.set(ticket, {
+    userId: auth.userId,
+    conversationId,
+    expiresAt: Date.now() + 30_000, // 30-second expiry
+  });
+
+  ctx.body = { ticket };
+});
+
+dmsRouter.get("/stream", async (ctx: Context) => {
+  // Auth via short-lived ticket (preferred) or legacy token param
+  const ticketParam = ctx.query["ticket"] as string;
+  const tokenParam = ctx.query["token"] as string;
+  const conversationIdParam = ctx.query["conversationId"] as string;
+
+  let userId: string;
+  let conversationId: string;
+
+  if (ticketParam) {
+    const ticketData = sseTickets.get(ticketParam);
+    if (!ticketData || Date.now() > ticketData.expiresAt) {
+      ctx.status = 401;
+      ctx.body = { error: "invalid_or_expired_ticket" };
+      return;
+    }
+    userId = ticketData.userId;
+    conversationId = ticketData.conversationId;
+    sseTickets.delete(ticketParam); // one-time use
+  } else if (tokenParam && conversationIdParam) {
+    // Legacy: token in query string (deprecated)
+    const payload = verifyToken(tokenParam);
+    if (!payload) {
+      ctx.status = 401;
+      ctx.body = { error: "invalid_token" };
+      return;
+    }
+    userId = payload.userId;
+    conversationId = conversationIdParam;
+  } else {
+    ctx.status = 400;
+    ctx.body = { error: "ticket or (token + conversationId) required" };
     return;
   }
 
   // Verify user is participant of this conversation
   const conv = stmts.getConversation.get(conversationId) as any;
-  if (!conv || (conv.participant1_id !== payload.userId && conv.participant2_id !== payload.userId)) {
+  if (!conv || (conv.participant1_id !== userId && conv.participant2_id !== userId)) {
     ctx.status = 404;
     ctx.body = { error: "Conversation not found" };
     return;
@@ -335,7 +416,7 @@ dmsRouter.get("/stream", async (ctx: Context) => {
   stream.write("event: connected\ndata: {}\n\n");
 
   const client: SSEClient = {
-    userId: payload.userId,
+    userId,
     conversationId,
     write: (event: string, data: any) => {
       try { stream.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}

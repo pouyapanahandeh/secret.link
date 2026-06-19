@@ -1,32 +1,46 @@
 import type { Context, Next } from "koa";
-
-const requests = new Map<string, { count: number; resetAt: number }>();
+import db from "../db.js";
 
 const WINDOW_MS = 60_000; // 1 minute
 const MAX_REQUESTS = 100;
-const MAX_REQUESTS_AUTHED = 200; // Authenticated users get higher limit
+const MAX_REQUESTS_AUTHED = 200;
+
+const stmts = {
+  get: db.prepare(`SELECT count, reset_at FROM rate_limits WHERE key = ?`),
+  upsert: db.prepare(`INSERT INTO rate_limits (key, count, reset_at) VALUES (?, 1, ?)
+    ON CONFLICT(key) DO UPDATE SET count = count + 1, reset_at = CASE WHEN excluded.reset_at > rate_limits.reset_at THEN excluded.reset_at ELSE rate_limits.reset_at END`),
+  reset: db.prepare(`UPDATE rate_limits SET count = 1, reset_at = ? WHERE key = ?`),
+  cleanup: db.prepare(`DELETE FROM rate_limits WHERE reset_at < ?`),
+};
+
+// Periodically clean expired entries
+setInterval(() => { stmts.cleanup.run(Date.now()); }, 60_000);
 
 export function rateLimiter() {
   return async (ctx: Context, next: Next) => {
-    // Use userId if authenticated, else IP
     const userId = ctx.state?.user?.userId;
     const key = userId ? `user:${userId}` : `ip:${ctx.ip}`;
     const limit = userId ? MAX_REQUESTS_AUTHED : MAX_REQUESTS;
     const now = Date.now();
 
-    let entry = requests.get(key);
-    if (!entry || now > entry.resetAt) {
-      entry = { count: 0, resetAt: now + WINDOW_MS };
-      requests.set(key, entry);
+    const row = stmts.get.get(key) as { count: number; reset_at: number } | undefined;
+
+    let count: number;
+    if (!row || now > row.reset_at) {
+      stmts.reset.run(now + WINDOW_MS, key);
+      if (!row) stmts.upsert.run(key, now + WINDOW_MS);
+      count = 1;
+    } else {
+      stmts.upsert.run(key, now + WINDOW_MS);
+      count = row.count + 1;
     }
 
-    entry.count++;
-
+    const resetAt = row && now <= row.reset_at ? row.reset_at : now + WINDOW_MS;
     ctx.set("X-RateLimit-Limit", String(limit));
-    ctx.set("X-RateLimit-Remaining", String(Math.max(0, limit - entry.count)));
-    ctx.set("X-RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
+    ctx.set("X-RateLimit-Remaining", String(Math.max(0, limit - count)));
+    ctx.set("X-RateLimit-Reset", String(Math.ceil(resetAt / 1000)));
 
-    if (entry.count > limit) {
+    if (count > limit) {
       ctx.status = 429;
       ctx.body = { error: "rate_limit_exceeded" };
       return;
@@ -37,7 +51,6 @@ export function rateLimiter() {
 }
 
 // DM-specific rate limiter: 30 messages per minute per user
-const dmRequests = new Map<string, { count: number; resetAt: number }>();
 const DM_WINDOW_MS = 60_000;
 const DM_MAX_MESSAGES = 30;
 
@@ -49,17 +62,22 @@ export function dmRateLimiter() {
     const key = `dm:${userId}`;
     const now = Date.now();
 
-    let entry = dmRequests.get(key);
-    if (!entry || now > entry.resetAt) {
-      entry = { count: 0, resetAt: now + DM_WINDOW_MS };
-      dmRequests.set(key, entry);
+    const row = stmts.get.get(key) as { count: number; reset_at: number } | undefined;
+
+    let count: number;
+    if (!row || now > row.reset_at) {
+      stmts.reset.run(now + DM_WINDOW_MS, key);
+      if (!row) stmts.upsert.run(key, now + DM_WINDOW_MS);
+      count = 1;
+    } else {
+      stmts.upsert.run(key, now + DM_WINDOW_MS);
+      count = row.count + 1;
     }
 
-    entry.count++;
-
-    if (entry.count > DM_MAX_MESSAGES) {
+    if (count > DM_MAX_MESSAGES) {
+      const resetAt = row && now <= row.reset_at ? row.reset_at : now + DM_WINDOW_MS;
       ctx.status = 429;
-      ctx.body = { error: "message_rate_limit_exceeded", retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+      ctx.body = { error: "message_rate_limit_exceeded", retryAfter: Math.ceil((resetAt - now) / 1000) };
       return;
     }
 
