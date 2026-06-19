@@ -16,6 +16,11 @@ export type SecretRecord = {
   readonly workspaceId?: string;
   readonly senderId?: string;
   readonly recipientHandle?: string;
+  // E2E key delivery (profile-addressed secrets): the AES key wrapped to the
+  // recipient's X25519 public key. The server stores these as opaque blobs.
+  readonly wrappedKey?: string;
+  readonly wrapNonce?: string;
+  readonly wrapEpk?: string;
   readonly burned: boolean;
 };
 

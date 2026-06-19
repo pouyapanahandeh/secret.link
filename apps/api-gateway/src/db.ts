@@ -1,13 +1,16 @@
 import Database from "better-sqlite3";
+import type BetterSqlite3 from "better-sqlite3";
 import path from "node:path";
+import { mkdirSync } from "node:fs";
 
 const DB_PATH = process.env["DB_PATH"] ?? path.resolve(process.cwd(), "data", "secretlink.db");
 
-// Ensure data directory exists
-import { mkdirSync } from "node:fs";
-mkdirSync(path.dirname(DB_PATH), { recursive: true });
+// Ensure data directory exists (skip for in-memory DBs)
+if (DB_PATH !== ":memory:") {
+  mkdirSync(path.dirname(DB_PATH), { recursive: true });
+}
 
-const db = new Database(DB_PATH);
+const db: BetterSqlite3.Database = new Database(DB_PATH);
 
 // Enable WAL mode for better performance
 db.pragma("journal_mode = WAL");
@@ -118,6 +121,60 @@ try { db.exec(`ALTER TABLE map_secrets ADD COLUMN media_type TEXT`); } catch {}t
 try { db.exec(`ALTER TABLE map_secrets ADD COLUMN reveal_timer_seconds INTEGER DEFAULT 30`); } catch {}
 try { db.exec(`ALTER TABLE map_secrets ADD COLUMN max_clicks INTEGER DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE map_secrets ADD COLUMN click_count INTEGER DEFAULT 0`); } catch {}
+
+// E2E key delivery for profile-addressed secrets (wrapped to recipient's X25519 key)
+try { db.exec(`ALTER TABLE secrets ADD COLUMN wrapped_key TEXT`); } catch {}
+try { db.exec(`ALTER TABLE secrets ADD COLUMN wrap_nonce TEXT`); } catch {}
+try { db.exec(`ALTER TABLE secrets ADD COLUMN wrap_epk TEXT`); } catch {}
+
+// Challenges table for WebAuthn
+db.exec(`
+  CREATE TABLE IF NOT EXISTS challenges (
+    user_id TEXT PRIMARY KEY,
+    challenge TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+`);
+
+// Rate limit table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS rate_limits (
+    key TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at INTEGER NOT NULL
+  );
+`);
+
+// Notifications table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    actor_id TEXT,
+    actor_handle TEXT,
+    entity_id TEXT,
+    data TEXT,
+    read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_notif_user_created ON notifications(user_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_notif_user_read ON notifications(user_id, read);
+`);
+
+// Web Push subscriptions (one row per browser/device endpoint)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_push_sub_user ON push_subscriptions(user_id);
+`);
 
 // ─── Conversations FK migration (safe to re-run) ────────────────────────────
 try {

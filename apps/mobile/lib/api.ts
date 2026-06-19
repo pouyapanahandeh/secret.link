@@ -171,14 +171,16 @@ export type MapSecret = {
   lng: number;
   emoji: string;
   handle?: string;
-  media_path?: string;
-  media_type?: string;
-  reveal_mode: "timer" | "clicks";
-  reveal_timer_seconds: number;
-  max_clicks: number;
-  click_count: number;
-  created_at: string;
-  expires_at: string;
+  locationName?: string | null;
+  cityName?: string | null;
+  mediaPath?: string | null;
+  mediaType?: string | null;
+  revealMode: "timer" | "clicks";
+  revealTimerSeconds: number;
+  maxClicks: number;
+  clickCount: number;
+  createdAt: string;
+  expiresAt: string;
 };
 
 export const secretsApi = {
@@ -247,6 +249,8 @@ export const secretsApi = {
     emoji: string;
     ttlMinutes: number;
     handle?: string;
+    locationName?: string;
+    cityName?: string;
     revealMode?: "timer" | "clicks";
     revealTimerSeconds?: number;
     maxClicks?: number;
@@ -255,6 +259,15 @@ export const secretsApi = {
 
   revealMapSecret: (id: string) =>
     api<MapSecret>(`/secrets/map/${id}/reveal`, { method: "POST" }),
+
+  getMapSecretsByHandle: (handle: string) =>
+    api<MapSecret[]>(`/secrets/map/by-handle/${encodeURIComponent(handle)}`),
+
+  reportMapSecret: (id: string, reason: string, details?: string) =>
+    api<{ ok: boolean }>(`/secrets/map/${id}/report`, {
+      method: "POST",
+      body: { reason, details: details || undefined },
+    }),
 };
 
 // DMs

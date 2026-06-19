@@ -21,7 +21,7 @@ export default function handleRequest(
     "max-age=63072000; includeSubDomains; preload"
   );
   responseHeaders.set("X-XSS-Protection", "0");
-  responseHeaders.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
+  responseHeaders.set("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(self)");
 
   return new Promise((resolve, reject) => {
     let shellRendered = false;

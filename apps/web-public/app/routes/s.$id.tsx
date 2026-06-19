@@ -76,6 +76,54 @@ export default function RevealSecret() {
 
       // If no key in URL, show raw (legacy secrets without encryption)
       if (!keyParam || !nonce) {
+        // Profile-addressed secret: the AES key was wrapped to our X25519 key
+        // and delivered via the API (no key in the URL). Try to unwrap it.
+        if (nonce && data.wrappedKey && data.wrapNonce && data.wrapEpk) {
+          const { getStoredKeyPair, unwrapKeyFromSender } = await import("../lib/dm-crypto");
+          const kp = await getStoredKeyPair();
+          if (!kp) {
+            setError("This secret was sent to your account, but secure keys aren't set up in this browser. Open your dashboard on the device where you first signed in.");
+            return;
+          }
+          let rawKey: Uint8Array;
+          try {
+            rawKey = await unwrapKeyFromSender(
+              { wrappedKey: data.wrappedKey, wrapNonce: data.wrapNonce, wrapEpk: data.wrapEpk },
+              kp.privateKey,
+            );
+          } catch {
+            setError("Couldn't unlock this secret with your keys. It may have been sent to a different device.");
+            return;
+          }
+          const { decryptBlob: decryptBlobW, keyFromRawBytes } = await import("../lib/crypto");
+          const wrappedAesKey = await keyFromRawBytes(rawKey);
+
+          if (contentType === "text") {
+            const binaryStr = atob(data.ciphertext);
+            const ciphertextBytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+              ciphertextBytes[i] = binaryStr.charCodeAt(i);
+            }
+            const decrypted = await decryptBlobW(ciphertextBytes, nonce, wrappedAesKey);
+            setContent({ type: "text", text: new TextDecoder().decode(decrypted) });
+          } else {
+            const blobRes = await fetch(`${apiBase}/v1/secrets/blob/${data.blobPath}`);
+            if (!blobRes.ok) {
+              setError("Failed to download encrypted file.");
+              return;
+            }
+            const encryptedBlob = new Uint8Array(await blobRes.arrayBuffer());
+            const decrypted = await decryptBlobW(encryptedBlob, nonce, wrappedAesKey);
+            const mimeType = data.mimeType ?? "application/octet-stream";
+            const objectUrl = URL.createObjectURL(new Blob([decrypted as BlobPart], { type: mimeType }));
+            if (contentType === "image") setContent({ type: "image", objectUrl });
+            else if (contentType === "video") setContent({ type: "video", objectUrl, mimeType });
+            else setContent({ type: "file", objectUrl, mimeType });
+          }
+          setRevealed(true);
+          return;
+        }
+
         if (contentType === "text") {
           setContent({ type: "text", text: data.ciphertext });
         } else {
@@ -166,19 +214,35 @@ export default function RevealSecret() {
   }
 
   if (revealed && content) {
-    const isClicksMode = maxViews > 1;
     return (
       <main className="flex min-h-screen flex-col items-center justify-center px-4 pt-20 pb-10">
         <AppNav />
         <div className="max-w-lg w-full">
           <p className="text-xs text-text-muted mb-4 text-center">
-            {isClicksMode
-              ? `${remainingViews ?? 0} reveal${(remainingViews ?? 0) === 1 ? "" : "s"} remaining`
-              : "This secret has been revealed and is now destroyed"
+            {maxViews === 1
+              ? "This secret has been revealed and is now destroyed"
+              : `${remainingViews ?? 0} view${(remainingViews ?? 0) === 1 ? "" : "s"} remaining`
             }
           </p>
 
-          {isClicksMode ? (
+          <ProtectedViewer
+            autoHideSeconds={viewDurationSeconds}
+            onExpired={() => {
+              if (remainingViews !== null && remainingViews > 0) {
+                // Multi-view: hide content but allow re-open
+                setRevealed(false);
+                setRevealing(false);
+                setContent(null);
+              } else {
+                // Single view or last view: mark as destroyed
+                setExpired(true);
+                if (content.type !== "text" && "objectUrl" in content) {
+                  URL.revokeObjectURL(content.objectUrl);
+                }
+                setContent(null);
+              }
+            }}
+          >
             <div className="rounded-2xl border border-border bg-surface-raised p-6">
               {content.type === "text" && (
                 <p className="text-lg text-text leading-relaxed whitespace-pre-wrap">{content.text}</p>
@@ -197,37 +261,7 @@ export default function RevealSecret() {
                 </div>
               )}
             </div>
-          ) : (
-            <ProtectedViewer
-              autoHideSeconds={viewDurationSeconds}
-              onExpired={() => {
-                setExpired(true);
-                if (content.type !== "text" && "objectUrl" in content) {
-                  URL.revokeObjectURL(content.objectUrl);
-                }
-                setContent(null);
-              }}
-            >
-              <div className="rounded-2xl border border-border bg-surface-raised p-6">
-                {content.type === "text" && (
-                  <p className="text-lg text-text leading-relaxed whitespace-pre-wrap">{content.text}</p>
-                )}
-                {content.type === "image" && (
-                  <img src={content.objectUrl} alt="Secret" className="w-full rounded-xl" draggable={false} />
-                )}
-                {content.type === "video" && (
-                  <video src={content.objectUrl} controls controlsList="nodownload noplaybackrate" disablePictureInPicture className="w-full rounded-xl" onContextMenu={(e) => e.preventDefault()} />
-                )}
-                {content.type === "file" && (
-                  <div className="text-center py-4">
-                    <span className="text-4xl block mb-3">📄</span>
-                    <p className="text-sm text-text-muted mb-4">Encrypted file ({content.mimeType})</p>
-                    <a href={content.objectUrl} download="secret-file" className="inline-block rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black hover:scale-[1.03] transition-all">Download file 📥</a>
-                  </div>
-                )}
-              </div>
-            </ProtectedViewer>
-          )}
+          </ProtectedViewer>
 
           <p className="mt-6 text-xs text-text-muted text-center">
             👁 Capture-resistant, not capture-proof

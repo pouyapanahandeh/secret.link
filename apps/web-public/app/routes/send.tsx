@@ -92,8 +92,7 @@ export default function Send() {
   const [message, setMessage] = useState("");
   const [viewDuration, setViewDuration] = useState("30");
   const [linkExpiry, setLinkExpiry] = useState("86400");
-  const [revealMode, setRevealMode] = useState<"timer" | "clicks">("timer");
-  const [maxClicks, setMaxClicks] = useState("1");
+  const [maxViews, setMaxViews] = useState("1");
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -120,8 +119,7 @@ export default function Send() {
 
     const encoder = new TextEncoder();
     const data = encoder.encode(message);
-    const views = revealMode === "clicks" ? Number(maxClicks) : 1;
-    const result = await encryptAndUpload(data, "text", "text/plain", Number(linkExpiry), Number(viewDuration), views);
+    const result = await encryptAndUpload(data, "text", "text/plain", Number(linkExpiry), Number(viewDuration), Number(maxViews));
 
     if ("error" in result) {
       setError(result.error);
@@ -151,8 +149,7 @@ export default function Send() {
         ? "video" as const
         : "file" as const;
 
-    const views = revealMode === "clicks" ? Number(maxClicks) : 1;
-    const result = await encryptAndUpload(data, contentType, selectedFile.type, Number(linkExpiry), Number(viewDuration), views);
+    const result = await encryptAndUpload(data, contentType, selectedFile.type, Number(linkExpiry), Number(viewDuration), Number(maxViews));
 
     if ("error" in result) {
       setError(result.error);
@@ -172,8 +169,7 @@ export default function Send() {
       const data = new Uint8Array(arrayBuffer);
       const contentType = mimeType.startsWith("video/") ? "video" as const : "image" as const;
 
-      const views = revealMode === "clicks" ? Number(maxClicks) : 1;
-      const result = await encryptAndUpload(data, contentType, mimeType, Number(linkExpiry), Number(viewDuration), views);
+      const result = await encryptAndUpload(data, contentType, mimeType, Number(linkExpiry), Number(viewDuration), Number(maxViews));
 
       if ("error" in result) {
         setError(result.error);
@@ -284,70 +280,45 @@ export default function Send() {
               </select>
             </div>
 
-            {/* Reveal mode selector */}
-            <div className="mb-5">
-              <label className="block text-sm font-medium mb-2">
-                Reveal mode
+            {/* View duration */}
+            <div className="mb-4">
+              <label htmlFor="viewDuration" className="block text-sm font-medium mb-1.5">
+                View duration ⏱️
+                <span className="text-text-muted font-normal ml-1">(auto-hides after this time)</span>
               </label>
-              <div className="flex rounded-2xl bg-surface-raised border border-border p-1 mb-3">
-                <button
-                  type="button"
-                  onClick={() => setRevealMode("timer")}
-                  className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-all ${
-                    revealMode === "timer" ? "bg-accent text-black shadow-sm" : "text-text-muted hover:text-text"
-                  }`}
-                >
-                  ⏱️ Timer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRevealMode("clicks")}
-                  className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-all ${
-                    revealMode === "clicks" ? "bg-accent text-black shadow-sm" : "text-text-muted hover:text-text"
-                  }`}
-                >
-                  👆 Click limit
-                </button>
-              </div>
+              <select
+                id="viewDuration"
+                value={viewDuration}
+                onChange={(e) => setViewDuration(e.target.value)}
+                className="w-full rounded-2xl bg-surface-raised border border-border px-4 py-3.5 text-text focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent/40 transition-all"
+              >
+                <option value="10">10 seconds</option>
+                <option value="30">30 seconds</option>
+                <option value="60">1 minute</option>
+                <option value="120">2 minutes</option>
+                <option value="300">5 minutes</option>
+              </select>
+            </div>
 
-              {revealMode === "timer" ? (
-                <div>
-                  <label htmlFor="viewDuration" className="block text-xs text-text-muted mb-1.5">
-                    Viewing time — content disappears after this duration
-                  </label>
-                  <select
-                    id="viewDuration"
-                    value={viewDuration}
-                    onChange={(e) => setViewDuration(e.target.value)}
-                    className="w-full rounded-2xl bg-surface-raised border border-border px-4 py-3.5 text-text focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent/40 transition-all"
-                  >
-                    <option value="10">10 seconds</option>
-                    <option value="30">30 seconds</option>
-                    <option value="60">1 minute</option>
-                    <option value="120">2 minutes</option>
-                    <option value="300">5 minutes</option>
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <label htmlFor="maxClicks" className="block text-xs text-text-muted mb-1.5">
-                    Max reveals — after this many opens, content won't show
-                  </label>
-                  <select
-                    id="maxClicks"
-                    value={maxClicks}
-                    onChange={(e) => setMaxClicks(e.target.value)}
-                    className="w-full rounded-2xl bg-surface-raised border border-border px-4 py-3.5 text-text focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent/40 transition-all"
-                  >
-                    <option value="1">1 reveal only</option>
-                    <option value="3">3 reveals</option>
-                    <option value="5">5 reveals</option>
-                    <option value="10">10 reveals</option>
-                    <option value="25">25 reveals</option>
-                    <option value="50">50 reveals</option>
-                  </select>
-                </div>
-              )}
+            {/* Max views */}
+            <div className="mb-5">
+              <label htmlFor="maxViews" className="block text-sm font-medium mb-1.5">
+                Max views 👁️
+                <span className="text-text-muted font-normal ml-1">(how many times the link can be opened)</span>
+              </label>
+              <select
+                id="maxViews"
+                value={maxViews}
+                onChange={(e) => setMaxViews(e.target.value)}
+                className="w-full rounded-2xl bg-surface-raised border border-border px-4 py-3.5 text-text focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent/40 transition-all"
+              >
+                <option value="1">1 view (burn after reading)</option>
+                <option value="3">3 views</option>
+                <option value="5">5 views</option>
+                <option value="10">10 views</option>
+                <option value="25">25 views</option>
+                <option value="50">50 views</option>
+              </select>
             </div>
 
             {/* Tab content */}

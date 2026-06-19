@@ -86,7 +86,7 @@ describe("Users API", () => {
     });
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.handle).toBe("testuser");
+    expect(body.user.handle).toBe("testuser");
   });
 
   it("rejects duplicate handle", async () => {

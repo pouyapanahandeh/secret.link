@@ -6,6 +6,10 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 import { getApiBase } from "../lib/api.client";
+import { getSocialMeta } from "../lib/socials";
+import { FollowListModal, type FollowListTab } from "../components/FollowListModal";
+import { ProfileActionSheet } from "../components/ProfileActionSheet";
+import type { UserLite } from "../lib/users";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -25,10 +29,15 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const rawHandle = params["handle"] ?? "";
   const handle = rawHandle.replace(/^@/, "");
-  const res = await fetch(`${API_URL}/v1/users/${handle}`);
-  const profile = res.ok ? await res.json() : null;
   const token = await getToken(request);
   const isLoggedIn = !!token;
+
+  // Forward the token so the server can recognise the owner and return their
+  // private follower/following counts.
+  const res = await fetch(`${API_URL}/v1/users/${handle}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  const profile = res.ok ? await res.json() : null;
 
   let isOwnProfile = false;
   if (token) {
@@ -52,14 +61,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const linkExpiry = Number(form.get("linkExpiry")) || 86400;
   const viewDuration = Number(form.get("viewDuration")) || 30;
   const keyBase64 = String(form.get("keyBase64") ?? "").trim();
+  const wrappedKey = String(form.get("wrappedKey") ?? "").trim();
+  const wrapNonce = String(form.get("wrapNonce") ?? "").trim();
+  const wrapEpk = String(form.get("wrapEpk") ?? "").trim();
 
   if (!ciphertext || !nonce || !keyBase64) {
     return json({ error: "Encryption failed. Please try again.", sent: false });
   }
 
+  if (!wrappedKey || !wrapNonce || !wrapEpk) {
+    return json({
+      error: "This user hasn't set up secure delivery yet. Ask them to open their dashboard once, then try again.",
+      sent: false,
+    });
+  }
+
+  // Forward the sender's token (if logged in) so the server can record who sent
+  // the secret — this powers the "your secret was read" notification and the
+  // sender's "Sent" history. The recipient is NEVER told who sent it (the
+  // secret stays anonymous); only the sender themselves can see their sent list.
+  const senderToken = await getToken(request);
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (senderToken) headers["Authorization"] = `Bearer ${senderToken}`;
+
   const res = await fetch(`${API_URL}/v1/secrets`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       ciphertext,
       contentType: "text",
@@ -69,6 +96,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       mimeType: "text/plain",
       viewDurationSeconds: viewDuration,
       recipientHandle: handle,
+      wrappedKey,
+      wrapNonce,
+      wrapEpk,
     }),
   });
 
@@ -80,18 +110,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return json({ error: null, sent: true, handle, secretId: secretData.id, keyBase64 });
 }
 
-const SOCIAL_ICONS: Record<string, string> = {
-  instagram: "📷",
-  twitter: "𝕏",
-  tiktok: "🎵",
-  youtube: "▶️",
-  github: "🐙",
-  linkedin: "💼",
-  snapchat: "👻",
-  telegram: "✈️",
-  website: "🌐",
-};
-
 export default function ProfilePage() {
   const { handle, profile, isLoggedIn, isOwnProfile, token } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -101,6 +119,8 @@ export default function ProfilePage() {
   const [followersCount, setFollowersCount] = useState(profile?.followersCount ?? 0);
   const [encrypting, setEncrypting] = useState(false);
   const [encryptError, setEncryptError] = useState<string | null>(null);
+  const [followModal, setFollowModal] = useState<FollowListTab | null>(null);
+  const [sheetUser, setSheetUser] = useState<UserLite | null>(null);
 
   const fetcherData = fetcher.data;
   const isSent = fetcherData?.sent || actionData?.sent;
@@ -127,11 +147,23 @@ export default function ProfilePage() {
         return;
       }
 
+      const recipientPublicKey = profile?.dmPublicKey as string | undefined;
+      if (!recipientPublicKey) {
+        setEncryptError("This user hasn't set up secure delivery yet. Ask them to open their dashboard once, then try again.");
+        setEncrypting(false);
+        return;
+      }
+
       const { encryptBlob, generateKeyBase64 } = await import("../lib/crypto");
-      const { key, keyBase64 } = await generateKeyBase64();
+      const { key, keyBase64, rawKey } = await generateKeyBase64();
       const encoder = new TextEncoder();
       const data = encoder.encode(message);
       const { ciphertext, nonce } = await encryptBlob(data, key);
+
+      // Wrap the AES key for the recipient's X25519 public key (E2E — the
+      // server only ever stores opaque ciphertext, never the key itself).
+      const { wrapKeyForRecipient } = await import("../lib/dm-crypto");
+      const wrapped = await wrapKeyForRecipient(rawKey, recipientPublicKey);
 
       // Encode encrypted bytes as base64
       let binary = "";
@@ -144,6 +176,9 @@ export default function ProfilePage() {
       submitData.append("ciphertext", ciphertextB64);
       submitData.append("nonce", nonce);
       submitData.append("keyBase64", keyBase64);
+      submitData.append("wrappedKey", wrapped.wrappedKey);
+      submitData.append("wrapNonce", wrapped.wrapNonce);
+      submitData.append("wrapEpk", wrapped.wrapEpk);
       submitData.append("linkExpiry", String(formData.get("linkExpiry") ?? "86400"));
       submitData.append("viewDuration", String(formData.get("viewDuration") ?? "30"));
 
@@ -249,50 +284,54 @@ export default function ProfilePage() {
           {/* Handle */}
           <h1 className="text-2xl font-bold">@{handle}</h1>
 
-          {/* Follower counts — visible for own profile or logged-in others */}
-          {(isOwnProfile || isLoggedIn) && (
-            <div className="flex items-center justify-center gap-4 mt-2">
-              <span className="text-xs text-text-muted"><strong className="text-text">{followersCount}</strong> followers</span>
-              <span className="text-xs text-text-muted"><strong className="text-text">{profile?.followingCount ?? 0}</strong> following</span>
+          {/* Follower counts — private: only the profile owner can see + open lists */}
+          {isOwnProfile && (
+            <div className="flex items-center justify-center gap-6 mt-3">
+              <button
+                type="button"
+                onClick={() => setFollowModal("followers")}
+                className="flex flex-col items-center hover:opacity-80 transition-opacity"
+              >
+                <span className="text-base font-bold text-text">{followersCount}</span>
+                <span className="text-xs text-text-muted">followers</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFollowModal("following")}
+                className="flex flex-col items-center hover:opacity-80 transition-opacity"
+              >
+                <span className="text-base font-bold text-text">{profile?.followingCount ?? 0}</span>
+                <span className="text-xs text-text-muted">following</span>
+              </button>
             </div>
-          )}
-
-          {/* Follow button — only for logged-in users viewing someone else */}
-          {isLoggedIn && !isOwnProfile && (
-            <button
-              onClick={toggleFollow}
-              className={`mt-3 text-xs px-5 py-2 rounded-full font-semibold transition-all ${
-                isFollowing
-                  ? "bg-surface-raised border border-border text-text-muted hover:border-red-400/50 hover:text-red-400"
-                  : "bg-accent text-black hover:scale-[1.02]"
-              }`}
-            >
-              {isFollowing ? "Following ✓" : "Follow"}
-            </button>
           )}
 
           {/* Bio */}
           {profile?.bio && (
-            <p className="text-text-muted mt-2 max-w-sm mx-auto text-sm leading-relaxed">
+            <p className="text-text-muted mt-3 max-w-sm mx-auto text-sm leading-relaxed">
               {profile.bio}
             </p>
           )}
 
           {/* Social links */}
           {profile?.socials && profile.socials.length > 0 && (
-            <div className="flex items-center justify-center gap-3 mt-4">
-              {profile.socials.map((s: { platform: string; url: string }, i: number) => (
-                <a
-                  key={i}
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-9 h-9 rounded-full bg-surface-raised border border-border flex items-center justify-center hover:border-accent/50 hover:scale-110 transition-all"
-                  title={s.platform}
-                >
-                  <span className="text-sm">{SOCIAL_ICONS[s.platform.toLowerCase()] ?? "🔗"}</span>
-                </a>
-              ))}
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+              {profile.socials.map((s: { platform: string; url: string }, i: number) => {
+                const meta = getSocialMeta(s.platform);
+                return (
+                  <a
+                    key={i}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full bg-surface-raised border border-border px-3 py-1.5 hover:border-accent/50 hover:scale-[1.03] transition-all"
+                    title={s.url}
+                  >
+                    <span className="text-base">{meta.icon}</span>
+                    <span className="text-xs font-medium">{meta.label}</span>
+                  </a>
+                );
+              })}
             </div>
           )}
 
@@ -303,25 +342,37 @@ export default function ProfilePage() {
             </span>
           )}
 
-          {/* DM button — only for logged-in users viewing someone else */}
-          {isLoggedIn && !isOwnProfile && (
-            <a
-              href={`/messages?to=${profile?.handle ?? handle}`}
-              className="inline-flex items-center gap-2 mt-4 text-xs bg-surface-raised border border-border hover:border-accent/50 text-text px-4 py-2 rounded-full transition-colors"
-            >
-              🔒 Send encrypted message
-            </a>
-          )}
-
-          {/* Edit profile link for own profile */}
-          {isOwnProfile && (
-            <a
-              href="/dashboard#profile"
-              className="inline-flex items-center gap-2 mt-4 text-xs bg-surface-raised border border-border hover:border-accent/50 text-text px-4 py-2 rounded-full transition-colors"
-            >
-              ✏️ Edit profile
-            </a>
-          )}
+          {/* Action buttons — grouped on one row for consistent spacing */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+            {isLoggedIn && !isOwnProfile && (
+              <>
+                <button
+                  onClick={toggleFollow}
+                  className={`text-xs px-5 py-2 rounded-full font-semibold transition-all ${
+                    isFollowing
+                      ? "bg-surface-raised border border-border text-text-muted hover:border-red-400/50 hover:text-red-400"
+                      : "bg-accent text-black hover:scale-[1.02]"
+                  }`}
+                >
+                  {isFollowing ? "Following ✓" : "Follow"}
+                </button>
+                <a
+                  href={`/messages?to=${profile?.handle ?? handle}`}
+                  className="inline-flex items-center gap-2 text-xs bg-surface-raised border border-border hover:border-accent/50 text-text px-5 py-2 rounded-full transition-colors"
+                >
+                  🔒 Message
+                </a>
+              </>
+            )}
+            {isOwnProfile && (
+              <a
+                href="/dashboard#profile"
+                className="inline-flex items-center gap-2 text-xs bg-surface-raised border border-border hover:border-accent/50 text-text px-5 py-2 rounded-full transition-colors"
+              >
+                ✏️ Edit profile
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Anonymous Secret Box — only for others */}
@@ -412,6 +463,24 @@ export default function ProfilePage() {
       </div>
       </div>
       {isLoggedIn && <MobileBottomNav handle={handle} />}
+
+      {/* Followers / Following lists (own profile only) */}
+      {isOwnProfile && token && followModal && (
+        <FollowListModal
+          token={token}
+          initialTab={followModal}
+          onClose={() => setFollowModal(null)}
+          onSelectUser={(u) => {
+            setFollowModal(null);
+            if (!u.isSelf) setSheetUser(u);
+          }}
+        />
+      )}
+
+      {/* Action sheet for a tapped follower/following user */}
+      {sheetUser && (
+        <ProfileActionSheet user={sheetUser} onClose={() => setSheetUser(null)} />
+      )}
     </main>
   );
 }

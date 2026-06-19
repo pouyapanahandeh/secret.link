@@ -5,7 +5,9 @@ import { nanoid } from "nanoid";
 import type { Context } from "koa";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { requireAuth, type AuthPayload } from "../middleware/auth.js";
 import db from "../db.js";
+import { createNotification, getUserIdByHandle } from "../notifications.js";
 
 export const secretsRouter = new Router({ prefix: "/secrets" });
 
@@ -15,7 +17,7 @@ fs.mkdir(BLOB_DIR, { recursive: true }).catch(() => {});
 
 // ─── SQLite-backed secret store ─────────────────────────────────────────────
 const secretStmts = {
-  insert: db.prepare(`INSERT INTO secrets (id, ciphertext, content_type, blob_path, blob_size_bytes, mime_type, nonce, view_duration_seconds, max_views, view_count, burned, recipient_handle, sender_id, workspace_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`),
+  insert: db.prepare(`INSERT INTO secrets (id, ciphertext, content_type, blob_path, blob_size_bytes, mime_type, nonce, view_duration_seconds, max_views, view_count, burned, recipient_handle, sender_id, workspace_id, wrapped_key, wrap_nonce, wrap_epk, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)`),
   findById: db.prepare(`SELECT * FROM secrets WHERE id = ?`),
   incrementView: db.prepare(`UPDATE secrets SET view_count = view_count + 1 WHERE id = ?`),
   burn: db.prepare(`UPDATE secrets SET burned = 1 WHERE id = ?`),
@@ -24,12 +26,38 @@ const secretStmts = {
 };
 
 const mapStmts = {
-  insert: db.prepare(`INSERT INTO map_secrets (id, message, lat, lng, emoji, handle, media_path, media_type, reveal_mode, reveal_timer_seconds, max_clicks, click_count, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`),
+  insert: db.prepare(`INSERT INTO map_secrets (id, message, lat, lng, emoji, handle, location_name, city_name, media_path, media_type, reveal_mode, reveal_timer_seconds, max_clicks, click_count, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`),
   getActive: db.prepare(`SELECT * FROM map_secrets WHERE expires_at > ?`),
   getById: db.prepare(`SELECT * FROM map_secrets WHERE id = ? AND expires_at > ?`),
   deleteExpired: db.prepare(`DELETE FROM map_secrets WHERE expires_at <= ?`),
   incrementClicks: db.prepare(`UPDATE map_secrets SET click_count = click_count + 1 WHERE id = ?`),
 };
+
+const reportStmts = {
+  insert: db.prepare(`INSERT INTO secret_reports (id, secret_id, reporter_user_id, reason, details, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)`),
+};
+
+/** Normalize a raw SQLite map_secrets row to camelCase JSON. */
+function normalizeMapSecret(row: any) {
+  return {
+    id: row.id,
+    message: row.message,
+    lat: row.lat,
+    lng: row.lng,
+    emoji: row.emoji,
+    handle: row.handle ?? null,
+    locationName: row.location_name ?? null,
+    cityName: row.city_name ?? null,
+    mediaPath: row.media_path ?? null,
+    mediaType: row.media_type ?? null,
+    revealMode: row.reveal_mode ?? "timer",
+    revealTimerSeconds: row.reveal_timer_seconds ?? 30,
+    maxClicks: row.max_clicks ?? 0,
+    clickCount: row.click_count ?? 0,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  };
+}
 
 const deps = {
   repo: {
@@ -41,6 +69,7 @@ const deps = {
         record.viewDurationSeconds ?? null, record.maxViews,
         record.recipientHandle ?? null, record.senderId ?? null,
         record.workspaceId ?? null,
+        record.wrappedKey ?? null, record.wrapNonce ?? null, record.wrapEpk ?? null,
         record.createdAt instanceof Date ? record.createdAt.toISOString() : record.createdAt,
         record.expiresAt instanceof Date ? record.expiresAt.toISOString() : record.expiresAt,
       );
@@ -63,6 +92,9 @@ const deps = {
         expiresAt: new Date(row.expires_at),
         workspaceId: row.workspace_id,
         recipientHandle: row.recipient_handle,
+        wrappedKey: row.wrapped_key,
+        wrapNonce: row.wrap_nonce,
+        wrapEpk: row.wrap_epk,
         burned: !!row.burned,
       };
     },
@@ -85,11 +117,32 @@ const deps = {
 };
 
 secretsRouter.post("/", async (ctx: Context) => {
-  const result = await createSecret(deps)(ctx.request.body);
+  const sender = ctx.state.user as AuthPayload | undefined;
+  const input = { ...(ctx.request.body as Record<string, unknown>), senderId: sender?.userId };
+  const result = await createSecret(deps)(input);
   result.match(
     (val) => {
       ctx.status = 201;
       ctx.body = val;
+
+      // Notify the recipient (if the secret is addressed to a registered handle)
+      const body = ctx.request.body as Record<string, unknown>;
+      const recipientHandle = body.recipientHandle ? String(body.recipientHandle).replace(/^@/, "").trim() : "";
+      if (recipientHandle) {
+        const recipientId = getUserIdByHandle(recipientHandle);
+        if (recipientId) {
+          // Secrets are anonymous — never reveal the sender's identity to the
+          // recipient, even when the sender is authenticated. (The sender_id is
+          // stored server-side only, to route the "secret_read" notification.)
+          createNotification({
+            userId: recipientId,
+            type: "secret",
+            actorId: null,
+            actorHandle: null,
+            entityId: val.id,
+          });
+        }
+      }
     },
     (e) => {
       ctx.status = e.kind === "invalid_input" ? 400 : 500;
@@ -106,6 +159,8 @@ secretsRouter.post("/map", async (ctx: Context) => {
   const lng = Number(body.lng);
   const emoji = String(body.emoji ?? "💬").slice(0, 4);
   const handle = body.handle ? String(body.handle) : undefined;
+  const locationName = body.locationName ? String(body.locationName).slice(0, 160) : null;
+  const cityName = body.cityName ? String(body.cityName).slice(0, 80) : null;
   const ttlMinutes = Math.min(Math.max(Number(body.ttlMinutes) || 60, 5), 1440);
 
   if (!message || message.length > 500) {
@@ -130,17 +185,25 @@ secretsRouter.post("/map", async (ctx: Context) => {
   const revealTimerSeconds = Math.min(Math.max(Number(body.revealTimerSeconds) || 30, 5), 300);
   const maxClicks = revealMode === "clicks" ? Math.min(Math.max(Number(body.maxClicks) || 1, 1), 100) : 0;
 
-  mapStmts.insert.run(id, message, lat, lng, emoji, handle ?? null, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks, createdAt, expiresAt);
+  mapStmts.insert.run(id, message, lat, lng, emoji, handle ?? null, locationName, cityName, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks, createdAt, expiresAt);
 
   ctx.status = 201;
-  ctx.body = { id, message, lat, lng, emoji, handle, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks, clickCount: 0, createdAt, expiresAt };
+  ctx.body = { id, message, lat, lng, emoji, handle, locationName, cityName, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks, clickCount: 0, createdAt, expiresAt };
 });
 
 secretsRouter.get("/map", async (ctx: Context) => {
   // Clean up expired
   mapStmts.deleteExpired.run(new Date().toISOString());
   const rows = mapStmts.getActive.all(new Date().toISOString()) as any[];
-  ctx.body = rows;
+  ctx.body = rows.map(normalizeMapSecret);
+});
+
+// Active map secrets for a single handle (powers profile "stories")
+secretsRouter.get("/map/by-handle/:handle", async (ctx: Context) => {
+  const handle = String(ctx.params["handle"] ?? "").replace(/^@/, "");
+  mapStmts.deleteExpired.run(new Date().toISOString());
+  const rows = mapStmts.getActive.all(new Date().toISOString()) as any[];
+  ctx.body = rows.filter((r) => (r.handle ?? "").replace(/^@/, "") === handle).map(normalizeMapSecret);
 });
 
 secretsRouter.get("/map/:id", async (ctx: Context) => {
@@ -153,7 +216,7 @@ secretsRouter.get("/map/:id", async (ctx: Context) => {
     return;
   }
 
-  ctx.body = row;
+  ctx.body = normalizeMapSecret(row);
 });
 
 secretsRouter.post("/map/:id/reveal", async (ctx: Context) => {
@@ -176,15 +239,69 @@ secretsRouter.post("/map/:id/reveal", async (ctx: Context) => {
     row.click_count += 1;
   }
 
-  ctx.body = row;
+  ctx.body = normalizeMapSecret(row);
+});
+
+secretsRouter.post("/map/:id/report", async (ctx: Context) => {
+  const id = String(ctx.params["id"] ?? "");
+  const row = mapStmts.getById.get(id, new Date().toISOString()) as any;
+  if (!row) {
+    ctx.status = 404;
+    ctx.body = { error: "Secret expired or not found" };
+    return;
+  }
+
+  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+  const reason = String(body.reason ?? "").trim().toLowerCase();
+  const details = String(body.details ?? "").trim();
+  const allowedReasons = new Set(["spam", "harassment", "hate", "sexual", "violence", "illegal", "other"]);
+
+  if (!allowedReasons.has(reason)) {
+    ctx.status = 400;
+    ctx.body = { error: "Invalid report reason" };
+    return;
+  }
+  if (details.length > 2000) {
+    ctx.status = 400;
+    ctx.body = { error: "Report details are too long" };
+    return;
+  }
+
+  const reporter = ctx.state.user as AuthPayload | undefined;
+  reportStmts.insert.run(nanoid(), id, reporter?.userId ?? null, reason, details || null, new Date().toISOString());
+
+  ctx.status = 201;
+  ctx.body = { ok: true };
 });
 
 secretsRouter.get("/:id", async (ctx: Context) => {
-  const result = await revealSecret(deps)(ctx.params["id"]!);
+  const id = ctx.params["id"]!;
+  const result = await revealSecret(deps)(id);
   result.match(
     (val) => {
+      // Augment with E2E key-delivery fields (opaque to the server) so a
+      // recipient opening from their inbox can unwrap the AES key.
+      const row = secretStmts.findById.get(id) as any;
       ctx.status = 200;
-      ctx.body = val;
+      ctx.body = {
+        ...val,
+        wrappedKey: row?.wrapped_key ?? null,
+        wrapNonce: row?.wrap_nonce ?? null,
+        wrapEpk: row?.wrap_epk ?? null,
+      };
+
+      // Notify the sender that their secret was read
+      if (row?.sender_id) {
+        const reader = ctx.state.user as AuthPayload | undefined;
+        createNotification({
+          userId: row.sender_id,
+          type: "secret_read",
+          actorId: reader?.userId ?? null,
+          actorHandle: reader?.handle ?? null,
+          entityId: id,
+          data: { recipientHandle: row.recipient_handle ?? null },
+        });
+      }
     },
     (e) => {
       const statusMap = {
@@ -251,9 +368,16 @@ secretsRouter.get("/blob/:path", async (ctx: Context) => {
   }
 });
 
-// ─── Inbox: Get secrets sent TO a handle ────────────────────────────────────
-secretsRouter.get("/inbox/:handle", async (ctx: Context) => {
+// ─── Inbox: Get secrets sent TO a handle (requires auth) ────────────────────
+secretsRouter.get("/inbox/:handle", requireAuth(), async (ctx: Context) => {
+  const auth = ctx.state.user as AuthPayload;
   const handle = ctx.params["handle"];
+  // Users can only view their own inbox
+  if (auth.handle !== handle) {
+    ctx.status = 403;
+    ctx.body = { error: "forbidden" };
+    return;
+  }
   const rows = secretStmts.inbox.all(handle!) as any[];
   ctx.body = rows.map(r => ({
     id: r.id,
@@ -265,9 +389,16 @@ secretsRouter.get("/inbox/:handle", async (ctx: Context) => {
   }));
 });
 
-// ─── Sent: Get secrets sent BY a user ───────────────────────────────────────
-secretsRouter.get("/sent/:userId", async (ctx: Context) => {
+// ─── Sent: Get secrets sent BY a user (requires auth) ───────────────────────
+secretsRouter.get("/sent/:userId", requireAuth(), async (ctx: Context) => {
+  const auth = ctx.state.user as AuthPayload;
   const userId = ctx.params["userId"];
+  // Users can only view their own sent items
+  if (auth.userId !== userId) {
+    ctx.status = 403;
+    ctx.body = { error: "forbidden" };
+    return;
+  }
   const rows = secretStmts.sent.all(userId!) as any[];
   ctx.body = rows.map(r => ({
     id: r.id,

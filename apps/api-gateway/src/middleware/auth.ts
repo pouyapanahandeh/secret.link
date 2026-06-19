@@ -24,28 +24,48 @@ export function verifyToken(token: string): AuthPayload | null {
   }
 }
 
-/** Middleware that requires a valid JWT in Authorization header or cookie */
-export function requireAuth() {
+/** Middleware that populates ctx.state.user if a valid token is present (does not reject) */
+export function optionalAuth() {
   return async (ctx: Context, next: Next) => {
     const authHeader = ctx.get("Authorization");
     const token = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
       : (ctx.cookies.get("sl_token") ?? null);
 
-    if (!token) {
-      ctx.status = 401;
-      ctx.body = { error: "unauthorized" };
-      return;
+    if (token) {
+      const payload = verifyToken(token);
+      if (payload) ctx.state.user = payload;
     }
 
-    const payload = verifyToken(token);
-    if (!payload) {
-      ctx.status = 401;
-      ctx.body = { error: "invalid_token" };
-      return;
+    await next();
+  };
+}
+
+/** Middleware that requires a valid JWT in Authorization header or cookie */
+export function requireAuth() {
+  return async (ctx: Context, next: Next) => {
+    if (!ctx.state.user) {
+      const authHeader = ctx.get("Authorization");
+      const token = authHeader?.startsWith("Bearer ")
+        ? authHeader.slice(7)
+        : (ctx.cookies.get("sl_token") ?? null);
+
+      if (!token) {
+        ctx.status = 401;
+        ctx.body = { error: "unauthorized" };
+        return;
+      }
+
+      const payload = verifyToken(token);
+      if (!payload) {
+        ctx.status = 401;
+        ctx.body = { error: "invalid_token" };
+        return;
+      }
+
+      ctx.state.user = payload;
     }
 
-    ctx.state.user = payload;
     await next();
   };
 }
