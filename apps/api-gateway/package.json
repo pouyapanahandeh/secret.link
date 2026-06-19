@@ -29,7 +29,7 @@
     "neverthrow": "^8.0.0",
     "pino": "^9.5.0",
     "pino-http": "^10.3.0",
-    "undici": "^7.0.0",
+    "undici": "^7.28.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
@@ -42,6 +42,6 @@
     "@types/koa__router": "^12.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "^3.2.6"
   }
 }
