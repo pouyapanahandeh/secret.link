@@ -248,16 +248,30 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     setKeyWarning("");
 
     const { publicKey: otherPubKey } = await keyRes.json();
-    let sk: CryptoKey;
+    let sk: CryptoKey | undefined;
     try {
       sk = await deriveSharedKey(myKeyPairRef.current.privateKey, otherPubKey);
-    } catch {
-      setKeyWarning("Key mismatch — cannot derive shared secret. The other user may have rotated their key.");
-      return;
+    } catch (err: any) {
+      console.error("[DM] deriveSharedKey failed:", err, "otherPubKey:", otherPubKey);
+      // If private key is stale, regenerate and retry once
+      try {
+        const newKp = await generateAndStoreKeyPair();
+        await fetch(`${getApiBase()}/v1/dms/keys`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ publicKey: newKp.publicKeyB64 }),
+        });
+        myKeyPairRef.current = newKp;
+        sk = await deriveSharedKey(newKp.privateKey, otherPubKey);
+      } catch (retryErr) {
+        console.error("[DM] deriveSharedKey retry failed:", retryErr);
+        setKeyWarning("Key mismatch — cannot derive shared secret. The other user may have rotated their key.");
+        return;
+      }
     }
-    setSharedKey(sk);
-    await loadMessages(conv.id, sk, false);
-    connectSSE(conv.id, sk);
+    setSharedKey(sk!);
+    await loadMessages(conv.id, sk!, false);
+    connectSSE(conv.id, sk!);
   }
 
   async function loadMessages(convId: string, key: CryptoKey, incremental: boolean) {

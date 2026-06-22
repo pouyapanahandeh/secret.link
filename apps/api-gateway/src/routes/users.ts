@@ -147,6 +147,14 @@ usersRouter.get("/search", async (ctx: Context) => {
   }));
 });
 
+// ─── Get current user (short, for auth checks) ─────────────────────────────
+usersRouter.get("/me", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const row = stmts.getUserById.get(userId) as any;
+  if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
+  ctx.body = dbUserToPublic(row);
+});
+
 // ─── Get user profile (public) ──────────────────────────────────────────────
 usersRouter.get("/:handle", async (ctx: Context) => {
   const handle = ctx.params["handle"];
@@ -180,14 +188,6 @@ usersRouter.get("/:handle", async (ctx: Context) => {
     followingCount: isOwner ? followingCount : null,
     dmPublicKey: dmKey?.public_key ?? null,
   };
-});
-
-// ─── Get current user (short, for auth checks) ─────────────────────────────
-usersRouter.get("/me", requireAuth(), async (ctx: Context) => {
-  const { userId } = ctx.state.user as AuthPayload;
-  const row = stmts.getUserById.get(userId) as any;
-  if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
-  ctx.body = dbUserToPublic(row);
 });
 
 // ─── Get current user (authenticated) ───────────────────────────────────────

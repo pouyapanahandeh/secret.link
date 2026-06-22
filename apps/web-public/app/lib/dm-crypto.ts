@@ -105,6 +105,14 @@ export async function migrateFromLocalStorage(): Promise<StoredKeyPair | null> {
  */
 export async function ensureKeyPair(): Promise<StoredKeyPair> {
   let kp = await getStoredKeyPair();
+  if (kp) {
+    // Validate that stored CryptoKey is still usable (can become stale on iOS/Safari PWA)
+    try {
+      await crypto.subtle.exportKey("raw", kp.publicKey);
+    } catch {
+      kp = null;
+    }
+  }
   if (!kp) kp = await migrateFromLocalStorage();
   if (!kp) kp = await generateAndStoreKeyPair();
   return kp;

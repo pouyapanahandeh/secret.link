@@ -39,6 +39,7 @@ rsync -avz --delete \
   --exclude '.turbo' \
   --exclude 'apps/web-public/build' \
   --exclude 'apps/api-gateway/data' \
+  --exclude 'apps/api-gateway/.blobs' \
   --exclude '*.db' \
   --exclude '*.db-shm' \
   --exclude '*.db-wal' \
