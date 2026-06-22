@@ -56,6 +56,10 @@ echo "→ Building web-public..."
 $SSH_CMD "cd $REMOTE_DIR/apps/web-public && pnpm build 2>&1 | tail -5"
 echo ""
 
+echo "→ Building web-admin..."
+$SSH_CMD "cd $REMOTE_DIR/apps/web-admin && pnpm build 2>&1 | tail -5"
+echo ""
+
 # ─── 4. Restart PM2 ─────────────────────────────────────────────────────────
 echo "→ Restarting services..."
 $SSH_CMD "cd $REMOTE_DIR && pm2 restart all 2>&1 | tail -3"
