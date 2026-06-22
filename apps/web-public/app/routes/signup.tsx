@@ -1,6 +1,6 @@
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useActionData } from "@remix-run/react";
+import { useActionData, Link } from "@remix-run/react";
 import { AppNav } from "../components/AppNav";
 import { createSessionRedirect } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
@@ -121,14 +121,14 @@ export default function Signup() {
 
           <p className="mt-4 text-xs text-text-muted text-center">
             By signing up, you confirm you are 18+ and accept our{" "}
-            <a href="/privacy" className="text-accent hover:underline">Privacy Policy</a>.
+            <Link to="/privacy" className="text-accent hover:underline">Privacy Policy</Link>.
           </p>
           <p className="mt-3 text-xs text-text-muted text-center">
             No password needed. Authenticate with biometrics on your device.
           </p>
           <p className="mt-4 text-sm text-text-muted text-center">
             Already have an account?{" "}
-            <a href="/login" className="text-accent hover:text-accent-soft transition-colors">Log in</a>
+            <Link to="/login" className="text-accent hover:text-accent-soft transition-colors">Log in</Link>
           </p>
         </div>
       </div>

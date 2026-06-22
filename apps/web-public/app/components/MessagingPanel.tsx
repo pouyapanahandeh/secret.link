@@ -1,13 +1,15 @@
 import { useEffect, useState, useRef } from "react";
+import { Link } from "@remix-run/react";
+import { getApiBase } from "../lib/api.client";
 import {
-  ensureKeyPair,
+  type StoredKeyPair,
+  getStoredKeyPair,
   generateAndStoreKeyPair,
-  deriveSharedKey,
+  migrateFromLocalStorage,
+  deriveSharedKey as deriveSharedKeyFromCryptoKey,
   encryptMessage,
   decryptMessage,
-  type StoredKeyPair,
 } from "../lib/dm-crypto";
-import { getApiBase } from "../lib/api.client";
 
 interface Conversation {
   id: string;
@@ -46,9 +48,6 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
   const [sharedKey, setSharedKey] = useState<CryptoKey | null>(null);
   const [newConvHandle, setNewConvHandle] = useState("");
   const [showNewConv, setShowNewConv] = useState(false);
-  const [searchResults, setSearchResults] = useState<{ id: string; handle: string; bio: string | null }[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [unreadCount, setUnreadCount] = useState(0);
   const [keyWarning, setKeyWarning] = useState("");
   const [hasMore, setHasMore] = useState(false);
@@ -123,19 +122,20 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     setMyUserId(data.id);
     setMyHandle(data.handle);
 
-    try {
-      const kp = await ensureKeyPair();
-      // Always ensure server has our current public key
-      await fetch(`${getApiBase()}/v1/dms/keys`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
-      });
-      myKeyPairRef.current = kp;
-    } catch (err) {
-      console.warn("[DM] Key setup failed (X25519 may not be supported):", err);
-      setKeyWarning("End-to-end encryption unavailable on this browser. Messages cannot be sent or decrypted.");
+    let kp = await getStoredKeyPair();
+    if (!kp) {
+      kp = await migrateFromLocalStorage();
     }
+    if (!kp) {
+      kp = await generateAndStoreKeyPair();
+    }
+    // Always ensure server has our current public key
+    await fetch(`${getApiBase()}/v1/dms/keys`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
+    });
+    myKeyPairRef.current = kp;
   }
 
   async function loadConversations() {
@@ -145,24 +145,31 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     if (res.ok) setConversations(await res.json());
   }
 
-  function connectSSE(convId: string, key: CryptoKey) {
+  async function connectSSE(convId: string, key: CryptoKey) {
     if (sseRef.current) sseRef.current.close();
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
 
-    // Get a short-lived ticket via API directly (client has the token)
-    (async () => {
-      try {
-        const ticketRes = await fetch(`${getApiBase()}/v1/dms/stream-ticket`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ conversationId: convId }),
-        });
-        if (!ticketRes.ok) throw new Error("Failed to get stream ticket");
+    // Fetch a short-lived stream ticket instead of passing the JWT in the URL
+    let ticketUrl: string | null = null;
+    try {
+      const ticketRes = await fetch(`${getApiBase()}/v1/dms/stream-ticket`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ conversationId: convId }),
+      });
+      if (ticketRes.ok) {
         const { ticket } = await ticketRes.json();
+        ticketUrl = `${getApiBase()}/v1/dms/stream?ticket=${encodeURIComponent(ticket)}`;
+      }
+    } catch {}
 
-        const url = `${getApiBase()}/v1/dms/stream?ticket=${encodeURIComponent(ticket)}`;
-        const sse = new EventSource(url);
-        sseRef.current = sse;
+    // Fallback to legacy token param if ticket fetch fails
+    const url = ticketUrl ?? `${getApiBase()}/v1/dms/stream?token=${encodeURIComponent(token)}&conversationId=${convId}`;
+    const sse = new EventSource(url);
+    sseRef.current = sse;
 
     sse.addEventListener("new_message", async (e) => {
       try {
@@ -217,13 +224,6 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
         pollRef.current = setInterval(() => loadMessages(convId, key, true), 3000);
       }
     };
-      } catch {
-        // Fallback to polling if ticket fetch fails
-        if (!pollRef.current && !document.hidden) {
-          pollRef.current = setInterval(() => loadMessages(convId, key, true), 3000);
-        }
-      }
-    })();
   }
 
   async function openConversation(conv: Conversation) {
@@ -248,30 +248,16 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     setKeyWarning("");
 
     const { publicKey: otherPubKey } = await keyRes.json();
-    let sk: CryptoKey | undefined;
+    let sk: CryptoKey;
     try {
-      sk = await deriveSharedKey(myKeyPairRef.current.privateKey, otherPubKey);
-    } catch (err: any) {
-      console.error("[DM] deriveSharedKey failed:", err, "otherPubKey:", otherPubKey);
-      // If private key is stale, regenerate and retry once
-      try {
-        const newKp = await generateAndStoreKeyPair();
-        await fetch(`${getApiBase()}/v1/dms/keys`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ publicKey: newKp.publicKeyB64 }),
-        });
-        myKeyPairRef.current = newKp;
-        sk = await deriveSharedKey(newKp.privateKey, otherPubKey);
-      } catch (retryErr) {
-        console.error("[DM] deriveSharedKey retry failed:", retryErr);
-        setKeyWarning("Key mismatch — cannot derive shared secret. The other user may have rotated their key.");
-        return;
-      }
+      sk = await deriveSharedKeyFromCryptoKey(myKeyPairRef.current.privateKey, otherPubKey);
+    } catch {
+      setKeyWarning("Key mismatch — cannot derive shared secret. The other user may have rotated their key.");
+      return;
     }
-    setSharedKey(sk!);
-    await loadMessages(conv.id, sk!, false);
-    connectSSE(conv.id, sk!);
+    setSharedKey(sk);
+    await loadMessages(conv.id, sk, false);
+    connectSSE(conv.id, sk);
   }
 
   async function loadMessages(convId: string, key: CryptoKey, incremental: boolean) {
@@ -405,37 +391,9 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
       const conv = await res.json();
       setShowNewConv(false);
       setNewConvHandle("");
-      setSearchResults([]);
       loadConversations();
       openConversation(conv);
     }
-  }
-
-  function handleSearchInput(value: string) {
-    setNewConvHandle(value);
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    const q = value.trim().replace(/^@/, "");
-    if (q.length < 2) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return;
-    }
-    setSearchLoading(true);
-    searchTimerRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`${getApiBase()}/v1/users/search?q=${encodeURIComponent(q)}`);
-        if (res.ok) {
-          const results = await res.json();
-          setSearchResults(results.filter((r: any) => r.handle !== myHandle));
-        }
-      } catch { /* ignore */ }
-      setSearchLoading(false);
-    }, 300);
-  }
-
-  function selectSearchResult(handle: string) {
-    setNewConvHandle(handle);
-    setSearchResults([]);
   }
 
   async function loadUnreadCount() {
@@ -491,11 +449,11 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
       <aside className={`${activeConv ? "hidden sm:flex" : "flex"} w-full sm:w-72 border-r border-border/50 flex-col`}>
         <div className="p-4 border-b border-border/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <a href="/dashboard" className="sm:hidden text-text-muted hover:text-text mr-1">
+            <Link to="/dashboard" className="sm:hidden text-text-muted hover:text-text mr-1">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
-            </a>
+            </Link>
             <h2 className="text-sm font-semibold">Messages</h2>
             {unreadCount > 0 && (
               <span className="bg-accent text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
@@ -521,41 +479,14 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
             <input
               type="text"
               value={newConvHandle}
-              onChange={(e) => handleSearchInput(e.target.value)}
-              placeholder="Search @handle..."
+              onChange={(e) => setNewConvHandle(e.target.value)}
+              placeholder="@handle"
               onKeyDown={(e) => e.key === "Enter" && startNewConversation()}
               className="w-full rounded-lg bg-surface-raised border border-border px-3 py-2 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
-              autoFocus
             />
-            {searchLoading && (
-              <p className="text-xs text-text-muted mt-1.5 px-1">Searching...</p>
-            )}
-            {!searchLoading && newConvHandle.trim().replace(/^@/, "").length >= 2 && searchResults.length === 0 && (
-              <p className="text-xs text-text-muted mt-1.5 px-1">No users found</p>
-            )}
-            {searchResults.length > 0 && (
-              <div className="mt-1.5 max-h-36 overflow-y-auto rounded-lg border border-border bg-surface">
-                {searchResults.map((user) => (
-                  <button
-                    key={user.id}
-                    onClick={() => selectSearchResult(user.handle)}
-                    className="w-full text-left px-3 py-2 hover:bg-surface-raised transition-colors flex items-center gap-2"
-                  >
-                    <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/50 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-bold text-accent">{user.handle[0]?.toUpperCase()}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">@{user.handle}</p>
-                      {user.bio && <p className="text-xs text-text-muted truncate">{user.bio}</p>}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
             <button
               onClick={startNewConversation}
-              disabled={!newConvHandle.trim()}
-              className="w-full mt-2 text-xs bg-accent text-black rounded-lg py-1.5 font-semibold disabled:opacity-50"
+              className="w-full mt-2 text-xs bg-accent text-black rounded-lg py-1.5 font-semibold"
             >
               Start Chat
             </button>

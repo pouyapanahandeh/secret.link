@@ -9,6 +9,18 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "4000",
+        JWT_SECRET: "f85dff9d4c7e4b1a9d2f6e8c3a5b7d0e",
+        RP_ID: "secretlink.life",
+        RP_ORIGIN: "https://secretlink.life,https://admin.secretlink.life",
+        CORS_ORIGINS: "https://secretlink.life,https://admin.secretlink.life,http://localhost:3000,http://localhost:3001",
+        SES_REGION: "eu-north-1",
+        SES_FROM: "hello@secretlink.life",
+        AWS_REGION: "eu-north-1",
+        AWS_ACCESS_KEY_ID: "AKIAWT6LITQ6QBCNXN7P",
+        AWS_SECRET_ACCESS_KEY: "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",
+        VAPID_PUBLIC_KEY: "BAVk4p8Gq9Sc8dIKnC-ePu7KWfQ17lV-1vFU0vA54T48oSx_MJHlW7-GVHGjjy4mEW_WVLyJ14ALIe8PkdsheVw",
+        VAPID_PRIVATE_KEY: "kbRni6ieyWeiCf0bMH7rbZipqU9OUtI2X-VxT-fdEIA",
+        VAPID_SUBJECT: "mailto:waac.world@gmail.com",
       },
     },
     {
@@ -20,6 +32,8 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3000",
+        SESSION_SECRET: "f85dff9d4c7e4b1a9d2f6e8c3a5b7d0e",
+        API_URL: "http://localhost:4000",
       },
     },
     {
@@ -31,6 +45,8 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3002",
+        SESSION_SECRET: "f85dff9d4c7e4b1a9d2f6e8c3a5b7d0e",
+        API_URL: "http://localhost:4000",
       },
     },
   ],

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "@remix-run/react";
 import { getApiBase } from "../lib/api.client";
 import { reverseGeocode } from "../lib/geocode";
 import type { MapSecret } from "../lib/map-types";
@@ -470,7 +471,7 @@ export function MapTab({ user, following }: MapTabProps) {
                   <p className="text-text text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMapSecret.message}</p>
                   <div className="flex items-center gap-2 mt-3">
                     {selectedMapSecret.handle && (
-                      <a href={`/${selectedMapSecret.handle}`} className="text-xs text-accent">@{selectedMapSecret.handle}</a>
+                      <Link to={`/${selectedMapSecret.handle}`} className="text-xs text-accent">@{selectedMapSecret.handle}</Link>
                     )}
                     {(selectedMapSecret.locationName || selectedMapSecret.cityName) && (
                       <span className="text-xs text-text-muted">

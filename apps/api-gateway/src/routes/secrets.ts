@@ -15,6 +15,18 @@ export const secretsRouter = new Router({ prefix: "/secrets" });
 const BLOB_DIR = path.resolve(process.cwd(), ".blobs");
 fs.mkdir(BLOB_DIR, { recursive: true }).catch(() => {});
 
+// Detect MIME type from file magic bytes
+function detectMimeType(buf: Buffer): string {
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return "image/gif";
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return "image/webp";
+  if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return "video/mp4";
+  if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return "video/webm";
+  return "application/octet-stream";
+}
+
 // ─── SQLite-backed secret store ─────────────────────────────────────────────
 const secretStmts = {
   insert: db.prepare(`INSERT INTO secrets (id, ciphertext, content_type, blob_path, blob_size_bytes, mime_type, nonce, view_duration_seconds, max_views, view_count, burned, recipient_handle, sender_id, workspace_id, wrapped_key, wrap_nonce, wrap_epk, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)`),
@@ -360,7 +372,7 @@ secretsRouter.get("/blob/:path", async (ctx: Context) => {
   try {
     const data = await fs.readFile(filePath);
     ctx.status = 200;
-    ctx.type = "application/octet-stream";
+    ctx.type = detectMimeType(data);
     ctx.body = data;
   } catch {
     ctx.status = 404;

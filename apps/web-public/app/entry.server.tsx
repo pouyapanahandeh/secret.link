@@ -23,6 +23,25 @@ export default function handleRequest(
   responseHeaders.set("X-XSS-Protection", "0");
   responseHeaders.set("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(self)");
 
+  // Content Security Policy
+  const apiDomain = process.env["API_URL"]
+    ? new URL(process.env["API_URL"]).host
+    : "localhost:4000";
+  responseHeaders.set(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
+      "font-src 'self' fonts.gstatic.com",
+      "img-src 'self' data: blob: *.basemaps.cartocdn.com *.openstreetmap.org",
+      `connect-src 'self' ${apiDomain} *.basemaps.cartocdn.com`,
+      "media-src 'self' blob:",
+      "worker-src 'self'",
+      "frame-ancestors 'none'",
+    ].join("; ")
+  );
+
   return new Promise((resolve, reject) => {
     let shellRendered = false;
     const { pipe, abort } = renderToPipeableStream(
