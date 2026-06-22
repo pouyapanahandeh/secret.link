@@ -1,5 +1,6 @@
 import type { MetaFunction } from "@remix-run/node";
 import { useEffect, useState, useRef } from "react";
+import { Link } from "@remix-run/react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { getApiBase } from "../lib/api.client";
 
@@ -159,12 +160,12 @@ export default function MapPage() {
     <main className="h-screen flex flex-col">
       {/* Nav */}
       <nav className="flex items-center justify-between px-4 sm:px-6 py-3 bg-surface border-b border-border/50 z-20 relative">
-        <a href="/" className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2">
           <img src="/secretlink.png" alt="Secretlink.life" className="w-7 h-7" />
           <span className="text-lg font-bold tracking-tight">
             secretlink<span className="text-accent">.</span>life
           </span>
-        </a>
+        </Link>
         <div className="flex items-center gap-3">
           <span className="text-sm text-accent font-semibold">🗺️ Secret Map</span>
           <ThemeToggle />
@@ -195,9 +196,9 @@ export default function MapPage() {
                 <p className="text-text text-sm leading-relaxed break-words">{selectedSecret.message}</p>
                 <div className="flex items-center gap-2 mt-2">
                   {selectedSecret.handle && (
-                    <a href={`/${selectedSecret.handle}`} className="text-xs text-accent hover:text-accent-soft">
+                    <Link to={`/${selectedSecret.handle}`} className="text-xs text-accent hover:text-accent-soft">
                       @{selectedSecret.handle}
-                    </a>
+                    </Link>
                   )}
                   <span className="text-xs text-text-muted">
                     ⏳ {timeRemaining(selectedSecret.expiresAt)}

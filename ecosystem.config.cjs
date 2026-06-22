@@ -9,6 +9,18 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "4000",
+        JWT_SECRET: "REDACTED_JWT_SECRET",
+        RP_ID: "secretlink.life",
+        RP_ORIGIN: "https://secretlink.life,https://admin.secretlink.life",
+        CORS_ORIGINS: "https://secretlink.life,https://admin.secretlink.life,http://localhost:3000,http://localhost:3001",
+        SES_REGION: "eu-north-1",
+        SES_FROM: "hello@secretlink.life",
+        AWS_REGION: "eu-north-1",
+        AWS_ACCESS_KEY_ID: "REDACTED_AWS_ACCESS_KEY_ID",
+        AWS_SECRET_ACCESS_KEY: "REDACTED_AWS_SECRET_ACCESS_KEY",
+        VAPID_PUBLIC_KEY: "REDACTED_VAPID_PUBLIC_KEY",
+        VAPID_PRIVATE_KEY: "REDACTED_VAPID_PRIVATE_KEY",
+        VAPID_SUBJECT: "mailto:ops@example.com",
       },
     },
     {
@@ -20,6 +32,8 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3000",
+        SESSION_SECRET: "REDACTED_JWT_SECRET",
+        API_URL: "http://localhost:4000",
       },
     },
     {
@@ -31,6 +45,8 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3002",
+        SESSION_SECRET: "REDACTED_JWT_SECRET",
+        API_URL: "http://localhost:4000",
       },
     },
   ],

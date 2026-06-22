@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useRouteError, isRouteErrorResponse } from "@remix-run/react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { getToken } from "../lib/session.server";
+import { getApiBase } from "../lib/api.client";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = await getToken(request);
@@ -32,24 +33,22 @@ export default function Index() {
       {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
-          <a href="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <img src="/secretlink.png" alt="Secretlink.life" className="w-7 h-7 sm:w-8 sm:h-8" />
             <span className="text-lg sm:text-xl font-bold tracking-tight">
               secretlink<span className="text-accent">.</span>life
             </span>
-          </a>
-
-          {/* Desktop nav */}
+          </Link>
           <div className="hidden sm:flex items-center gap-4">
-            <a href="/about" className="text-sm text-text-muted hover:text-text transition-colors">About</a>
-            <a href="/send" className="text-sm text-text-muted hover:text-text transition-colors">Send</a>
+            <Link to="/about" className="text-sm text-text-muted hover:text-text transition-colors">About</Link>
+            <Link to="/send" className="text-sm text-text-muted hover:text-text transition-colors">Send</Link>
             <ThemeToggle />
-            <a
-              href="/login"
+            <Link
+              to="/login"
               className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-black hover:scale-[1.03] transition-all"
             >
               Sign in
-            </a>
+            </Link>
           </div>
 
           {/* Mobile hamburger */}
@@ -73,18 +72,18 @@ export default function Index() {
         {/* Mobile menu */}
         {menuOpen && (
           <div className="sm:hidden border-t border-border/50 px-4 py-4 space-y-3 bg-surface/95 backdrop-blur-md">
-            <a href="/about" className="block text-sm text-text-muted hover:text-text transition-colors py-2">About</a>
-            <a href="/send" className="block text-sm text-text-muted hover:text-text transition-colors py-2">Send</a>
+            <Link to="/about" className="block text-sm text-text-muted hover:text-text transition-colors py-2">About</Link>
+            <Link to="/send" className="block text-sm text-text-muted hover:text-text transition-colors py-2">Send</Link>
             <div className="flex items-center justify-between py-2">
               <span className="text-sm text-text-muted">Theme</span>
               <ThemeToggle />
             </div>
-            <a
-              href="/login"
+            <Link
+              to="/login"
               className="block text-center rounded-full bg-accent px-4 py-2.5 text-sm font-bold text-black hover:scale-[1.02] transition-all"
             >
               Sign in
-            </a>
+            </Link>
           </div>
         )}
       </nav>
@@ -107,18 +106,18 @@ export default function Index() {
           </p>
 
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href="/send"
+            <Link
+              to="/send"
               className="rounded-full bg-accent px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/25 hover:shadow-accent/50 hover:scale-[1.03] transition-all duration-200"
             >
               Send a secret 🤫
-            </a>
-            <a
-              href="/signup"
+            </Link>
+            <Link
+              to="/signup"
               className="rounded-full border-2 border-border px-8 py-3.5 text-sm font-semibold text-text hover:border-accent hover:text-accent transition-all duration-200"
             >
               Get your @handle
-            </a>
+            </Link>
           </div>
           <p className="mt-4 text-xs text-text-muted">Free forever · No email required · 100% encrypted</p>
         </div>
@@ -225,18 +224,18 @@ export default function Index() {
         <div className="text-5xl mb-4">🤫</div>
         <h2 className="text-2xl font-bold mb-2">Got something to say?</h2>
         <p className="text-text-muted mb-6">Go on. We won't tell anyone.</p>
-        <a
-          href="/send"
+        <Link
+          to="/send"
           className="inline-block rounded-full bg-accent px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/25 hover:shadow-accent/50 hover:scale-[1.03] transition-all duration-200"
         >
           Send a secret →
-        </a>
+        </Link>
       </section>
 
       <footer className="border-t border-border/50 py-6 text-center text-xs text-text-muted">
-        <a href="/about" className="hover:text-text transition-colors">About</a>
+        <Link to="/about" className="hover:text-text transition-colors">About</Link>
         {" · "}
-        <a href="/privacy" className="hover:text-text transition-colors">Privacy Policy</a>
+        <Link to="/privacy" className="hover:text-text transition-colors">Privacy Policy</Link>
         {" · "}
         <a href="https://teams.secretlink.life" className="hover:text-text transition-colors">For Teams</a>
         {" · "}
@@ -268,11 +267,7 @@ function LandingMap() {
   const [timerSeconds, setTimerSeconds] = useState(30);
   const [maxClicks, setMaxClicks] = useState(3);
 
-  function getApiBase() {
-    if (typeof window === "undefined") return "";
-    const origin = window.location.origin;
-    return window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
-  }
+  // Imported at top of file via api.client — used inline below as getApiBase()
 
   function placePin(lat: number, lng: number) {
     const L = (window as any).L;

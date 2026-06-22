@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, useFetcher } from "@remix-run/react";
+import { useLoaderData, useActionData, useFetcher, Link } from "@remix-run/react";
 import { useState, useEffect } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { getToken } from "../lib/session.server";
@@ -233,12 +233,12 @@ export default function ProfilePage() {
               Your anonymous message has been delivered to <span className="text-accent">@{handle}</span>.
               It will self-destruct after being read.
             </p>
-            <a
-              href={`/${handle}`}
+            <Link
+              to={`/${handle}`}
               className="inline-flex rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all"
             >
               Send another →
-            </a>
+            </Link>
           </div>
         </div>
         {isLoggedIn && <MobileBottomNav handle={handle} />}
@@ -253,12 +253,12 @@ export default function ProfilePage() {
           <Sidebar />
           {/* Mobile header for logged-in */}
           <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
-            <a href="/dashboard" className="flex items-center gap-2">
+            <Link to="/dashboard" className="flex items-center gap-2">
               <img src="/secretlink.png" alt="" className="w-7 h-7" />
               <span className="text-lg font-bold tracking-tight">
                 secretlink<span className="text-accent">.</span>life
               </span>
-            </a>
+            </Link>
             <ThemeToggle />
           </header>
         </>
@@ -365,12 +365,12 @@ export default function ProfilePage() {
               </>
             )}
             {isOwnProfile && (
-              <a
-                href="/dashboard#profile"
+              <Link
+                to="/dashboard#profile"
                 className="inline-flex items-center gap-2 text-xs bg-surface-raised border border-border hover:border-accent/50 text-text px-5 py-2 rounded-full transition-colors"
               >
                 ✏️ Edit profile
-              </a>
+              </Link>
             )}
           </div>
         </div>
@@ -452,12 +452,12 @@ export default function ProfilePage() {
         {!isLoggedIn && (
         <div className="text-center mt-8">
           <p className="text-sm text-text-muted mb-2">Want your own anonymous inbox?</p>
-          <a
-            href="/signup"
+          <Link
+            to="/signup"
             className="inline-flex rounded-full border border-border px-5 py-2 text-sm font-semibold text-text hover:border-accent hover:text-accent transition-all"
           >
             Get your @handle
-          </a>
+          </Link>
         </div>
         )}
       </div>
@@ -496,23 +496,23 @@ function Sidebar() {
   return (
     <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border/50 bg-surface shrink-0">
       <div className="px-5 py-5 border-b border-border/50">
-        <a href="/dashboard" className="flex items-center gap-2">
+        <Link to="/dashboard" className="flex items-center gap-2">
           <img src="/secretlink.png" alt="" className="w-7 h-7" />
           <span className="text-lg font-bold tracking-tight">
             secretlink<span className="text-accent">.</span>life
           </span>
-        </a>
+        </Link>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map((item) => (
-          <a
+          <Link
             key={item.id}
-            href={item.href}
+            to={item.href}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-text-muted hover:text-text hover:bg-surface-raised transition-all"
           >
             {item.icon}
             <span>{item.label}</span>
-          </a>
+          </Link>
         ))}
       </nav>
       <div className="px-3 py-4 border-t border-border/50 space-y-2">
@@ -531,22 +531,22 @@ function MobileBottomNav({ handle }: { handle: string }) {
   return (
     <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border/50 z-30">
       <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
-        <a href="/dashboard" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
+        <Link to="/dashboard" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
           <span className="text-[10px] font-medium">Home</span>
-        </a>
-        <a href="/dashboard#map" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
+        </Link>
+        <Link to="/dashboard#map" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503-11.307l4.994-2.497A.75.75 0 0121 4.196v13.608a.75.75 0 01-.497.708l-5.006 2.503m-6.994-3.015l-5.006 2.503A.75.75 0 013 19.804V6.196a.75.75 0 01.497-.708l5.006-2.503m6.994 3.015L9 4.485m6.497 1.53L9 8.515" /></svg>
           <span className="text-[10px] font-medium">Map</span>
-        </a>
-        <a href="/messages" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
+        </Link>
+        <Link to="/messages" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443h.004c2.174-.063 4.322-.258 6.426-.573 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg>
           <span className="text-[10px] font-medium">Messages</span>
-        </a>
-        <a href={`/${handle}`} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-accent">
+        </Link>
+        <Link to={`/${handle}`} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-accent">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
           <span className="text-[10px] font-medium">Profile</span>
-        </a>
+        </Link>
       </div>
     </nav>
   );
@@ -555,21 +555,21 @@ function MobileBottomNav({ handle }: { handle: string }) {
 function Nav({ isLoggedIn, handle: _handle }: { isLoggedIn: boolean; handle: string }) {
   return (
     <nav className={`${isLoggedIn ? "sm:hidden" : ""} fixed top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50`}>
-      <a href="/" className="flex items-center gap-2">
+      <Link to="/" className="flex items-center gap-2">
         <img src="/secretlink.png" alt="Secretlink.life" className="w-7 h-7" />
         <span className="text-lg font-bold tracking-tight">
           secretlink<span className="text-accent">.</span>life
         </span>
-      </a>
+      </Link>
       <div className="flex items-center gap-3">
         <ThemeToggle />
         {!isLoggedIn && (
-          <a
-            href="/login"
+          <Link
+            to="/login"
             className="rounded-full bg-accent px-3 py-1.5 text-sm font-bold text-black hover:scale-[1.03] transition-all"
           >
             Sign in
-          </a>
+          </Link>
         )}
       </div>
     </nav>

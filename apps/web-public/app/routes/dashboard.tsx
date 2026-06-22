@@ -350,12 +350,12 @@ export default function Dashboard() {
       <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border/50 bg-surface shrink-0">
         {/* Logo */}
         <div className="px-5 py-5 border-b border-border/50">
-          <a href="/dashboard" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <img src="/secretlink.png" alt="" className="w-7 h-7" />
             <span className="text-lg font-bold tracking-tight">
               secretlink<span className="text-accent">.</span>life
             </span>
-          </a>
+          </Link>
         </div>
 
         {/* Nav links */}
@@ -396,9 +396,9 @@ export default function Dashboard() {
       {/* ─── Mobile Header ─── */}
       {activeTab !== "messages" && (
       <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
-        <a href="/dashboard" className="flex items-center gap-2">
+        <Link to="/dashboard" className="flex items-center gap-2">
           <img src="/secretlink.png" alt="" className="w-6 h-6" />
-        </a>
+        </Link>
         <div className="flex items-center gap-2">
           <NotificationBell token={token} onNavigate={handleNavClick} />
           <ThemeToggle />
@@ -437,9 +437,9 @@ export default function Dashboard() {
                     {user.email ?? "No email"} · {user.isPro ? "Pro ⭐" : "Free"}
                   </p>
                 </div>
-                <a href={`/${user.handle}`} className="shrink-0 text-xs bg-accent/10 text-accent px-3 py-1.5 rounded-full">
+                <Link to={`/${user.handle}`} className="shrink-0 text-xs bg-accent/10 text-accent px-3 py-1.5 rounded-full">
                   View
-                </a>
+                </Link>
               </div>
 
               {/* Quick link */}
@@ -481,7 +481,7 @@ export default function Dashboard() {
                   <div className="mt-3 space-y-2">
                     {searchResults.map((u: any) => (
                       <div key={u.id} className="flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3">
-                        <a href={`/${u.handle}`} className="flex items-center gap-3 flex-1 min-w-0">
+                        <Link to={`/${u.handle}`} className="flex items-center gap-3 flex-1 min-w-0">
                           <div className="w-9 h-9 rounded-full bg-accent/20 border border-accent/50 flex items-center justify-center shrink-0">
                             <span className="text-xs font-bold text-accent">{u.handle[0]?.toUpperCase()}</span>
                           </div>
@@ -489,7 +489,7 @@ export default function Dashboard() {
                             <p className="text-sm font-medium truncate">@{u.handle} {u.isPro && "⭐"}</p>
                             {u.bio && <p className="text-xs text-text-muted truncate">{u.bio}</p>}
                           </div>
-                        </a>
+                        </Link>
                         {u.id !== user.id && (
                           <button
                             onClick={() => toggleFollow(u.id)}

@@ -1,6 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, Link } from "@remix-run/react";
 import { useState } from "react";
 import { ProtectedViewer } from "../components/ProtectedViewer";
 import { AppNav } from "../components/AppNav";
@@ -187,9 +187,9 @@ export default function RevealSecret() {
         <div className="max-w-md w-full text-center">
           <h1 className="text-3xl font-bold mb-4 text-text/60">Gone.</h1>
           <p className="text-text-muted">{error}</p>
-          <a href="/" className="inline-block mt-8 text-sm text-accent hover:text-accent/80 transition-colors">
+          <Link to="/" className="inline-block mt-8 text-sm text-accent hover:text-accent/80 transition-colors">
             ← Back to Secretlink.life
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -205,9 +205,9 @@ export default function RevealSecret() {
           <p className="text-text-muted text-sm">
             The timer expired. This secret no longer exists anywhere — not on the server, not in your browser.
           </p>
-          <a href="/send" className="inline-block mt-8 text-sm text-accent hover:text-accent/80 transition-colors">
+          <Link to="/send" className="inline-block mt-8 text-sm text-accent hover:text-accent/80 transition-colors">
             Send your own secret →
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -267,9 +267,9 @@ export default function RevealSecret() {
             👁 Capture-resistant, not capture-proof
           </p>
           <div className="mt-4 text-center">
-            <a href="/send" className="text-sm text-accent hover:text-accent/80 transition-colors">
+            <Link to="/send" className="text-sm text-accent hover:text-accent/80 transition-colors">
               Send your own secret →
-            </a>
+            </Link>
           </div>
         </div>
       </main>

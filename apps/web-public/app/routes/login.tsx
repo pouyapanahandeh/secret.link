@@ -1,6 +1,6 @@
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useActionData } from "@remix-run/react";
+import { useActionData, Link } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { AppNav } from "../components/AppNav";
 import { createSessionRedirect } from "../lib/session.server";
@@ -130,9 +130,9 @@ export default function Login() {
               We sent a login link to <strong className="text-text">{actionData.email}</strong>.
               Click it to sign in.
             </p>
-            <a href="/login" className="text-sm text-accent hover:text-accent-soft transition-colors">
+            <Link to="/login" className="text-sm text-accent hover:text-accent-soft transition-colors">
               ← Try again
-            </a>
+            </Link>
           </div>
         </div>
       </main>
@@ -229,7 +229,7 @@ export default function Login() {
 
           <p className="mt-8 text-sm text-text-muted text-center">
             Don't have an account?{" "}
-            <a href="/signup" className="text-accent hover:text-accent-soft transition-colors">Sign up</a>
+            <Link to="/signup" className="text-accent hover:text-accent-soft transition-colors">Sign up</Link>
           </p>
         </div>
       </div>
