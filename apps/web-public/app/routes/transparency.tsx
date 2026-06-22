@@ -7,7 +7,7 @@ export const meta: MetaFunction = () => [{ title: "Transparency Report — Secre
 
 export async function loader() {
   try {
-    const res = await fetch(`${API_URL}/v1/admin/transparency`);
+    const res = await fetch(`${API_URL}/v1/public/transparency`);
     if (!res.ok) {
       return json({ stats: null });
     }

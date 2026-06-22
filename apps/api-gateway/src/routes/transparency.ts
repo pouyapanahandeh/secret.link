@@ -2,7 +2,7 @@ import Router from "@koa/router";
 import type { Context } from "koa";
 import db from "../db.js";
 
-export const transparencyRouter = new Router({ prefix: "/admin" });
+export const transparencyRouter = new Router({ prefix: "/public" });
 
 // ─── Public Transparency Stats (no auth) ───────────────────────────────────
 
