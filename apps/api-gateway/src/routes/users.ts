@@ -23,6 +23,7 @@ setInterval(() => { challengeStmts.cleanup.run(Date.now()); }, 60_000);
 const RP_NAME = "Secretlink.life";
 const RP_ID = process.env["RP_ID"] ?? "localhost";
 const RP_ORIGIN = process.env["RP_ORIGIN"] ?? "http://localhost:3000";
+const RP_ORIGINS = RP_ORIGIN.split(",").map((o) => o.trim());
 const SES_REGION = process.env["SES_REGION"] ?? "eu-north-1";
 const SES_FROM = process.env["SES_FROM"] ?? "noreply@secretlink.life";
 const ses = new SESClient({ region: SES_REGION });
@@ -362,7 +363,7 @@ usersRouter.post("/me/passkey/register-verify", requireAuth(), async (ctx: Conte
   const verification = await verifyRegistrationResponse({
     response: body,
     expectedChallenge,
-    expectedOrigin: RP_ORIGIN,
+    expectedOrigin: RP_ORIGINS,
     expectedRPID: RP_ID,
   });
 
@@ -428,7 +429,7 @@ usersRouter.post("/auth/passkey/login-verify", async (ctx: Context) => {
   const verification = await verifyAuthenticationResponse({
     response: body.credential as any,
     expectedChallenge,
-    expectedOrigin: RP_ORIGIN,
+    expectedOrigin: RP_ORIGINS,
     expectedRPID: RP_ID,
     credential: {
       id: credential.id,

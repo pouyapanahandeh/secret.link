@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
+import { useEffect, useRef, useState } from "react";
 import { sessionStorage, getSession } from "~/lib/session.server";
 
 const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
@@ -132,33 +133,43 @@ export default function Login() {
 }
 
 function PasskeyVerify({ options, handle }: { options: any; handle: string }) {
+  const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const credentialRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { startAuthentication } = await import("@simplewebauthn/browser");
+        const credential = await startAuthentication({ optionsJSON: options });
+        if (cancelled) return;
+        credentialRef.current!.value = JSON.stringify(credential);
+        formRef.current!.submit();
+      } catch (e: any) {
+        if (cancelled) return;
+        console.error("Passkey auth failed:", e);
+        setError(e?.message || "Passkey authentication failed");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [options]);
+
   return (
     <div>
       <p className="text-sm text-[var(--text-muted)] mb-4">Passkey challenge received. Complete authentication on your device.</p>
-      <Form method="post" id="verify-form">
+      <form method="post" ref={formRef} action="/login">
         <input type="hidden" name="step" value="verify" />
         <input type="hidden" name="verifyHandle" value={handle} />
-        <input type="hidden" name="credential" id="credential-input" />
-      </Form>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (async function() {
-              try {
-                const options = ${JSON.stringify(options)};
-                const { startAuthentication } = await import("https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@13/dist/bundle/index.js");
-                const credential = await startAuthentication({ optionsJSON: options });
-                document.getElementById("credential-input").value = JSON.stringify(credential);
-                document.getElementById("verify-form").submit();
-              } catch (e) {
-                console.error("Passkey auth failed:", e);
-                document.querySelector(".card").innerHTML += '<p style="color:var(--danger);font-size:0.875rem;margin-top:1rem;">Passkey authentication failed. <a href="/login" style="color:var(--accent);">Try again</a></p>';
-              }
-            })();
-          `,
-        }}
-      />
-      <p className="text-sm text-[var(--text-muted)] animate-pulse">Waiting for passkey...</p>
+        <input type="hidden" name="credential" ref={credentialRef} />
+      </form>
+      {error ? (
+        <p className="text-sm text-[var(--danger)] mt-2">
+          {error}. <a href="/login" className="text-[var(--accent)] underline">Try again</a>
+        </p>
+      ) : (
+        <p className="text-sm text-[var(--text-muted)] animate-pulse">Waiting for passkey...</p>
+      )}
     </div>
   );
 }
