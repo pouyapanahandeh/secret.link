@@ -199,5 +199,105 @@ try {
   }
 } catch {}
 
+// ─── Phase 1: Admin & Compliance migrations ─────────────────────────────────
+
+// Add role column to users
+try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`); } catch {}
+
+// Expand secret_reports table
+try { db.exec(`ALTER TABLE secret_reports ADD COLUMN actioned_by TEXT`); } catch {}
+try { db.exec(`ALTER TABLE secret_reports ADD COLUMN actioned_at TEXT`); } catch {}
+try { db.exec(`ALTER TABLE secret_reports ADD COLUMN action_type TEXT`); } catch {}
+try { db.exec(`ALTER TABLE secret_reports ADD COLUMN action_reason TEXT`); } catch {}
+try { db.exec(`ALTER TABLE secret_reports ADD COLUMN appeal_status TEXT`); } catch {}
+try { db.exec(`ALTER TABLE secret_reports ADD COLUMN internal_notes TEXT`); } catch {}
+
+// secret_reports table (in case it doesn't exist yet)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS secret_reports (
+    id TEXT PRIMARY KEY,
+    secret_id TEXT NOT NULL,
+    reporter_user_id TEXT,
+    reason TEXT NOT NULL,
+    details TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    actioned_by TEXT,
+    actioned_at TEXT,
+    action_type TEXT,
+    action_reason TEXT,
+    appeal_status TEXT,
+    internal_notes TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_reports_status ON secret_reports(status);
+  CREATE INDEX IF NOT EXISTS idx_reports_secret ON secret_reports(secret_id);
+`);
+
+// Audit log
+db.exec(`
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    actor_id TEXT NOT NULL,
+    actor_handle TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT,
+    details TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
+`);
+
+// Appeals table (Phase 2)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS appeals (
+    id TEXT PRIMARY KEY,
+    report_id TEXT NOT NULL REFERENCES secret_reports(id),
+    user_id TEXT NOT NULL REFERENCES users(id),
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    resolution_note TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_appeals_status ON appeals(status);
+  CREATE INDEX IF NOT EXISTS idx_appeals_user ON appeals(user_id);
+`);
+
+// Account deletion requests (Phase 2)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS deletion_requests (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    requested_at TEXT NOT NULL,
+    execute_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    executed_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_deletion_user ON deletion_requests(user_id);
+  CREATE INDEX IF NOT EXISTS idx_deletion_status ON deletion_requests(status);
+`);
+
+// User suspensions
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_suspensions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    reason TEXT NOT NULL,
+    suspended_by TEXT NOT NULL,
+    suspended_at TEXT NOT NULL,
+    expires_at TEXT,
+    lifted_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_suspension_user ON user_suspensions(user_id);
+`);
+
 export { db };
 export default db;

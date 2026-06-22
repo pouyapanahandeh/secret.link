@@ -1,0 +1,9 @@
+{
+  "extends": "@secretlink/config-tsconfig/remix.json",
+  "compilerOptions": {
+    "paths": {
+      "~/*": ["./app/*"]
+    }
+  },
+  "include": ["app/**/*.ts", "app/**/*.tsx", "env.d.ts"]
+}

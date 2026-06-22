@@ -6,6 +6,9 @@ import { workspacesRouter } from "./workspaces.js";
 import { feedbackRouter } from "./feedback.js";
 import { dmsRouter } from "./dms.js";
 import { notificationsRouter } from "./notifications.js";
+import { adminRouter } from "./admin.js";
+import { complianceRouter } from "./compliance.js";
+import { transparencyRouter } from "./transparency.js";
 
 export const router = new Router({ prefix: "/v1" });
 
@@ -16,3 +19,6 @@ router.use(workspacesRouter.routes());
 router.use(feedbackRouter.routes());
 router.use(dmsRouter.routes());
 router.use(notificationsRouter.routes());
+router.use(transparencyRouter.routes());
+router.use(adminRouter.routes());
+router.use(complianceRouter.routes());
