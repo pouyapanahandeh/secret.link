@@ -68,6 +68,7 @@ function dbUserToPublic(row: any) {
     handle: row.handle,
     email: row.email,
     isPro: !!row.is_pro,
+    role: row.role ?? "user",
     createdAt: row.created_at,
     bio: row.bio ?? null,
     avatarUrl: row.avatar_url ?? null,
@@ -178,6 +179,14 @@ usersRouter.get("/:handle", async (ctx: Context) => {
     followingCount: isOwner ? followingCount : null,
     dmPublicKey: dmKey?.public_key ?? null,
   };
+});
+
+// ─── Get current user (short, for auth checks) ─────────────────────────────
+usersRouter.get("/me", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const row = stmts.getUserById.get(userId) as any;
+  if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
+  ctx.body = dbUserToPublic(row);
 });
 
 // ─── Get current user (authenticated) ───────────────────────────────────────
