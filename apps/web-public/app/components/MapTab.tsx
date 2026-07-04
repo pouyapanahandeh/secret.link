@@ -7,6 +7,7 @@ import type { MapSecret } from "../lib/map-types";
 interface MapTabProps {
   user: { handle: string; avatarUrl?: string | null };
   following: Array<{ handle?: string; avatarUrl?: string | null }>;
+  token: string;
 }
 
 const EMOJIS = ["💬", "❤️", "🔥", "👀", "🤫", "💀", "🎉", "😂"];
@@ -36,7 +37,7 @@ function mapTimeRemaining(expiresAt: string) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m left`;
 }
 
-export function MapTab({ user, following }: MapTabProps) {
+export function MapTab({ user, following, token }: MapTabProps) {
   // Map instance refs
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -206,9 +207,12 @@ export function MapTab({ user, following }: MapTabProps) {
 
       const geo = await reverseGeocode(mapClickedPos.lat, mapClickedPos.lng);
 
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (!mapAnonymous) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`${getApiBase()}/v1/secrets/map`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           message: mapMessage.trim(),
           lat: mapClickedPos.lat,
@@ -704,17 +708,32 @@ export function MapTab({ user, following }: MapTabProps) {
           </h3>
           <div className="space-y-2">
             {visibleMapSecrets.slice(0, 10).map((s) => (
-              <div key={s.id} className="flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3">
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  setSelectedMapSecret(s);
+                  setMapSecretRevealed(false);
+                  setShowMapPost(false);
+                  setMapReportOpen(false);
+                  setMapReportResult(null);
+                  if (mapInstanceRef.current) {
+                    mapInstanceRef.current.setView([s.lat, s.lng], 14);
+                  }
+                }}
+                className="w-full flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3 hover:border-accent/50 transition-colors text-left"
+              >
                 <span className="text-lg">{s.emoji}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">{s.message}</p>
+                  <p className="text-sm text-text-muted italic">Tap to reveal</p>
                   <p className="text-xs text-text-muted">
                     {s.handle && `@${s.handle} · `}
                     {(s.cityName || s.locationName) && `${s.cityName || s.locationName} · `}
                     ⏳ {mapTimeRemaining(s.expiresAt)}
                   </p>
                 </div>
-              </div>
+                <span className="text-xs text-accent">👁️</span>
+              </button>
             ))}
           </div>
         </div>

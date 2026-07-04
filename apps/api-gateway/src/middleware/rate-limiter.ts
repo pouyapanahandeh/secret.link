@@ -97,3 +97,35 @@ export function dmRateLimiter() {
     await next();
   };
 }
+
+// Map post rate limiter: 10 posts per minute per IP.
+const MAP_POST_WINDOW_MS = 60_000;
+const MAP_POST_MAX = 10;
+
+export function mapPostRateLimiter() {
+  return async (ctx: Context, next: Next) => {
+    const bucket = hit(`map-post:${ctx.ip}`, MAP_POST_WINDOW_MS);
+    if (bucket.count > MAP_POST_MAX) {
+      ctx.status = 429;
+      ctx.body = { error: "map_post_rate_limit", retryAfter: Math.ceil((bucket.resetAt - Date.now()) / 1000) };
+      return;
+    }
+    await next();
+  };
+}
+
+// Blob upload rate limiter: 20 uploads per minute per IP.
+const BLOB_UPLOAD_WINDOW_MS = 60_000;
+const BLOB_UPLOAD_MAX = 20;
+
+export function blobUploadRateLimiter() {
+  return async (ctx: Context, next: Next) => {
+    const bucket = hit(`blob-upload:${ctx.ip}`, BLOB_UPLOAD_WINDOW_MS);
+    if (bucket.count > BLOB_UPLOAD_MAX) {
+      ctx.status = 429;
+      ctx.body = { error: "blob_upload_rate_limit", retryAfter: Math.ceil((bucket.resetAt - Date.now()) / 1000) };
+      return;
+    }
+    await next();
+  };
+}

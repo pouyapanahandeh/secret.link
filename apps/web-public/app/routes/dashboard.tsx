@@ -780,7 +780,7 @@ export default function Dashboard() {
 
           {/* ─── MAP TAB ─── */}
           {activeTab === "map" && (
-            <MapTab user={user} following={following as Array<{ handle?: string; avatarUrl?: string | null }>} />
+            <MapTab user={user} following={following as Array<{ handle?: string; avatarUrl?: string | null }>} token={token} />
           )}
         </div>
       </div>
@@ -875,6 +875,7 @@ export default function Dashboard() {
       {showStoryComposer && (
         <StoryComposer
           handle={user.handle}
+          token={token}
           onClose={() => setShowStoryComposer(false)}
           onPosted={() => revalidator.revalidate()}
         />
