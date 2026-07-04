@@ -104,7 +104,19 @@ echo "→ Activating release..."
   set -e
   ln -sfn $BASE_DIR/releases/$RELEASE $BASE_DIR/current
   cd $BASE_DIR/current
+  # PM2 is anchored to the \`current\` symlink (see ecosystem.config.cjs APP_ROOT),
+  # so a zero-downtime reload re-execs against this release.
   pm2 startOrReload ecosystem.config.cjs --update-env 2>&1 | tail -3
+  # Self-heal: if any process is still pinned to a non-current absolute path
+  # (this is the bug that made deploys silent no-ops), re-register cleanly.
+  if pm2 jlist | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{const bad=JSON.parse(s).some(p=>!(p.pm2_env.pm_cwd||\"\").includes(\"/current/\"));process.exit(bad?1:0)})'; then
+    echo '  PM2 anchored to current release ✓'
+  else
+    echo '  ⚠ PM2 was not anchored to current — re-registering cleanly'
+    pm2 delete all || true
+    pm2 start ecosystem.config.cjs --update-env 2>&1 | tail -3
+    pm2 save
+  fi
 "
 sleep 3
 
