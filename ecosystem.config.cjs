@@ -39,6 +39,16 @@ function loadEnv(file) {
 const fileEnv = loadEnv(path.join(__dirname, ".env"));
 const get = (k) => process.env[k] ?? fileEnv[k];
 
+// Anchor PM2 to the `current` symlink on the server (NOT a resolved release
+// path). Node's process.cwd() resolves symlinks, so starting with relative
+// paths would pin PM2 to releases/<timestamp>; a later symlink swap + reload
+// would then keep re-running the OLD release. Using the absolute symlink path
+// means every reload re-resolves `current` to the newest release. Falls back to
+// __dirname for local dev, where the release layout doesn't exist.
+const SERVER_CURRENT = "/home/ubuntu/secretlink-releases/current";
+const APP_ROOT = fs.existsSync(SERVER_CURRENT) ? SERVER_CURRENT : __dirname;
+const appPath = (p) => path.join(APP_ROOT, p);
+
 const REQUIRED = [
   "JWT_SECRET",
   "SESSION_SECRET",
@@ -100,16 +110,16 @@ module.exports = {
   apps: [
     {
       name: "api-gateway",
-      cwd: "./apps/api-gateway",
-      script: "../../node_modules/.bin/tsx",
+      cwd: appPath("apps/api-gateway"),
+      script: appPath("node_modules/.bin/tsx"),
       args: "src/index.ts",
       interpreter: "/usr/bin/node",
       env: apiEnv,
     },
     {
       name: "web-public",
-      cwd: "./apps/web-public",
-      script: "../../node_modules/.bin/remix-serve",
+      cwd: appPath("apps/web-public"),
+      script: appPath("node_modules/.bin/remix-serve"),
       args: "./build/server/index.js",
       interpreter: "/usr/bin/node",
       env: {
@@ -123,8 +133,8 @@ module.exports = {
     },
     {
       name: "web-admin",
-      cwd: "./apps/web-admin",
-      script: "../../node_modules/.bin/remix-serve",
+      cwd: appPath("apps/web-admin"),
+      script: appPath("node_modules/.bin/remix-serve"),
       args: "./build/server/index.js",
       interpreter: "/usr/bin/node",
       env: {
