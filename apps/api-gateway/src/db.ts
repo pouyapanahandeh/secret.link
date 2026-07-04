@@ -448,6 +448,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_feedback_msg_channel ON feedback_messages(channel_id);
 `);
 
+// ─── Contact form messages (public form → admin inbox) ──────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS contact_messages (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    message TEXT NOT NULL,
+    user_id TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_contact_messages_status ON contact_messages(status);
+`);
+
 // ─── Performance indexes for hot query paths ─────────────────────────────────
 // Without these, the inbox/sent lists and the public map endpoint fall back to
 // full table scans that degrade as the tables grow.

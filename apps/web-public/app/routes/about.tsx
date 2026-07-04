@@ -69,9 +69,15 @@ export default function About() {
           </ul>
         </section>
 
-        <footer className="border-t border-candle/10 pt-6 text-center">
+        <footer className="border-t border-candle/10 pt-6 text-center space-y-2">
           <p className="text-candle/40 text-sm">
             Built with 🔐 by the Secretlink.life team
+          </p>
+          <p className="text-candle/40 text-sm">
+            Have a question?{" "}
+            <a href="/contact" className="text-blush hover:underline">Contact us</a>
+            {" · "}
+            <a href="/" className="hover:text-candle/60 transition-colors">← Back to Secretlink.life</a>
           </p>
         </footer>
       </article>

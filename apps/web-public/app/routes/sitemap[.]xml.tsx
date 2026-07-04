@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   { path: "/terms", priority: "0.5", changefreq: "monthly" },
   { path: "/community-guidelines", priority: "0.5", changefreq: "monthly" },
   { path: "/transparency", priority: "0.6", changefreq: "weekly" },
+  { path: "/contact", priority: "0.4", changefreq: "yearly" },
   { path: "/login", priority: "0.4", changefreq: "yearly" },
   { path: "/signup", priority: "0.7", changefreq: "yearly" },
 ];
