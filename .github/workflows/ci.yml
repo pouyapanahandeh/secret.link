@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint (deployable apps)
+        run: pnpm exec turbo run lint --filter=@secretlink/api-gateway --filter=@secretlink/web-public --filter=@secretlink/web-admin
+
+      - name: Test
+        run: pnpm test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-test-secret-not-used-in-prod
+          MASTER_KEY: dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktMzI=
+
+      - name: Build (deployable apps — mobile requires EAS cloud and is excluded)
+        run: pnpm exec turbo run build --filter=@secretlink/api-gateway --filter=@secretlink/web-public --filter=@secretlink/web-admin

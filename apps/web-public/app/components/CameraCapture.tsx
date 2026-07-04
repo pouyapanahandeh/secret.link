@@ -91,7 +91,6 @@ export function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
   useEffect(() => {
     startStream(mode, facing);
     return () => stopStream();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, facing]);
 
   // Clear the recording timer on unmount.

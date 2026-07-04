@@ -3,17 +3,13 @@ import { createSecret, revealSecret } from "@secretlink/core";
 import type { ContentType } from "@secretlink/core";
 import { nanoid } from "nanoid";
 import type { Context } from "koa";
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { requireAuth, type AuthPayload } from "../middleware/auth.js";
 import db from "../db.js";
+import { wrapKey } from "../lib/crypto.js";
+import { blobStore } from "../lib/blob-store.js";
 import { createNotification, getUserIdByHandle } from "../notifications.js";
 
 export const secretsRouter = new Router({ prefix: "/secrets" });
-
-// Local blob storage directory
-const BLOB_DIR = path.resolve(process.cwd(), ".blobs");
-fs.mkdir(BLOB_DIR, { recursive: true }).catch(() => {});
 
 // Detect MIME type from file magic bytes
 function detectMimeType(buf: Buffer): string {
@@ -118,12 +114,12 @@ const deps = {
       secretStmts.burn.run(id);
       if (row?.blob_path) {
         setTimeout(() => {
-          fs.unlink(path.join(BLOB_DIR, row.blob_path)).catch(() => {});
+          blobStore.delete(row.blob_path).catch(() => {});
         }, 60_000);
       }
     },
   },
-  kms: { wrap: async (_dek: Uint8Array, _wsId?: string) => "wrapped-key" },
+  kms: { wrap: async (dek: Uint8Array, _wsId?: string) => wrapKey(dek) },
   clock: { now: () => new Date() },
   id: () => nanoid(),
 };
@@ -353,7 +349,7 @@ secretsRouter.post("/blob", async (ctx: Context) => {
 
   const blobId = nanoid();
   const blobPath = `${blobId}.bin`;
-  await fs.writeFile(path.join(BLOB_DIR, blobPath), Buffer.concat(chunks));
+  await blobStore.put(blobPath, Buffer.concat(chunks));
 
   ctx.status = 201;
   ctx.body = { blobPath, sizeBytes: totalSize };
@@ -368,16 +364,16 @@ secretsRouter.get("/blob/:path", async (ctx: Context) => {
     return;
   }
 
-  const filePath = path.join(BLOB_DIR, blobPath);
-  try {
-    const data = await fs.readFile(filePath);
-    ctx.status = 200;
-    ctx.type = detectMimeType(data);
-    ctx.body = data;
-  } catch {
+  const data = await blobStore.get(blobPath);
+  if (!data) {
     ctx.status = 404;
     ctx.body = { error: "blob_not_found" };
+    return;
   }
+  ctx.status = 200;
+  ctx.type = detectMimeType(data);
+  ctx.set("Cache-Control", "private, max-age=31536000, immutable");
+  ctx.body = data;
 });
 
 // ─── Inbox: Get secrets sent TO a handle (requires auth) ────────────────────

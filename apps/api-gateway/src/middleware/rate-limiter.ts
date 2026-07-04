@@ -1,48 +1,76 @@
 import type { Context, Next } from "koa";
-import db from "../db.js";
+
+// In-memory sliding-window counters. Keeping this off SQLite avoids a write on
+// every request to the single-threaded database. State is per-process; behind a
+// single instance that is fine. If the API is ever scaled horizontally this
+// should move to a shared store (e.g. Redis).
 
 const WINDOW_MS = 60_000; // 1 minute
-const MAX_REQUESTS = 100;
-const MAX_REQUESTS_AUTHED = 200;
+const MAX_REQUESTS = 200;
+const MAX_REQUESTS_AUTHED = 600;
 
-const stmts = {
-  get: db.prepare(`SELECT count, reset_at FROM rate_limits WHERE key = ?`),
-  upsert: db.prepare(`INSERT INTO rate_limits (key, count, reset_at) VALUES (?, 1, ?)
-    ON CONFLICT(key) DO UPDATE SET count = count + 1, reset_at = CASE WHEN excluded.reset_at > rate_limits.reset_at THEN excluded.reset_at ELSE rate_limits.reset_at END`),
-  reset: db.prepare(`UPDATE rate_limits SET count = 1, reset_at = ? WHERE key = ?`),
-  cleanup: db.prepare(`DELETE FROM rate_limits WHERE reset_at < ?`),
-};
+interface Bucket {
+  count: number;
+  resetAt: number;
+}
 
-// Periodically clean expired entries
-setInterval(() => { stmts.cleanup.run(Date.now()); }, 60_000);
+const buckets = new Map<string, Bucket>();
+
+// Periodically drop expired buckets so the map doesn't grow unbounded.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, b] of buckets) {
+    if (now > b.resetAt) buckets.delete(key);
+  }
+}, 60_000).unref?.();
+
+function hit(key: string, windowMs: number): Bucket {
+  const now = Date.now();
+  const existing = buckets.get(key);
+  if (!existing || now > existing.resetAt) {
+    const fresh = { count: 1, resetAt: now + windowMs };
+    buckets.set(key, fresh);
+    return fresh;
+  }
+  existing.count += 1;
+  return existing;
+}
+
+// Requests originating on the same host (Remix SSR → API) never traverse the
+// public proxy, so they arrive with a loopback address. These are trusted
+// server-to-server calls and are not rate limited — but we still emit headers.
+function isLoopback(ip: string): boolean {
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+}
 
 export function rateLimiter() {
   return async (ctx: Context, next: Next) => {
-    const userId = ctx.state?.user?.userId;
-    const key = userId ? `user:${userId}` : `ip:${ctx.ip}`;
+    // ctx.ip honours X-Forwarded-For only when app.proxy === true (set in
+    // index.ts). nginx is configured to overwrite XFF with the real client IP,
+    // so external clients cannot spoof it.
+    const ip = ctx.ip;
+    const userId = ctx.state?.user?.userId as string | undefined;
+    const key = userId ? `user:${userId}` : `ip:${ip}`;
     const limit = userId ? MAX_REQUESTS_AUTHED : MAX_REQUESTS;
-    const now = Date.now();
 
-    const row = stmts.get.get(key) as { count: number; reset_at: number } | undefined;
-
-    let count: number;
-    if (!row || now > row.reset_at) {
-      stmts.reset.run(now + WINDOW_MS, key);
-      if (!row) stmts.upsert.run(key, now + WINDOW_MS);
-      count = 1;
-    } else {
-      stmts.upsert.run(key, now + WINDOW_MS);
-      count = row.count + 1;
+    if (isLoopback(ip) && !userId) {
+      // Trusted internal traffic: advertise headers but do not enforce.
+      ctx.set("X-RateLimit-Limit", String(limit));
+      ctx.set("X-RateLimit-Remaining", String(limit));
+      ctx.set("X-RateLimit-Reset", String(Math.ceil((Date.now() + WINDOW_MS) / 1000)));
+      await next();
+      return;
     }
 
-    const resetAt = row && now <= row.reset_at ? row.reset_at : now + WINDOW_MS;
-    ctx.set("X-RateLimit-Limit", String(limit));
-    ctx.set("X-RateLimit-Remaining", String(Math.max(0, limit - count)));
-    ctx.set("X-RateLimit-Reset", String(Math.ceil(resetAt / 1000)));
+    const bucket = hit(key, WINDOW_MS);
 
-    if (count > limit) {
+    ctx.set("X-RateLimit-Limit", String(limit));
+    ctx.set("X-RateLimit-Remaining", String(Math.max(0, limit - bucket.count)));
+    ctx.set("X-RateLimit-Reset", String(Math.ceil(bucket.resetAt / 1000)));
+
+    if (bucket.count > limit) {
       ctx.status = 429;
-      ctx.body = { error: "rate_limit_exceeded" };
+      ctx.body = { error: "rate_limit_exceeded", retryAfter: Math.ceil((bucket.resetAt - Date.now()) / 1000) };
       return;
     }
 
@@ -50,34 +78,19 @@ export function rateLimiter() {
   };
 }
 
-// DM-specific rate limiter: 30 messages per minute per user
+// DM-specific rate limiter: 30 messages per minute per user.
 const DM_WINDOW_MS = 60_000;
 const DM_MAX_MESSAGES = 30;
 
 export function dmRateLimiter() {
   return async (ctx: Context, next: Next) => {
-    const userId = ctx.state?.user?.userId;
+    const userId = ctx.state?.user?.userId as string | undefined;
     if (!userId) { await next(); return; }
 
-    const key = `dm:${userId}`;
-    const now = Date.now();
-
-    const row = stmts.get.get(key) as { count: number; reset_at: number } | undefined;
-
-    let count: number;
-    if (!row || now > row.reset_at) {
-      stmts.reset.run(now + DM_WINDOW_MS, key);
-      if (!row) stmts.upsert.run(key, now + DM_WINDOW_MS);
-      count = 1;
-    } else {
-      stmts.upsert.run(key, now + DM_WINDOW_MS);
-      count = row.count + 1;
-    }
-
-    if (count > DM_MAX_MESSAGES) {
-      const resetAt = row && now <= row.reset_at ? row.reset_at : now + DM_WINDOW_MS;
+    const bucket = hit(`dm:${userId}`, DM_WINDOW_MS);
+    if (bucket.count > DM_MAX_MESSAGES) {
       ctx.status = 429;
-      ctx.body = { error: "message_rate_limit_exceeded", retryAfter: Math.ceil((resetAt - now) / 1000) };
+      ctx.body = { error: "message_rate_limit_exceeded", retryAfter: Math.ceil((bucket.resetAt - Date.now()) / 1000) };
       return;
     }
 

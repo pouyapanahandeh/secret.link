@@ -1,3 +1,91 @@
+/* eslint-disable */
+// PM2 process definitions.
+//
+// Secrets are NO LONGER stored in this file. They are loaded at runtime from a
+// `.env` file that lives ONLY on the server (never committed) and/or from the
+// process environment (e.g. injected from AWS SSM Parameter Store by the deploy
+// script). See `.env.production.example` for the full list of required keys and
+// `scripts/pull-ssm-env.sh` for the SSM-backed workflow.
+
+const fs = require("node:fs");
+const path = require("node:path");
+
+/** Minimal .env parser (no dependency). Values already in process.env win. */
+function loadEnv(file) {
+  const out = {};
+  try {
+    const raw = fs.readFileSync(file, "utf8");
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let val = trimmed.slice(eq + 1).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      out[key] = val;
+    }
+  } catch {
+    // No .env file present — rely on the ambient process environment instead.
+  }
+  return out;
+}
+
+const fileEnv = loadEnv(path.join(__dirname, ".env"));
+const get = (k) => process.env[k] ?? fileEnv[k];
+
+const REQUIRED = [
+  "JWT_SECRET",
+  "SESSION_SECRET",
+  "VAPID_PUBLIC_KEY",
+  "VAPID_PRIVATE_KEY",
+  "MASTER_KEY",
+];
+const missing = REQUIRED.filter((k) => !get(k));
+if (missing.length > 0) {
+  throw new Error(
+    `[ecosystem] Missing required secrets: ${missing.join(", ")}. ` +
+      `Create a .env file (see .env.production.example) or export them before starting PM2.`,
+  );
+}
+
+const apiEnv = {
+  NODE_ENV: "production",
+  PORT: "4000",
+  JWT_SECRET: get("JWT_SECRET"),
+  MASTER_KEY: get("MASTER_KEY"),
+  RP_ID: get("RP_ID") ?? "secretlink.life",
+  RP_ORIGIN: get("RP_ORIGIN") ?? "https://secretlink.life,https://admin.secretlink.life",
+  CORS_ORIGINS:
+    get("CORS_ORIGINS") ??
+    "https://secretlink.life,https://admin.secretlink.life,http://localhost:3000,http://localhost:3001",
+  SES_REGION: get("SES_REGION") ?? "eu-north-1",
+  SES_FROM: get("SES_FROM") ?? "hello@secretlink.life",
+  AWS_REGION: get("AWS_REGION") ?? "eu-north-1",
+  IVS_REGION: get("IVS_REGION") ?? "eu-west-1",
+  VAPID_PUBLIC_KEY: get("VAPID_PUBLIC_KEY"),
+  VAPID_PRIVATE_KEY: get("VAPID_PRIVATE_KEY"),
+  VAPID_SUBJECT: get("VAPID_SUBJECT") ?? "mailto:waac.world@gmail.com",
+  // Blob storage. Set STORAGE_DRIVER=s3 + BLOB_BUCKET to use S3 (recommended in prod).
+  STORAGE_DRIVER: get("STORAGE_DRIVER") ?? "local",
+  BLOB_BUCKET: get("BLOB_BUCKET") ?? "",
+};
+
+// AWS credentials are intentionally omitted: the EC2 instance uses an IAM
+// instance-profile role, so the SDK resolves credentials automatically. Only
+// fall back to static keys if explicitly provided (e.g. local dev).
+if (get("AWS_ACCESS_KEY_ID") && get("AWS_SECRET_ACCESS_KEY")) {
+  apiEnv.AWS_ACCESS_KEY_ID = get("AWS_ACCESS_KEY_ID");
+  apiEnv.AWS_SECRET_ACCESS_KEY = get("AWS_SECRET_ACCESS_KEY");
+}
+
+const sessionSecret = get("SESSION_SECRET");
+
 module.exports = {
   apps: [
     {
@@ -6,22 +94,7 @@ module.exports = {
       script: "../../node_modules/.bin/tsx",
       args: "src/index.ts",
       interpreter: "/usr/bin/node",
-      env: {
-        NODE_ENV: "production",
-        PORT: "4000",
-        JWT_SECRET: "f85dff9d4c7e4b1a9d2f6e8c3a5b7d0e",
-        RP_ID: "secretlink.life",
-        RP_ORIGIN: "https://secretlink.life,https://admin.secretlink.life",
-        CORS_ORIGINS: "https://secretlink.life,https://admin.secretlink.life,http://localhost:3000,http://localhost:3001",
-        SES_REGION: "eu-north-1",
-        SES_FROM: "hello@secretlink.life",
-        AWS_REGION: "eu-north-1",
-        AWS_ACCESS_KEY_ID: "AKIAWT6LITQ6QBCNXN7P",
-        AWS_SECRET_ACCESS_KEY: "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",
-        VAPID_PUBLIC_KEY: "BAVk4p8Gq9Sc8dIKnC-ePu7KWfQ17lV-1vFU0vA54T48oSx_MJHlW7-GVHGjjy4mEW_WVLyJ14ALIe8PkdsheVw",
-        VAPID_PRIVATE_KEY: "kbRni6ieyWeiCf0bMH7rbZipqU9OUtI2X-VxT-fdEIA",
-        VAPID_SUBJECT: "mailto:waac.world@gmail.com",
-      },
+      env: apiEnv,
     },
     {
       name: "web-public",
@@ -32,8 +105,9 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3000",
-        SESSION_SECRET: "f85dff9d4c7e4b1a9d2f6e8c3a5b7d0e",
-        API_URL: "http://localhost:4000",
+        SESSION_SECRET: sessionSecret,
+        API_URL: get("API_URL") ?? "http://localhost:4000",
+        PUBLIC_ORIGIN: get("PUBLIC_ORIGIN") ?? "https://secretlink.life",
       },
     },
     {
@@ -45,8 +119,8 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3002",
-        SESSION_SECRET: "f85dff9d4c7e4b1a9d2f6e8c3a5b7d0e",
-        API_URL: "http://localhost:4000",
+        SESSION_SECRET: sessionSecret,
+        API_URL: get("API_URL") ?? "http://localhost:4000",
       },
     },
   ],

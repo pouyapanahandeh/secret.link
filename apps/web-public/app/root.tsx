@@ -40,6 +40,27 @@ const swScript = `
   }
 `;
 
+// Structured data (JSON-LD) so search and generative engines understand the
+// site entity. This is the "GEO" surface — stable, machine-readable facts.
+const structuredData = JSON.stringify({
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      name: "Secretlink.life",
+      url: "https://secretlink.life",
+      logo: "https://secretlink.life/secretlink.png",
+    },
+    {
+      "@type": "WebSite",
+      name: "Secretlink.life",
+      url: "https://secretlink.life",
+      description:
+        "The private social layer. Send secrets that self-destruct, share anonymously, and connect without a trace.",
+    },
+  ],
+});
+
 export default function App() {
   return (
     <html lang="en">
@@ -48,6 +69,7 @@ export default function App() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#facc15" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />
         <Meta />
         <Links />
       </head>

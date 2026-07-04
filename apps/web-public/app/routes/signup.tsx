@@ -46,10 +46,22 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ errors: { handle: data.error ?? "Something went wrong" }, values: { handle, email } }, { status: 400 });
   }
 
-  const { token } = await res.json();
+  // The API no longer returns the token in the body — it is delivered via an
+  // HttpOnly Set-Cookie header. Extract it here (server-to-server) and re-wrap
+  // it into our own encrypted Remix session so it never touches page JS.
+  const token = extractSlToken(res.headers.get("set-cookie"));
+  if (!token) {
+    return json({ errors: { handle: "Something went wrong" }, values: { handle, email } }, { status: 500 });
+  }
 
-  // Set secure cookie and redirect to dashboard
   return createSessionRedirect(token, "/dashboard");
+}
+
+/** Pull the sl_token value out of an upstream Set-Cookie header. */
+function extractSlToken(setCookie: string | null): string | null {
+  if (!setCookie) return null;
+  const match = /(?:^|,\s*)sl_token=([^;]+)/.exec(setCookie);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 export default function Signup() {

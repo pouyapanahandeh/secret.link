@@ -1,5 +1,14 @@
-# User-agent: *
-Allow: /
+User-agent: *
+Allow: /$
+Allow: /about
+Allow: /privacy
+Allow: /terms
+Allow: /community-guidelines
+Allow: /transparency
+Disallow: /dashboard
+Disallow: /messages
+Disallow: /send
+Disallow: /auth/
 
 # AI crawlers — explicitly allowed
 User-agent: GPTBot
@@ -21,5 +30,4 @@ User-agent: Applebot-Extended
 Allow: /
 
 # Sitemaps
-Sitemap: https://secret.link/sitemap.xml
-Sitemap: https://secret.link/teams/sitemap.xml
+Sitemap: https://secretlink.life/sitemap.xml

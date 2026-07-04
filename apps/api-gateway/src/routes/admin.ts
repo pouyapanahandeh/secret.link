@@ -2,7 +2,7 @@ import Router from "@koa/router";
 import type { Context } from "koa";
 import { nanoid } from "nanoid";
 import db from "../db.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, clearSuspensionCache } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/admin.js";
 
 export const adminRouter = new Router({ prefix: "/admin" });
@@ -94,11 +94,13 @@ adminRouter.patch("/reports/:id", async (ctx: Context) => {
 
   // Execute the action
   if (action_type === "remove") {
+    // Read the owner handle BEFORE deleting the row (otherwise the notification
+    // lookup below finds nothing and the owner is never told).
+    const secret = db.prepare("SELECT handle FROM map_secrets WHERE id = ?").get(report.secret_id) as any;
     db.prepare("DELETE FROM map_secrets WHERE id = ?").run(report.secret_id);
     logAudit(user.userId, user.handle, "content_removed", "map_secret", report.secret_id, action_reason as string);
 
     // Notify the content owner
-    const secret = db.prepare("SELECT handle FROM map_secrets WHERE id = ?").get(report.secret_id) as any;
     if (secret?.handle) {
       const owner = db.prepare("SELECT id FROM users WHERE handle = ?").get(secret.handle) as any;
       if (owner) {
@@ -123,6 +125,7 @@ adminRouter.patch("/reports/:id", async (ctx: Context) => {
       if (owner) {
         db.prepare(`INSERT INTO user_suspensions (id, user_id, reason, suspended_by, suspended_at) VALUES (?, ?, ?, ?, ?)`)
           .run(nanoid(), owner.id, (action_reason as string) ?? "Policy violation", user.userId, now);
+        clearSuspensionCache(owner.id);
         db.prepare(`INSERT INTO notifications (id, user_id, type, actor_handle, entity_id, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
           .run(nanoid(), owner.id, "account_suspended", "moderation", null, JSON.stringify({ reason: action_reason }), now);
       }
@@ -221,6 +224,7 @@ adminRouter.patch("/users/:id", async (ctx: Context) => {
     const expiresAt = body.expires_at ? String(body.expires_at) : null;
     db.prepare(`INSERT INTO user_suspensions (id, user_id, reason, suspended_by, suspended_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`)
       .run(nanoid(), ctx.params.id, reason, admin.userId, new Date().toISOString(), expiresAt);
+    clearSuspensionCache(ctx.params.id);
     db.prepare(`INSERT INTO notifications (id, user_id, type, actor_handle, entity_id, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .run(nanoid(), ctx.params.id, "account_suspended", "moderation", null, JSON.stringify({ reason }), new Date().toISOString());
     logAudit(admin.userId, admin.handle, "user_suspended", "user", ctx.params.id, reason);
@@ -230,6 +234,7 @@ adminRouter.patch("/users/:id", async (ctx: Context) => {
   if (body.unsuspend === true) {
     db.prepare("UPDATE user_suspensions SET lifted_at = ? WHERE user_id = ? AND lifted_at IS NULL")
       .run(new Date().toISOString(), ctx.params.id);
+    clearSuspensionCache(ctx.params.id);
     db.prepare(`INSERT INTO notifications (id, user_id, type, actor_handle, entity_id, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .run(nanoid(), ctx.params.id, "suspension_lifted", "moderation", null, null, new Date().toISOString());
     logAudit(admin.userId, admin.handle, "user_unsuspended", "user", ctx.params.id, undefined);
@@ -306,6 +311,7 @@ adminRouter.patch("/appeals/:id", async (ctx: Context) => {
   if (decision === "reversed") {
     db.prepare("UPDATE user_suspensions SET lifted_at = ? WHERE user_id = ? AND lifted_at IS NULL")
       .run(now, appeal.user_id);
+    clearSuspensionCache(appeal.user_id);
   }
 
   // Notify the user

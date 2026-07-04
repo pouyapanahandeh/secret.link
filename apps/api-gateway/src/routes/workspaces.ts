@@ -1,19 +1,29 @@
 import Router from "@koa/router";
 import type { Context } from "koa";
+import db from "../db.js";
 
 export const workspacesRouter = new Router({ prefix: "/workspaces" });
 
-// In-memory store for development
-const workspaces = new Map<string, {
-  id: string;
-  name: string;
-  slug: string;
-  plan: string;
-  region: string;
-  seatCount: number;
-  maxSeats: number;
-  createdAt: string;
-}>();
+const stmts = {
+  getBySlug: db.prepare(`SELECT * FROM workspaces WHERE slug = ?`),
+  insert: db.prepare(
+    `INSERT INTO workspaces (id, name, slug, plan, region, seat_count, max_seats, created_at)
+     VALUES (?, ?, ?, 'free', ?, 1, 15, ?)`,
+  ),
+};
+
+function rowToResponse(row: any) {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    plan: row.plan,
+    region: row.region,
+    seatCount: row.seat_count,
+    maxSeats: row.max_seats,
+    createdAt: row.created_at,
+  };
+}
 
 workspacesRouter.post("/", async (ctx: Context) => {
   const body = ctx.request.body as Record<string, unknown>;
@@ -33,44 +43,35 @@ workspacesRouter.post("/", async (ctx: Context) => {
     return;
   }
 
-  if (workspaces.has(slug)) {
-    ctx.status = 409;
-    ctx.body = { error: "slug_taken" };
-    return;
-  }
-
   if (!["us", "eu"].includes(region)) {
     ctx.status = 400;
     ctx.body = { error: "invalid_region" };
     return;
   }
 
-  const workspace = {
-    id: crypto.randomUUID(),
-    name,
-    slug,
-    plan: "free",
-    region,
-    seatCount: 1,
-    maxSeats: 15,
-    createdAt: new Date().toISOString(),
-  };
+  if (stmts.getBySlug.get(slug)) {
+    ctx.status = 409;
+    ctx.body = { error: "slug_taken" };
+    return;
+  }
 
-  workspaces.set(slug, workspace);
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  stmts.insert.run(id, name, slug, region, createdAt);
+
   ctx.status = 201;
-  ctx.body = workspace;
+  ctx.body = rowToResponse(stmts.getBySlug.get(slug));
 });
 
 workspacesRouter.get("/:slug", async (ctx: Context) => {
-  const slug = ctx.params["slug"];
-  const workspace = workspaces.get(slug!);
+  const row = stmts.getBySlug.get(ctx.params["slug"]!) as any;
 
-  if (!workspace) {
+  if (!row) {
     ctx.status = 404;
     ctx.body = { error: "workspace_not_found" };
     return;
   }
 
   ctx.status = 200;
-  ctx.body = workspace;
+  ctx.body = rowToResponse(row);
 });

@@ -21,7 +21,7 @@ interface MapSecret {
 }
 
 export default function MapPage() {
-  const [_secrets, setSecrets] = useState<MapSecret[]>([]);
+  const [, setSecrets] = useState<MapSecret[]>([]);
   const [selectedSecret, setSelectedSecret] = useState<MapSecret | null>(null);
   const [showPost, setShowPost] = useState(false);
   const [posting, setPosting] = useState(false);
@@ -111,7 +111,7 @@ export default function MapPage() {
           setShowPost(false);
         });
       });
-    } catch (err) {
+    } catch {
       // silently fail
     }
   }
@@ -141,7 +141,7 @@ export default function MapPage() {
         setClickedPos(null);
         loadSecrets();
       }
-    } catch (err) {
+    } catch {
       // silently fail
     } finally {
       setPosting(false);
