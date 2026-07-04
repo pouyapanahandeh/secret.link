@@ -11,6 +11,10 @@ interface StoryComposerProps {
   onClose: () => void;
   /** Called after a story is posted (so the dashboard can refresh). */
   onPosted?: () => void;
+  /** Pre-set coordinates (e.g. from map click). Skips geolocation if provided. */
+  initialCoords?: { lat: number; lng: number } | null;
+  /** If true, show anonymity toggle and additional map-pin options. */
+  mapPinMode?: boolean;
 }
 
 const EMOJIS = ["💬", "❤️", "🔥", "👀", "🤫", "💀", "🎉", "😂"];
@@ -29,7 +33,7 @@ type Step = "media" | "compose" | "confirm";
  * Step 2: Message composition + settings
  * Step 3: Preview & confirm
  */
-export function StoryComposer({ handle, token, onClose, onPosted }: StoryComposerProps) {
+export function StoryComposer({ handle, token, onClose, onPosted, initialCoords, mapPinMode }: StoryComposerProps) {
   const [step, setStep] = useState<Step>("media");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -37,26 +41,39 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
 
   const [message, setMessage] = useState("");
   const [emoji, setEmoji] = useState("💬");
-  const [ttl, setTtl] = useState(1440);
+  const [ttl, setTtl] = useState(mapPinMode ? 60 : 1440);
+  const [anonymous, setAnonymous] = useState(false);
+  const [revealMode, setRevealMode] = useState<"timer" | "clicks">("timer");
+  const [revealTimer, setRevealTimer] = useState(30);
+  const [maxClicks, setMaxClicks] = useState(3);
 
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(true);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(initialCoords ?? null);
+  const [locating, setLocating] = useState(!initialCoords);
   const [locationName, setLocationName] = useState("");
   const [cityName, setCityName] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
   const [locationResults, setLocationResults] = useState<GeocodeResult[]>([]);
   const [searchingLocations, setSearchingLocations] = useState(false);
+  const [locationFocused, setLocationFocused] = useState(false);
 
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Resolve geolocation on mount.
+  // Resolve geolocation on mount (skip if initialCoords provided).
   useEffect(() => {
+    if (initialCoords) {
+      reverseGeocode(initialCoords.lat, initialCoords.lng).then((g) => {
+        if (!g) return;
+        setLocationName(g.locationName);
+        setCityName(g.cityName ?? "");
+      }).catch(() => {});
+      return;
+    }
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
       setLocating(false);
-      setError("Location isn't available on this device.");
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -71,7 +88,6 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
       },
       () => {
         setLocating(false);
-        setError("Allow location access to post a story.");
       },
       { enableHighAccuracy: true, timeout: 10000 },
     );
@@ -84,21 +100,32 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
     };
   }, [preview]);
 
-  // Search places by query.
+  // Search places by query with debounce.
   useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
     const q = locationQuery.trim();
-    if (q.length < 2) {
+    if (q.length < 3) {
       setLocationResults([]);
       setSearchingLocations(false);
       return;
     }
-    const timer = setTimeout(async () => {
-      setSearchingLocations(true);
-      const results = await searchLocations(q);
-      setLocationResults(results);
-      setSearchingLocations(false);
-    }, 300);
-    return () => clearTimeout(timer);
+
+    setSearchingLocations(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await searchLocations(q);
+        setLocationResults(results);
+      } catch {
+        setLocationResults([]);
+      } finally {
+        setSearchingLocations(false);
+      }
+    }, 500);
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
   }, [locationQuery]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -129,6 +156,19 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
     setStep("compose");
   }
 
+  function selectLocation(r: GeocodeResult) {
+    const lat = Number(r.lat);
+    const lng = Number(r.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      setCoords({ lat, lng });
+      setLocationName(r.display_name);
+      setCityName(cityFromResult(r));
+    }
+    setLocationQuery(r.display_name);
+    setLocationResults([]);
+    setLocationFocused(false);
+  }
+
   async function post() {
     if (!coords || !message.trim() || posting) return;
     setPosting(true);
@@ -146,22 +186,26 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
         }
       }
 
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (!anonymous) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`${getApiBase()}/v1/secrets/map`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers,
         body: JSON.stringify({
           message: message.trim(),
           lat: coords.lat,
           lng: coords.lng,
           emoji,
           ttlMinutes: ttl,
-          handle,
+          handle: anonymous ? undefined : handle,
           locationName: locationName || undefined,
           cityName: cityName || undefined,
           mediaPath,
           mediaType,
-          revealMode: "timer",
-          revealTimerSeconds: 15,
+          revealMode,
+          revealTimerSeconds: revealMode === "timer" ? revealTimer : undefined,
+          maxClicks: revealMode === "clicks" ? maxClicks : undefined,
         }),
       });
 
@@ -200,8 +244,8 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
         <div className="px-5 pt-5 pb-3 border-b border-border/50">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold">
-              {step === "media" && "Add to your story"}
-              {step === "compose" && "Write your story"}
+              {step === "media" && (mapPinMode ? "Drop a secret" : "Add to your story")}
+              {step === "compose" && "Write your message"}
               {step === "confirm" && "Preview"}
             </h3>
             <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text text-xl leading-none px-1">
@@ -287,50 +331,52 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
                 </div>
               )}
 
-              {/* Location status */}
-              <div className="flex items-center gap-2 text-xs bg-surface rounded-xl border border-border px-3 py-2.5">
-                <span>📍</span>
-                {locating ? (
-                  <span className="text-text-muted">Finding your location…</span>
-                ) : coords ? (
-                  <span className="text-text-muted truncate">
-                    {locationName ? locationName : "Your current location"}
-                  </span>
-                ) : (
-                  <span className="text-red-400">Location needed</span>
-                )}
-              </div>
+              {/* Location section */}
+              <div className="relative">
+                <div className="flex items-center gap-2 text-xs bg-surface rounded-xl border border-border px-3 py-2.5">
+                  <span>📍</span>
+                  {locating ? (
+                    <span className="text-text-muted">Finding your location…</span>
+                  ) : coords ? (
+                    <span className="text-text-muted truncate">
+                      {locationName ? locationName : `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}
+                    </span>
+                  ) : (
+                    <span className="text-amber-400">Search a location below to pin your story</span>
+                  )}
+                </div>
 
-              {/* Location search */}
-              <div>
-                <input
-                  type="text"
-                  value={locationQuery}
-                  onChange={(e) => setLocationQuery(e.target.value)}
-                  placeholder="Search city or place (optional)"
-                  className="w-full rounded-xl bg-surface border border-border px-3 py-2.5 text-xs text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent/40"
-                />
-                {searchingLocations && <p className="text-[11px] text-text-muted mt-1 px-1">Searching…</p>}
-                {locationResults.length > 0 && (
-                  <div className="mt-2 rounded-xl border border-border bg-surface max-h-32 overflow-y-auto">
-                    {locationResults.map((r) => (
+                {/* Location search input */}
+                <div className="mt-2 relative">
+                  <input
+                    type="text"
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    onFocus={() => setLocationFocused(true)}
+                    onBlur={() => setTimeout(() => setLocationFocused(false), 200)}
+                    placeholder="Search location (e.g. Budapest, Times Square…)"
+                    className="w-full rounded-xl bg-surface border border-border px-3 py-2.5 text-xs text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  />
+                  {searchingLocations && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Autocomplete results dropdown */}
+                {locationResults.length > 0 && locationFocused && (
+                  <div className="absolute left-0 right-0 mt-1 z-10 rounded-xl border border-border bg-surface-raised shadow-lg max-h-48 overflow-y-auto">
+                    {locationResults.map((r, idx) => (
                       <button
-                        key={`${r.lat},${r.lon},${r.display_name}`}
+                        key={`${r.lat}-${r.lon}-${idx}`}
                         type="button"
-                        onClick={() => {
-                          const lat = Number(r.lat);
-                          const lng = Number(r.lon);
-                          if (Number.isFinite(lat) && Number.isFinite(lng)) {
-                            setCoords({ lat, lng });
-                            setLocationName(r.display_name);
-                            setCityName(cityFromResult(r));
-                          }
-                          setLocationQuery(r.display_name);
-                          setLocationResults([]);
-                        }}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-surface-raised border-b border-border/50 last:border-b-0 truncate"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectLocation(r)}
+                        className="w-full text-left px-3 py-2.5 text-xs hover:bg-accent/10 border-b border-border/30 last:border-b-0 flex items-start gap-2"
                       >
-                        {r.display_name}
+                        <span className="text-text-muted mt-0.5 shrink-0">📍</span>
+                        <span className="text-text leading-tight">{r.display_name}</span>
                       </button>
                     ))}
                   </div>
@@ -370,7 +416,9 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
 
               {/* TTL selection as cards */}
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-2">Story expires in</label>
+                <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-2">
+                  {mapPinMode ? "Pin expires in" : "Story expires in"}
+                </label>
                 <div className="grid grid-cols-4 gap-2">
                   {TTL_OPTIONS.map((opt) => (
                     <button
@@ -387,6 +435,77 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
                   ))}
                 </div>
               </div>
+
+              {/* Reveal mode (map pin mode) */}
+              {mapPinMode && (
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-2">Reveal mode</label>
+                  <div className="flex rounded-xl border border-border overflow-hidden mb-2">
+                    <button
+                      onClick={() => setRevealMode("timer")}
+                      className={`flex-1 text-xs py-2 transition-colors ${revealMode === "timer" ? "bg-accent text-black font-medium" : "bg-surface text-text-muted"}`}
+                    >
+                      ⏱️ Timer
+                    </button>
+                    <button
+                      onClick={() => setRevealMode("clicks")}
+                      className={`flex-1 text-xs py-2 transition-colors ${revealMode === "clicks" ? "bg-accent text-black font-medium" : "bg-surface text-text-muted"}`}
+                    >
+                      👆 Clicks
+                    </button>
+                  </div>
+                  {revealMode === "timer" ? (
+                    <select
+                      value={revealTimer}
+                      onChange={(e) => setRevealTimer(Number(e.target.value))}
+                      className="w-full text-xs bg-surface border border-border rounded-lg px-2 py-1.5 text-text"
+                    >
+                      <option value={5}>5 seconds</option>
+                      <option value={10}>10 seconds</option>
+                      <option value={15}>15 seconds</option>
+                      <option value={30}>30 seconds</option>
+                      <option value={60}>1 minute</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={maxClicks}
+                      onChange={(e) => setMaxClicks(Number(e.target.value))}
+                      className="w-full text-xs bg-surface border border-border rounded-lg px-2 py-1.5 text-text"
+                    >
+                      <option value={1}>1 reveal only</option>
+                      <option value={3}>3 reveals</option>
+                      <option value={5}>5 reveals</option>
+                      <option value={10}>10 reveals</option>
+                      <option value={25}>25 reveals</option>
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {/* Anonymity toggle (map pin mode) */}
+              {mapPinMode && (
+                <button
+                  type="button"
+                  onClick={() => setAnonymous((a) => !a)}
+                  aria-pressed={anonymous}
+                  className="w-full flex items-center justify-between gap-3 rounded-xl bg-surface border border-border px-3 py-2.5 text-left hover:border-accent/40 transition-colors"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="text-base">{anonymous ? "🥷" : "👤"}</span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium text-text truncate">
+                        {anonymous ? "Posting anonymously" : `Posting as @${handle}`}
+                      </span>
+                      <span className="text-[10px] text-text-muted truncate">
+                        {anonymous ? "Your handle won't be shown" : "Your handle will be visible"}
+                      </span>
+                    </span>
+                  </span>
+                  <span className={`relative shrink-0 w-10 h-6 rounded-full transition-colors ${anonymous ? "bg-accent" : "bg-border"}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${anonymous ? "translate-x-4" : ""}`} />
+                  </span>
+                </button>
+              )}
 
               {error && <p className="text-xs text-red-400">{error}</p>}
 
@@ -430,9 +549,10 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-text leading-relaxed break-words whitespace-pre-wrap">{message}</p>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <span className="text-xs text-accent">@{handle}</span>
+                      {!anonymous && <span className="text-xs text-accent">@{handle}</span>}
+                      {anonymous && <span className="text-xs text-text-muted">🥷 Anonymous</span>}
                       {locationName && (
-                        <span className="text-xs text-text-muted">📍 {locationName}</span>
+                        <span className="text-xs text-text-muted">📍 {locationName.split(",")[0]}</span>
                       )}
                       <span className="text-xs text-text-muted">
                         ⏳ {TTL_OPTIONS.find((o) => o.value === ttl)?.label}
@@ -455,7 +575,7 @@ export function StoryComposer({ handle, token, onClose, onPosted }: StoryCompose
                   disabled={posting || !coords || !message.trim()}
                   className="flex-1 rounded-full bg-accent px-4 py-2.5 text-sm font-bold text-black hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100"
                 >
-                  {posting ? "Posting…" : "Share story ✨"}
+                  {posting ? "Posting…" : mapPinMode ? "Drop secret 📍" : "Share story ✨"}
                 </button>
               </div>
             </div>

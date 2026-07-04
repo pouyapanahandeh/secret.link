@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@remix-run/react";
 import { getApiBase } from "../lib/api.client";
-import { reverseGeocode } from "../lib/geocode";
 import type { MapSecret } from "../lib/map-types";
+import { StoryComposer } from "./StoryComposer";
 
 interface MapTabProps {
   user: { handle: string; avatarUrl?: string | null };
@@ -10,7 +10,6 @@ interface MapTabProps {
   token: string;
 }
 
-const EMOJIS = ["💬", "❤️", "🔥", "👀", "🤫", "💀", "🎉", "😂"];
 const REPORT_REASONS = [
   { value: "spam", label: "Spam / scam" },
   { value: "harassment", label: "Harassment" },
@@ -48,20 +47,9 @@ export function MapTab({ user, following, token }: MapTabProps) {
   const [selectedMapSecret, setSelectedMapSecret] = useState<MapSecret | null>(null);
   const [mapSecretRevealed, setMapSecretRevealed] = useState(false);
 
-  // Post form state
+  // Post form state — now uses StoryComposer modal
   const [showMapPost, setShowMapPost] = useState(false);
   const [mapClickedPos, setMapClickedPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapMessage, setMapMessage] = useState("");
-  const [mapEmoji, setMapEmoji] = useState("💬");
-  const [mapTtl, setMapTtl] = useState(60);
-  const [mapPosting, setMapPosting] = useState(false);
-  const [mapFile, setMapFile] = useState<File | null>(null);
-  const [mapFilePreview, setMapFilePreview] = useState<string | null>(null);
-  const mapFileInputRef = useRef<HTMLInputElement>(null);
-  const [mapRevealMode, setMapRevealMode] = useState<"timer" | "clicks">("timer");
-  const [mapRevealTimer, setMapRevealTimer] = useState(30);
-  const [mapMaxClicks, setMapMaxClicks] = useState(3);
-  const [mapAnonymous, setMapAnonymous] = useState(false);
 
   // City filter
   const [mapCityFilter, setMapCityFilter] = useState<string | null>(null);
@@ -189,63 +177,6 @@ export function MapTab({ user, following, token }: MapTabProps) {
   }
 
   // ─── Post ─────────────────────────────────────────────────────────────────
-  async function postMapSecret() {
-    if (!mapClickedPos || !mapMessage.trim()) return;
-    setMapPosting(true);
-    try {
-      let mediaPath: string | null = null;
-      let mediaType: string | null = null;
-
-      if (mapFile) {
-        const uploadRes = await fetch(`${getApiBase()}/v1/secrets/blob`, { method: "POST", body: mapFile });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          mediaPath = uploadData.blobPath;
-          mediaType = mapFile.type;
-        }
-      }
-
-      const geo = await reverseGeocode(mapClickedPos.lat, mapClickedPos.lng);
-
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (!mapAnonymous) headers["Authorization"] = `Bearer ${token}`;
-
-      const res = await fetch(`${getApiBase()}/v1/secrets/map`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          message: mapMessage.trim(),
-          lat: mapClickedPos.lat,
-          lng: mapClickedPos.lng,
-          emoji: mapEmoji,
-          ttlMinutes: mapTtl,
-          handle: mapAnonymous ? undefined : user.handle,
-          locationName: geo?.locationName ?? undefined,
-          cityName: geo?.cityName ?? undefined,
-          mediaPath,
-          mediaType,
-          revealMode: mapRevealMode,
-          revealTimerSeconds: mapRevealMode === "timer" ? mapRevealTimer : undefined,
-          maxClicks: mapRevealMode === "clicks" ? mapMaxClicks : undefined,
-        }),
-      });
-      if (res.ok) {
-        setMapMessage("");
-        setShowMapPost(false);
-        setMapClickedPos(null);
-        setMapFile(null);
-        setMapFilePreview(null);
-        if (mapPinMarkerRef.current && mapInstanceRef.current) {
-          mapInstanceRef.current.removeLayer(mapPinMarkerRef.current);
-          mapPinMarkerRef.current = null;
-        }
-        loadMapSecrets();
-      }
-    } finally {
-      setMapPosting(false);
-    }
-  }
-
   // ─── Report ───────────────────────────────────────────────────────────────
   async function submitMapReport() {
     if (!selectedMapSecret?.id) return;
@@ -269,18 +200,6 @@ export function MapTab({ user, following, token }: MapTabProps) {
       setMapReportResult("Could not send report. Please try again.");
     } finally {
       setMapReportSubmitting(false);
-    }
-  }
-
-  // ─── File upload ──────────────────────────────────────────────────────────
-  function handleMapFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setMapFile(file);
-    if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-      setMapFilePreview(URL.createObjectURL(file));
-    } else {
-      setMapFilePreview(null);
     }
   }
 
@@ -560,144 +479,23 @@ export function MapTab({ user, following, token }: MapTabProps) {
         </div>
       )}
 
-      {/* Post form (shown when map is clicked) */}
+      {/* StoryComposer modal (shown when map is clicked) */}
       {showMapPost && mapClickedPos && (
-        <div className="mt-4 bg-surface-raised rounded-2xl border border-border p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">Drop a secret here</h3>
-            <button onClick={() => { setShowMapPost(false); setMapClickedPos(null); if (mapPinMarkerRef.current && mapInstanceRef.current) { mapInstanceRef.current.removeLayer(mapPinMarkerRef.current); mapPinMarkerRef.current = null; } }} className="text-text-muted hover:text-text text-lg">×</button>
-          </div>
-
-          <textarea
-            value={mapMessage}
-            onChange={(e) => setMapMessage(e.target.value)}
-            maxLength={500}
-            rows={3}
-            placeholder="Write your secret..."
-            className="w-full rounded-xl bg-surface border border-border px-3 py-2.5 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
-          />
-
-          {/* File preview */}
-          {mapFilePreview && mapFile && (
-            <div className="mt-2 relative inline-block">
-              {mapFile.type.startsWith("image/") ? (
-                <img src={mapFilePreview} alt="preview" className="max-h-24 rounded-lg border border-border" />
-              ) : mapFile.type.startsWith("video/") ? (
-                <video src={mapFilePreview} className="max-h-24 rounded-lg border border-border" controls />
-              ) : null}
-              <button
-                onClick={() => { setMapFile(null); setMapFilePreview(null); }}
-                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
-              >×</button>
-            </div>
-          )}
-          {mapFile && !mapFilePreview && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-text-muted bg-surface rounded-lg border border-border px-3 py-2">
-              <span>📎</span>
-              <span className="truncate">{mapFile.name}</span>
-              <button onClick={() => { setMapFile(null); setMapFilePreview(null); }} className="text-red-400 ml-auto">×</button>
-            </div>
-          )}
-
-          {/* Attachments row */}
-          <input ref={mapFileInputRef} type="file" accept="image/*,video/*,.pdf,.txt,.doc,.docx" className="hidden" onChange={handleMapFileSelect} />
-          <div className="flex items-center gap-1.5 mt-3">
-            <button onClick={() => mapFileInputRef.current?.click()} className="flex items-center gap-1 text-xs text-text-muted bg-surface border border-border rounded-lg px-2 py-1.5 hover:border-accent/50 transition-colors">📎</button>
-            <button onClick={() => { if (mapFileInputRef.current) { mapFileInputRef.current.accept = "image/*"; mapFileInputRef.current.click(); mapFileInputRef.current.accept = "image/*,video/*,.pdf,.txt,.doc,.docx"; } }} className="flex items-center gap-1 text-xs text-text-muted bg-surface border border-border rounded-lg px-2 py-1.5 hover:border-accent/50 transition-colors">📸</button>
-            <button onClick={() => { if (mapFileInputRef.current) { mapFileInputRef.current.accept = "video/*"; mapFileInputRef.current.click(); mapFileInputRef.current.accept = "image/*,video/*,.pdf,.txt,.doc,.docx"; } }} className="flex items-center gap-1 text-xs text-text-muted bg-surface border border-border rounded-lg px-2 py-1.5 hover:border-accent/50 transition-colors">🎬</button>
-            <div className="flex-1" />
-            {EMOJIS.map((e) => (
-              <button
-                key={e}
-                onClick={() => setMapEmoji(e)}
-                className={`w-6 h-6 rounded flex items-center justify-center text-xs transition-all ${
-                  mapEmoji === e ? "bg-accent/20 scale-110 ring-1 ring-accent" : "hover:bg-surface-raised"
-                }`}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-
-          {/* Settings grid */}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Pin expires</label>
-              <select value={mapTtl} onChange={(e) => setMapTtl(Number(e.target.value))} className="w-full text-xs bg-surface border border-border rounded-lg px-2 py-1.5 text-text">
-                <option value={5}>5 min</option>
-                <option value={30}>30 min</option>
-                <option value={60}>1 hour</option>
-                <option value={360}>6 hours</option>
-                <option value={1440}>24 hours</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Reveal mode</label>
-              <div className="flex rounded-lg border border-border overflow-hidden">
-                <button onClick={() => setMapRevealMode("timer")} className={`flex-1 text-xs py-1.5 transition-colors ${mapRevealMode === "timer" ? "bg-accent text-black font-medium" : "bg-surface text-text-muted"}`}>⏱️</button>
-                <button onClick={() => setMapRevealMode("clicks")} className={`flex-1 text-xs py-1.5 transition-colors ${mapRevealMode === "clicks" ? "bg-accent text-black font-medium" : "bg-surface text-text-muted"}`}>👆</button>
-              </div>
-            </div>
-            <div className="col-span-2">
-              {mapRevealMode === "timer" ? (
-                <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">View time</label>
-                  <select value={mapRevealTimer} onChange={(e) => setMapRevealTimer(Number(e.target.value))} className="w-full text-xs bg-surface border border-border rounded-lg px-2 py-1.5 text-text">
-                    <option value={5}>5 seconds</option>
-                    <option value={10}>10 seconds</option>
-                    <option value={15}>15 seconds</option>
-                    <option value={30}>30 seconds</option>
-                    <option value={60}>1 minute</option>
-                    <option value={120}>2 minutes</option>
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Max reveals</label>
-                  <select value={mapMaxClicks} onChange={(e) => setMapMaxClicks(Number(e.target.value))} className="w-full text-xs bg-surface border border-border rounded-lg px-2 py-1.5 text-text">
-                    <option value={1}>1 reveal only</option>
-                    <option value={3}>3 reveals</option>
-                    <option value={5}>5 reveals</option>
-                    <option value={10}>10 reveals</option>
-                    <option value={25}>25 reveals</option>
-                    <option value={50}>50 reveals</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Anonymity toggle */}
-          <button
-            type="button"
-            onClick={() => setMapAnonymous((a) => !a)}
-            aria-pressed={mapAnonymous}
-            className="w-full mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface border border-border px-3 py-2.5 text-left hover:border-accent/40 transition-colors"
-          >
-            <span className="flex items-center gap-2 min-w-0">
-              <span className="text-base">{mapAnonymous ? "🥷" : "👤"}</span>
-              <span className="flex flex-col min-w-0">
-                <span className="text-xs font-medium text-text truncate">
-                  {mapAnonymous ? "Posting anonymously" : `Posting as @${user.handle}`}
-                </span>
-                <span className="text-[10px] text-text-muted truncate">
-                  {mapAnonymous ? "Your handle won't be shown on this drop" : "Your handle will be visible on this drop"}
-                </span>
-              </span>
-            </span>
-            <span className={`relative shrink-0 w-10 h-6 rounded-full transition-colors ${mapAnonymous ? "bg-accent" : "bg-border"}`}>
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${mapAnonymous ? "translate-x-4" : ""}`} />
-            </span>
-          </button>
-
-          <button
-            onClick={postMapSecret}
-            disabled={mapPosting || !mapMessage.trim()}
-            className="w-full mt-4 rounded-full bg-accent px-4 py-2.5 text-sm font-bold text-black hover:scale-[1.02] transition-all disabled:opacity-50"
-          >
-            {mapPosting ? "Dropping..." : "Drop secret 📍"}
-          </button>
-        </div>
+        <StoryComposer
+          handle={user.handle}
+          token={token}
+          initialCoords={mapClickedPos}
+          mapPinMode
+          onClose={() => {
+            setShowMapPost(false);
+            setMapClickedPos(null);
+            if (mapPinMarkerRef.current && mapInstanceRef.current) {
+              mapInstanceRef.current.removeLayer(mapPinMarkerRef.current);
+              mapPinMarkerRef.current = null;
+            }
+          }}
+          onPosted={() => loadMapSecrets()}
+        />
       )}
 
       {/* Recent secrets list */}
