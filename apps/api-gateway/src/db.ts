@@ -448,5 +448,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_feedback_msg_channel ON feedback_messages(channel_id);
 `);
 
+// ─── Performance indexes for hot query paths ─────────────────────────────────
+// Without these, the inbox/sent lists and the public map endpoint fall back to
+// full table scans that degrade as the tables grow.
+//   - inbox:  WHERE recipient_handle = ? AND burned = 0 ORDER BY created_at DESC
+//   - sent:   WHERE sender_id = ? ORDER BY created_at DESC
+//   - map:    WHERE expires_at > ?   (and the expiry sweep: expires_at <= ?)
+migrate("perf-indexes.v1", () => {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_secrets_recipient_burned_created
+      ON secrets(recipient_handle, burned, created_at);
+    CREATE INDEX IF NOT EXISTS idx_secrets_sender_created
+      ON secrets(sender_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_map_secrets_expires
+      ON map_secrets(expires_at);
+  `);
+});
+
 export { db };
 export default db;
