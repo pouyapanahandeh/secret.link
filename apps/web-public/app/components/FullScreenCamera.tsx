@@ -154,7 +154,7 @@ export function FullScreenCamera({ onCapture, onClose }: FullScreenCameraProps) 
   const progressPct = recording ? Math.min(recordingMs / MAX_VIDEO_DURATION_MS, 1) : 0;
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black flex flex-col">
+    <div className="fixed inset-0 z-[10001] bg-black flex flex-col">
       {/* Hidden canvas for photo capture */}
       <canvas ref={canvasRef} className="hidden" />
 
