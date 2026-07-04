@@ -31,13 +31,13 @@ export default function handleRequest(
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' player.live-video.net",
       "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
       "font-src 'self' fonts.gstatic.com",
       "img-src 'self' data: blob: *.basemaps.cartocdn.com *.openstreetmap.org",
-      `connect-src 'self' ${apiDomain} *.basemaps.cartocdn.com`,
-      "media-src 'self' blob:",
-      "worker-src 'self'",
+      `connect-src 'self' ${apiDomain} *.basemaps.cartocdn.com *.live-video.net:* wss://*.live-video.net:*`,
+      "media-src 'self' blob: *.live-video.net",
+      "worker-src 'self' blob:",
       "frame-ancestors 'none'",
     ].join("; ")
   );

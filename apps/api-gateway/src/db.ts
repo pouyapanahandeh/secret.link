@@ -16,6 +16,36 @@ const db: BetterSqlite3.Database = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
+// ─── Migration helpers ──────────────────────────────────────────────────────
+// Versioned migration bookkeeping. Every applied migration is recorded so we
+// can tell "already applied" apart from "failed" — unlike the old
+// `try { ALTER } catch {}` pattern which silently swallowed real errors.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    id TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+  );
+`);
+
+const migrationApplied = db.prepare("SELECT 1 FROM schema_migrations WHERE id = ?");
+const recordMigration = db.prepare(
+  "INSERT OR IGNORE INTO schema_migrations (id, applied_at) VALUES (?, ?)",
+);
+
+/** Run a migration exactly once, keyed by a stable id. */
+function migrate(id: string, fn: () => void): void {
+  if (migrationApplied.get(id)) return;
+  fn();
+  recordMigration.run(id, new Date().toISOString());
+}
+
+/** Idempotently add a column, checking the live schema instead of catching errors. */
+function addColumn(table: string, column: string, definition: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (cols.some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
 // ─── Schema ─────────────────────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -74,8 +104,14 @@ db.exec(`
     lng REAL NOT NULL,
     emoji TEXT DEFAULT '💬',
     handle TEXT,
+    location_name TEXT,
+    city_name TEXT,
     media_path TEXT,
     media_type TEXT,
+    reveal_mode TEXT DEFAULT 'timer',
+    reveal_timer_seconds INTEGER DEFAULT 30,
+    max_clicks INTEGER DEFAULT 0,
+    click_count INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL
   );
@@ -115,17 +151,26 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_dm_msg_recipient_read ON dm_messages(recipient_id, read_at);
 `);
 
-// ─── Migrations (safe to re-run) ────────────────────────────────────────────
-try { db.exec(`ALTER TABLE map_secrets ADD COLUMN media_path TEXT`); } catch {}
-try { db.exec(`ALTER TABLE map_secrets ADD COLUMN media_type TEXT`); } catch {}try { db.exec(`ALTER TABLE map_secrets ADD COLUMN reveal_mode TEXT DEFAULT 'timer'`); } catch {}
-try { db.exec(`ALTER TABLE map_secrets ADD COLUMN reveal_timer_seconds INTEGER DEFAULT 30`); } catch {}
-try { db.exec(`ALTER TABLE map_secrets ADD COLUMN max_clicks INTEGER DEFAULT 0`); } catch {}
-try { db.exec(`ALTER TABLE map_secrets ADD COLUMN click_count INTEGER DEFAULT 0`); } catch {}
+// ─── Migrations (idempotent, tracked in schema_migrations) ──────────────────
+migrate("map_secrets.columns.v1", () => {
+  // Geocoded labels shown on the map + in the admin console. Their absence was
+  // a latent crash: routes INSERT/SELECT these columns on every map secret.
+  addColumn("map_secrets", "location_name", "TEXT");
+  addColumn("map_secrets", "city_name", "TEXT");
+  addColumn("map_secrets", "media_path", "TEXT");
+  addColumn("map_secrets", "media_type", "TEXT");
+  addColumn("map_secrets", "reveal_mode", "TEXT DEFAULT 'timer'");
+  addColumn("map_secrets", "reveal_timer_seconds", "INTEGER DEFAULT 30");
+  addColumn("map_secrets", "max_clicks", "INTEGER DEFAULT 0");
+  addColumn("map_secrets", "click_count", "INTEGER DEFAULT 0");
+});
 
 // E2E key delivery for profile-addressed secrets (wrapped to recipient's X25519 key)
-try { db.exec(`ALTER TABLE secrets ADD COLUMN wrapped_key TEXT`); } catch {}
-try { db.exec(`ALTER TABLE secrets ADD COLUMN wrap_nonce TEXT`); } catch {}
-try { db.exec(`ALTER TABLE secrets ADD COLUMN wrap_epk TEXT`); } catch {}
+migrate("secrets.wrap.v1", () => {
+  addColumn("secrets", "wrapped_key", "TEXT");
+  addColumn("secrets", "wrap_nonce", "TEXT");
+  addColumn("secrets", "wrap_epk", "TEXT");
+});
 
 // Challenges table for WebAuthn
 db.exec(`
@@ -202,17 +247,12 @@ try {
 // ─── Phase 1: Admin & Compliance migrations ─────────────────────────────────
 
 // Add role column to users
-try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`); } catch {}
+migrate("users.role.v1", () => {
+  addColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
+});
 
-// Expand secret_reports table
-try { db.exec(`ALTER TABLE secret_reports ADD COLUMN actioned_by TEXT`); } catch {}
-try { db.exec(`ALTER TABLE secret_reports ADD COLUMN actioned_at TEXT`); } catch {}
-try { db.exec(`ALTER TABLE secret_reports ADD COLUMN action_type TEXT`); } catch {}
-try { db.exec(`ALTER TABLE secret_reports ADD COLUMN action_reason TEXT`); } catch {}
-try { db.exec(`ALTER TABLE secret_reports ADD COLUMN appeal_status TEXT`); } catch {}
-try { db.exec(`ALTER TABLE secret_reports ADD COLUMN internal_notes TEXT`); } catch {}
-
-// secret_reports table (in case it doesn't exist yet)
+// secret_reports table — MUST be created before the column migration below so
+// a fresh database bootstraps cleanly.
 db.exec(`
   CREATE TABLE IF NOT EXISTS secret_reports (
     id TEXT PRIMARY KEY,
@@ -233,6 +273,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_reports_status ON secret_reports(status);
   CREATE INDEX IF NOT EXISTS idx_reports_secret ON secret_reports(secret_id);
 `);
+
+// Expand pre-existing secret_reports tables that lack the moderation columns.
+migrate("secret_reports.columns.v1", () => {
+  addColumn("secret_reports", "actioned_by", "TEXT");
+  addColumn("secret_reports", "actioned_at", "TEXT");
+  addColumn("secret_reports", "action_type", "TEXT");
+  addColumn("secret_reports", "action_reason", "TEXT");
+  addColumn("secret_reports", "appeal_status", "TEXT");
+  addColumn("secret_reports", "internal_notes", "TEXT");
+});
 
 // Audit log
 db.exec(`
@@ -297,6 +347,105 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_suspension_user ON user_suspensions(user_id);
+`);
+
+// ─── Live Streaming (IVS) ───────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ivs_channels (
+    user_id       TEXT PRIMARY KEY REFERENCES users(id),
+    channel_arn   TEXT NOT NULL,
+    stream_key    TEXT NOT NULL,
+    ingest_ep     TEXT NOT NULL,
+    playback_url  TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS streams (
+    id            TEXT PRIMARY KEY,
+    user_id       TEXT NOT NULL REFERENCES users(id),
+    handle        TEXT,
+    title         TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'live',
+    viewer_count  INTEGER NOT NULL DEFAULT 0,
+    started_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    ended_at      TEXT,
+    lat           REAL,
+    lng           REAL,
+    reveal_mode   TEXT NOT NULL DEFAULT 'open',
+    reveal_timer_seconds INTEGER DEFAULT 30,
+    max_reveals   INTEGER DEFAULT 0,
+    reveal_count  INTEGER NOT NULL DEFAULT 0,
+    max_viewers   INTEGER NOT NULL DEFAULT 0,
+    nsfw          INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_streams_status ON streams(status);
+  CREATE INDEX IF NOT EXISTS idx_streams_handle ON streams(handle);
+`);
+
+// Migration: add new columns to existing streams table
+migrate("streams.columns.v1", () => {
+  addColumn("streams", "reveal_mode", "TEXT NOT NULL DEFAULT 'open'");
+  addColumn("streams", "reveal_timer_seconds", "INTEGER DEFAULT 30");
+  addColumn("streams", "max_reveals", "INTEGER DEFAULT 0");
+  addColumn("streams", "reveal_count", "INTEGER NOT NULL DEFAULT 0");
+  addColumn("streams", "max_viewers", "INTEGER NOT NULL DEFAULT 0");
+  addColumn("streams", "nsfw", "INTEGER NOT NULL DEFAULT 0");
+});
+
+// Encrypt IVS stream keys at rest: add a column for the ciphertext form. The
+// legacy `stream_key` column is retained for backward compatibility during
+// migration but new channels only populate `stream_key_enc`.
+migrate("ivs_channels.encrypt.v1", () => {
+  addColumn("ivs_channels", "stream_key_enc", "TEXT");
+});
+
+// Token revocation (logout / forced sign-out). We store the JWT id (jti) of any
+// token that must no longer be accepted, until its natural expiry.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti TEXT PRIMARY KEY,
+    user_id TEXT,
+    revoked_at TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_revoked_expires ON revoked_tokens(expires_at);
+`);
+
+// ─── Teams: workspaces & feedback (persisted; formerly in-memory) ───────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS workspaces (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    plan TEXT NOT NULL DEFAULT 'free',
+    region TEXT NOT NULL DEFAULT 'us',
+    seat_count INTEGER NOT NULL DEFAULT 1,
+    max_seats INTEGER NOT NULL DEFAULT 15,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS feedback_channels (
+    id TEXT PRIMARY KEY,
+    workspace_slug TEXT,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'one_way',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS feedback_messages (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL REFERENCES feedback_channels(id),
+    ciphertext TEXT NOT NULL,
+    sentiment_tag TEXT,
+    topic_tag TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_feedback_msg_channel ON feedback_messages(channel_id);
 `);
 
 export { db };

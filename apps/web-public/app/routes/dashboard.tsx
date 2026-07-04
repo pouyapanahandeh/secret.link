@@ -17,6 +17,8 @@ import { API_URL } from "../lib/api.server";
 import { getApiBase } from "../lib/api.client";
 import { getViewedStoryIds, computeViewedHandles } from "../lib/story-views";
 import { getSocialMeta, detectPlatform, SOCIAL_META, SOCIAL_PLATFORMS } from "../lib/socials";
+import { GoLiveButton } from "../components/GoLiveButton";
+import { LiveStreams } from "../components/LiveStreams";
 
 export const meta: MetaFunction = () => [
   { title: "Dashboard — Secretlink.life" },
@@ -83,8 +85,12 @@ export async function action({ request }: ActionFunctionArgs) {
       return json(await res.json());
     }
     case "get-api-token": {
-      // Return the token for client-side DM operations (E2E encryption requires client-side API calls)
-      return json({ token });
+      // Client-side DM E2E encryption needs a bearer token, but we must not hand
+      // the 7-day session JWT to page JS. Exchange it for a short-lived (15 min)
+      // token minted by the API instead.
+      const res = await fetch(`${API_URL}/v1/users/auth/session-token`, { method: "POST", headers });
+      if (!res.ok) return json({ error: "token_exchange_failed" }, { status: 502 });
+      return json(await res.json());
     }
     default:
       return json({ error: "unknown_intent" }, { status: 400 });
@@ -175,6 +181,7 @@ export default function Dashboard() {
   // Home "+" action button (post story / secret / pin on map).
   const [fabOpen, setFabOpen] = useState(false);
   const [showStoryComposer, setShowStoryComposer] = useState(false);
+  const [showBroadcast, setShowBroadcast] = useState(false);
 
   // Read tab from URL hash on mount
   useEffect(() => {
@@ -220,7 +227,6 @@ export default function Dashboard() {
       searchFetcher.submit({ intent: "search", q }, { method: "post" });
     }, 300);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   // Seed follow state from search results (server is the source of truth).
@@ -441,6 +447,9 @@ export default function Dashboard() {
                   View
                 </Link>
               </div>
+
+              {/* Live Streams */}
+              <LiveStreams compact />
 
               {/* Quick link */}
               <div className="flex items-center gap-2 mb-6 bg-surface-raised rounded-xl border border-border px-3 py-2.5">
@@ -791,6 +800,7 @@ export default function Dashboard() {
             {fabOpen && (
               <div className="flex flex-col items-end gap-3 mb-1">
                 {[
+                  { label: "Go live", emoji: "🔴", onClick: () => { setFabOpen(false); setShowBroadcast(true); } },
                   { label: "Post story", emoji: "✨", onClick: () => { setFabOpen(false); setShowStoryComposer(true); } },
                   { label: "Post secret", emoji: "🔐", onClick: () => { setFabOpen(false); navigate("/send"); } },
                   { label: "Pin on map", emoji: "📍", onClick: () => { setFabOpen(false); setActiveTab("map"); } },
@@ -868,6 +878,27 @@ export default function Dashboard() {
           onClose={() => setShowStoryComposer(false)}
           onPosted={() => revalidator.revalidate()}
         />
+      )}
+
+      {/* Broadcast overlay (Go Live from FAB) */}
+      {showBroadcast && (
+        <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface rounded-2xl border border-border max-w-md w-full p-5 relative">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">Go Live</h2>
+              <button
+                onClick={() => setShowBroadcast(false)}
+                className="w-8 h-8 rounded-full bg-surface-raised border border-border flex items-center justify-center text-text-muted hover:text-text transition-colors"
+                aria-label="Close"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <GoLiveButton token={token} />
+          </div>
+        </div>
       )}
     </main>
   );

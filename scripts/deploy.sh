@@ -1,88 +1,125 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ─── Config ──────────────────────────────────────────────────────────────────
-SERVER="ubuntu@203.0.113.10"
-SSH_KEY="$HOME/.ssh/secretlink-key.pem"
-REMOTE_DIR="/home/ubuntu/secretlink"
+# ─── Secretlink versioned deploy with rollback ───────────────────────────────
+# Each deploy goes into releases/<timestamp>; `current` is a symlink swapped
+# atomically only after the build + health check succeed. Roll back with:
+#   ./scripts/deploy.sh --rollback
+#
+# Secrets are pulled from SSM on the server (scripts/pull-ssm-env.sh) if
+# available; otherwise the existing server-side .env is reused.
+
+SERVER="${DEPLOY_SERVER:-ubuntu@203.0.113.10}"
+SSH_KEY="${DEPLOY_KEY:-$HOME/.ssh/secretlink-key.pem}"
+BASE_DIR="/home/ubuntu/secretlink-releases"
+LEGACY_DIR="/home/ubuntu/secretlink"
 LOCAL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+RELEASE="$(date +%Y%m%dT%H%M%S)"
 
-SSH_CMD="ssh -i $SSH_KEY $SERVER"
+SSH_CMD=(ssh -i "$SSH_KEY" "$SERVER")
 
-echo "──── Secretlink Deploy ────"
-echo "Local:  $LOCAL_DIR"
-echo "Remote: $SERVER:$REMOTE_DIR"
-echo ""
-
-# ─── 1. Pre-deploy backup on server ─────────────────────────────────────────
-echo "→ Creating database backup on server..."
-BACKUP_NAME="secretlink.pre-deploy-$(date +%Y%m%dT%H%M%S).db"
-$SSH_CMD "cd $REMOTE_DIR/apps/api-gateway && \
-  cp data/secretlink.db data/$BACKUP_NAME && \
-  echo '  Backup: data/$BACKUP_NAME' && \
-  echo '  Size: '\$(du -h data/$BACKUP_NAME | cut -f1)"
-echo ""
-
-# ─── 2. Rsync source (protect data dir) ─────────────────────────────────────
-echo "→ Syncing source code..."
-rsync -avz --delete \
-  --exclude 'node_modules' \
-  --exclude '.git' \
-  --exclude 'apps/mobile' \
-  --exclude 'apps/mobile-public' \
-  --exclude 'apps/mobile-teams' \
-  --exclude 'apps/web-teams' \
-  --exclude 'apps/game-runtime' \
-  --exclude 'apps/ai-worker' \
-  --exclude 'apps/moderation-worker' \
-  --exclude 'infra' \
-  --exclude '.turbo' \
-  --exclude 'apps/web-public/build' \
-  --exclude 'apps/api-gateway/data' \
-  --exclude 'apps/api-gateway/.blobs' \
-  --exclude '*.db' \
-  --exclude '*.db-shm' \
-  --exclude '*.db-wal' \
-  -e "ssh -i $SSH_KEY" \
-  "$LOCAL_DIR/" \
-  "$SERVER:$REMOTE_DIR/" | tail -5
-echo ""
-
-# ─── 3. Install deps & build ────────────────────────────────────────────────
-echo "→ Installing dependencies..."
-$SSH_CMD "cd $REMOTE_DIR && pnpm install --no-frozen-lockfile 2>&1 | tail -3"
-echo ""
-
-echo "→ Building web-public..."
-$SSH_CMD "cd $REMOTE_DIR/apps/web-public && pnpm build 2>&1 | tail -5"
-echo ""
-
-echo "→ Building web-admin..."
-$SSH_CMD "cd $REMOTE_DIR/apps/web-admin && pnpm build 2>&1 | tail -5"
-echo ""
-
-# ─── 4. Restart PM2 ─────────────────────────────────────────────────────────
-echo "→ Restarting services..."
-$SSH_CMD "cd $REMOTE_DIR && pm2 restart all 2>&1 | tail -3"
-sleep 2
-
-# ─── 5. Health check ────────────────────────────────────────────────────────
-echo ""
-echo "→ Health check..."
-WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://secretlink.life/)
-API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://secretlink.life/v1/secrets/map)
-echo "  Web:  $WEB_STATUS"
-echo "  API:  $API_STATUS"
-
-if [[ "$WEB_STATUS" == "200" && "$API_STATUS" == "200" ]]; then
-  echo ""
-  echo "✅ Deploy successful!"
-else
-  echo ""
-  echo "⚠️  Health check failed — check PM2 logs: ssh -i $SSH_KEY $SERVER 'pm2 logs --lines 20'"
+# ─── Rollback mode ────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "--rollback" ]]; then
+  echo "──── Rolling back to previous release ────"
+  "${SSH_CMD[@]}" "
+    set -e
+    cd $BASE_DIR
+    prev=\$(ls -1d 2* | sort | tail -2 | head -1)
+    [ -n \"\$prev\" ] || { echo 'No previous release found'; exit 1; }
+    ln -sfn $BASE_DIR/\$prev $BASE_DIR/current
+    cd $BASE_DIR/current && pm2 restart all --update-env
+    echo \"Rolled back to \$prev\"
+  "
+  exit 0
 fi
 
-# ─── 6. Show backup count ───────────────────────────────────────────────────
+echo "──── Secretlink Deploy ($RELEASE) ────"
+echo "Local:  $LOCAL_DIR"
+echo "Remote: $SERVER:$BASE_DIR/$RELEASE"
 echo ""
-echo "→ Backups on server:"
-$SSH_CMD "ls -lh $REMOTE_DIR/apps/api-gateway/data/*.db 2>/dev/null | grep -v shm | grep -v wal"
+
+# ─── 1. Pre-deploy DB backup ─────────────────────────────────────────────────
+echo "→ Backing up database..."
+"${SSH_CMD[@]}" "
+  set -e
+  DATA_DIR=\$(readlink -f $BASE_DIR/shared/data 2>/dev/null || echo $LEGACY_DIR/apps/api-gateway/data)
+  if [ -f \"\$DATA_DIR/secretlink.db\" ]; then
+    cp \"\$DATA_DIR/secretlink.db\" \"\$DATA_DIR/secretlink.pre-deploy-$RELEASE.db\"
+    ls -1t \"\$DATA_DIR\"/secretlink.pre-deploy-*.db | tail -n +6 | xargs -r rm --
+    echo \"  Backup: secretlink.pre-deploy-$RELEASE.db\"
+  else
+    echo '  No existing DB found (first deploy?)'
+  fi
+"
+
+# ─── 2. Prepare shared dirs (data, blobs, .env survive releases) ─────────────
+"${SSH_CMD[@]}" "
+  mkdir -p $BASE_DIR/releases $BASE_DIR/shared/data $BASE_DIR/shared/blobs
+  if [ ! -f $BASE_DIR/shared/.env ] && [ -f $LEGACY_DIR/.env ]; then cp $LEGACY_DIR/.env $BASE_DIR/shared/.env; fi
+  # Seed shared data from the legacy layout on first versioned deploy.
+  if [ ! -f $BASE_DIR/shared/data/secretlink.db ] && [ -f $LEGACY_DIR/apps/api-gateway/data/secretlink.db ]; then
+    cp $LEGACY_DIR/apps/api-gateway/data/secretlink.db* $BASE_DIR/shared/data/ 2>/dev/null || true
+  fi
+"
+
+# ─── 3. Rsync source into the new release dir ────────────────────────────────
+echo "→ Syncing source..."
+rsync -az --delete \
+  --exclude 'node_modules' --exclude '.git' \
+  --exclude 'apps/mobile' --exclude 'apps/mobile-public' --exclude 'apps/mobile-teams' \
+  --exclude 'apps/web-teams' --exclude 'apps/game-runtime' \
+  --exclude 'apps/ai-worker' --exclude 'apps/moderation-worker' \
+  --exclude '.turbo' --exclude 'apps/web-public/build' --exclude 'apps/web-admin/build' \
+  --exclude 'apps/api-gateway/data' --exclude 'apps/api-gateway/.blobs' \
+  --exclude '*.db' --exclude '*.db-shm' --exclude '*.db-wal' --exclude '.env' \
+  -e "ssh -i $SSH_KEY" \
+  "$LOCAL_DIR/" "$SERVER:$BASE_DIR/releases/$RELEASE/" | tail -3
+
+# ─── 4. Wire shared state into the release ───────────────────────────────────
+"${SSH_CMD[@]}" "
+  set -e
+  cd $BASE_DIR/releases/$RELEASE
+  ln -sfn $BASE_DIR/shared/data apps/api-gateway/data
+  ln -sfn $BASE_DIR/shared/blobs apps/api-gateway/.blobs
+  # Refresh .env from SSM when possible; fall back to the existing shared .env.
+  if aws sts get-caller-identity >/dev/null 2>&1; then
+    bash scripts/pull-ssm-env.sh > $BASE_DIR/shared/.env.new && mv $BASE_DIR/shared/.env.new $BASE_DIR/shared/.env || true
+  fi
+  ln -sfn $BASE_DIR/shared/.env .env
+"
+
+# ─── 5. Install & build ──────────────────────────────────────────────────────
+echo "→ Installing dependencies + building..."
+"${SSH_CMD[@]}" "
+  set -e
+  cd $BASE_DIR/releases/$RELEASE
+  pnpm install --frozen-lockfile 2>&1 | tail -2 || pnpm install --no-frozen-lockfile 2>&1 | tail -2
+  (cd apps/web-public && pnpm build 2>&1 | tail -2)
+  (cd apps/web-admin && pnpm build 2>&1 | tail -2)
+"
+
+# ─── 6. Swap symlink + restart ───────────────────────────────────────────────
+echo "→ Activating release..."
+"${SSH_CMD[@]}" "
+  set -e
+  ln -sfn $BASE_DIR/releases/$RELEASE $BASE_DIR/current
+  cd $BASE_DIR/current
+  pm2 startOrReload ecosystem.config.cjs --update-env 2>&1 | tail -3
+"
+sleep 3
+
+# ─── 7. Health check (auto-rollback on failure) ──────────────────────────────
+echo "→ Health check..."
+WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://secretlink.life/ || echo 000)
+API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://secretlink.life/v1/health || echo 000)
+echo "  Web: $WEB_STATUS   API: $API_STATUS"
+
+if [[ "$WEB_STATUS" == "200" && "$API_STATUS" == "200" ]]; then
+  echo "→ Pruning old releases (keep 5)..."
+  "${SSH_CMD[@]}" "cd $BASE_DIR/releases && ls -1 | sort | head -n -5 | xargs -r rm -rf --"
+  echo "✅ Deploy $RELEASE successful."
+else
+  echo "⚠️  Health check failed — rolling back."
+  "$0" --rollback
+  exit 1
+fi

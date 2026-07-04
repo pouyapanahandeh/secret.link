@@ -1,0 +1,20 @@
+# Litestream — continuous SQLite replication to S3.
+# Install on the EC2 host and run as a systemd service:
+#   https://litestream.io/install/
+#
+#   sudo cp infra/litestream.yml /etc/litestream.yml
+#   sudo systemctl enable --now litestream
+#
+# Restore (disaster recovery):
+#   litestream restore -o /home/ubuntu/secretlink-releases/shared/data/secretlink.db \
+#     s3://secretlink-blobs/litestream/secretlink
+
+dbs:
+  - path: /home/ubuntu/secretlink-releases/shared/data/secretlink.db
+    replicas:
+      - type: s3
+        bucket: secretlink-blobs
+        path: litestream/secretlink
+        region: eu-north-1
+        retention: 720h        # 30 days of point-in-time history
+        sync-interval: 10s

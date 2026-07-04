@@ -15,13 +15,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export const meta: MetaFunction = () => {
+  const title = "Secretlink.life — Say what you really mean";
+  const description =
+    "The private social layer. Send secrets that self-destruct, share anonymously, and connect without a trace.";
+  const url = "https://secretlink.life/";
+  const image = "https://secretlink.life/secretlink.png";
   return [
-    { title: "Secretlink.life — Say what you really mean" },
-    {
-      name: "description",
-      content:
-        "The private social layer. Send secrets that self-destruct, share anonymously, and connect without a trace.",
-    },
+    { title },
+    { name: "description", content: description },
+    { tagName: "link", rel: "canonical", href: url },
+    // Open Graph
+    { property: "og:type", content: "website" },
+    { property: "og:site_name", content: "Secretlink.life" },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+    { property: "og:url", content: url },
+    { property: "og:image", content: image },
+    // Twitter
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: title },
+    { name: "twitter:description", content: description },
+    { name: "twitter:image", content: image },
   ];
 };
 

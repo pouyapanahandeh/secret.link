@@ -3,7 +3,7 @@ import type { Context } from "koa";
 import { nanoid } from "nanoid";
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
-import { signToken, requireAuth, type AuthPayload } from "../middleware/auth.js";
+import { signToken, requireAuth, revokeToken, type AuthPayload } from "../middleware/auth.js";
 import db from "../db.js";
 import { createNotification } from "../notifications.js";
 
@@ -114,8 +114,11 @@ usersRouter.post("/", async (ctx: Context) => {
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
+  // The token is delivered ONLY via the HttpOnly cookie, never in the JSON body,
+  // so it is never exposed to page JavaScript. Server-side callers (Remix SSR)
+  // read it from the Set-Cookie response header.
   ctx.status = 201;
-  ctx.body = { token, user: { id, handle, email, isPro: false } };
+  ctx.body = { user: { id, handle, email, isPro: false } };
 });
 
 // ─── Search users (must be before /:handle) ─────────────────────────────────
@@ -497,8 +500,12 @@ usersRouter.post("/auth/magic-link", async (ctx: Context) => {
       },
     }));
   } catch (err) {
-    console.error("[MAGIC LINK] SES send failed:", err);
-    console.log(`[MAGIC LINK] Fallback link for @${foundUser.handle}: ${magicLink}`);
+    // Never log the magic link itself (it is a bearer credential). Log only that
+    // delivery failed, and surface a non-enumerating error to the caller.
+    console.error("[MAGIC LINK] SES send failed:", err instanceof Error ? err.message : err);
+    ctx.status = 502;
+    ctx.body = { error: "email_delivery_failed", message: "Could not send the login email. Please try again shortly." };
+    return;
   }
 
   ctx.body = { sent: true };
@@ -530,8 +537,22 @@ usersRouter.post("/auth/magic-link/verify", async (ctx: Context) => {
   ctx.body = { token, user: { id: foundUser.id, handle: foundUser.handle } };
 });
 
+// ─── Short-lived token for client-side E2E DM calls ─────────────────────────
+// The browser needs a bearer token to make client-side encrypted DM requests.
+// Instead of handing out the 7-day session JWT, mint a fresh 15-minute token so
+// a leak (e.g. via XSS) has a tightly bounded blast radius.
+usersRouter.post("/auth/session-token", requireAuth(), async (ctx: Context) => {
+  const { userId, handle } = ctx.state.user as AuthPayload;
+  const token = signToken({ userId, handle }, "15m");
+  ctx.body = { token, expiresIn: 900 };
+});
+
 // ─── Logout ─────────────────────────────────────────────────────────────────
 usersRouter.post("/auth/logout", async (ctx: Context) => {
+  // Revoke the presented token so it can't be reused even if it was captured.
+  const authHeader = ctx.get("Authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : ctx.cookies.get("sl_token");
+  if (token) revokeToken(token);
   ctx.cookies.set("sl_token", "", { maxAge: 0 });
   ctx.body = { ok: true };
 });

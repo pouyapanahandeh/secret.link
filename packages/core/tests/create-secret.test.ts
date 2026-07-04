@@ -41,7 +41,7 @@ describe("createSecret", () => {
     const deps = makeDeps();
     const result = await createSecret(deps)({
       ciphertext: "data",
-      ttlSeconds: 10,
+      ttlSeconds: 2, // schema minimum is 5 seconds
     });
 
     expect(result.isErr()).toBe(true);

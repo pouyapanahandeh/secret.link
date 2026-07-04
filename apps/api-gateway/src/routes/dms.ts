@@ -1,7 +1,7 @@
 import Router from "@koa/router";
 import type { Context } from "koa";
 import { nanoid } from "nanoid";
-import { requireAuth, verifyToken, type AuthPayload } from "../middleware/auth.js";
+import { requireAuth, type AuthPayload } from "../middleware/auth.js";
 import { dmRateLimiter } from "../middleware/rate-limiter.js";
 import db from "../db.js";
 import { createNotification } from "../notifications.js";
@@ -361,39 +361,25 @@ dmsRouter.post("/stream-ticket", requireAuth(), async (ctx: Context) => {
 });
 
 dmsRouter.get("/stream", async (ctx: Context) => {
-  // Auth via short-lived ticket (preferred) or legacy token param
+  // Auth via short-lived, single-use ticket only. Long-lived JWTs are never
+  // accepted in the query string (they would leak into logs and history).
   const ticketParam = ctx.query["ticket"] as string;
-  const tokenParam = ctx.query["token"] as string;
-  const conversationIdParam = ctx.query["conversationId"] as string;
 
-  let userId: string;
-  let conversationId: string;
-
-  if (ticketParam) {
-    const ticketData = sseTickets.get(ticketParam);
-    if (!ticketData || Date.now() > ticketData.expiresAt) {
-      ctx.status = 401;
-      ctx.body = { error: "invalid_or_expired_ticket" };
-      return;
-    }
-    userId = ticketData.userId;
-    conversationId = ticketData.conversationId;
-    sseTickets.delete(ticketParam); // one-time use
-  } else if (tokenParam && conversationIdParam) {
-    // Legacy: token in query string (deprecated)
-    const payload = verifyToken(tokenParam);
-    if (!payload) {
-      ctx.status = 401;
-      ctx.body = { error: "invalid_token" };
-      return;
-    }
-    userId = payload.userId;
-    conversationId = conversationIdParam;
-  } else {
+  if (!ticketParam) {
     ctx.status = 400;
-    ctx.body = { error: "ticket or (token + conversationId) required" };
+    ctx.body = { error: "ticket_required" };
     return;
   }
+
+  const ticketData = sseTickets.get(ticketParam);
+  if (!ticketData || Date.now() > ticketData.expiresAt) {
+    ctx.status = 401;
+    ctx.body = { error: "invalid_or_expired_ticket" };
+    return;
+  }
+  const userId = ticketData.userId;
+  const conversationId = ticketData.conversationId;
+  sseTickets.delete(ticketParam); // one-time use
 
   // Verify user is participant of this conversation
   const conv = stmts.getConversation.get(conversationId) as any;

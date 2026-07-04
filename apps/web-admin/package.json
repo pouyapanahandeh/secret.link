@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@remix-run/dev": "^2.15.0",
+    "@secretlink/config-eslint": "workspace:*",
     "@secretlink/config-tsconfig": "workspace:*",
     "@tailwindcss/vite": "^4.3.0",
     "@types/react": "^19.0.0",

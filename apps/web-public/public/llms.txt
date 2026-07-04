@@ -1,0 +1,27 @@
+# Secretlink.life
+
+> The private social layer. Send secrets that self-destruct, share anonymously,
+> and connect without a trace. Direct messages and profile-addressed secrets are
+> end-to-end encrypted; content is ephemeral by design.
+
+## What it is
+- Anonymous, ephemeral social product for individuals.
+- Encrypted "secret links" that self-destruct after a set number of views or a time limit.
+- A location-based "map stories" feed, end-to-end encrypted direct messages, and live streaming.
+
+## For companies
+- A companion B2B product provides anonymous Q&A and feedback channels for teams
+  (workspaces + encrypted feedback channels), aimed at candid, identity-protected
+  employee sentiment.
+
+## Key pages
+- Home: https://secretlink.life/
+- About: https://secretlink.life/about
+- Privacy: https://secretlink.life/privacy
+- Terms: https://secretlink.life/terms
+- Community guidelines: https://secretlink.life/community-guidelines
+- Transparency report: https://secretlink.life/transparency
+
+## Notes for AI crawlers
+- Public informational pages are crawlable; the authenticated app (dashboard,
+  messages, send) is not and requires login.

@@ -8,7 +8,7 @@ export default defineConfig({
     alias: {
       "libsodium-wrappers-sumo": resolve(
         __dirname,
-        "../../node_modules/.pnpm/libsodium-wrappers-sumo@0.7.16/node_modules/libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers.js",
+        "../../node_modules/libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers.js",
       ),
     },
   },
