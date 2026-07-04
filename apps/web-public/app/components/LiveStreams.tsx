@@ -62,28 +62,58 @@ export function LiveStreams({ compact }: LiveStreamsProps) {
   }
 
   if (streams.length === 0) {
+    if (compact) return null;
     return (
-      <div className={`text-center ${compact ? "py-4" : "py-12"}`}>
+      <div className="text-center py-12">
         <p className="text-3xl mb-2">📡</p>
         <p className="text-sm text-text-muted">No one is live right now</p>
       </div>
     );
   }
 
+  if (compact) {
+    return (
+      <div className="mb-4 flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+        {streams.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setWatching(s)}
+            className="flex items-center gap-2 shrink-0 rounded-full border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 pl-1 pr-3 py-1 transition-all"
+          >
+            <div className="relative">
+              <div className="w-8 h-8 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center text-xs font-bold text-red-400">
+                {s.handle ? s.handle[0]!.toUpperCase() : "?"}
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-xs font-semibold text-text truncate max-w-[7rem]">
+                @{s.handle ?? "anon"}
+              </span>
+              <span className="text-[10px] bg-red-600 text-white px-1.5 py-px rounded font-bold leading-tight">LIVE</span>
+            </div>
+            <span className="text-[10px] text-text-muted shrink-0 tabular-nums">
+              👁 {s.viewerCount}
+            </span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <div className={compact ? "space-y-2" : "space-y-3"}>
-      {!compact && (
-        <h3 className="text-sm font-medium text-text-muted uppercase tracking-wider">
-          🔴 Live Now ({streams.length})
-        </h3>
-      )}
+    <div className="space-y-3">
+      <h3 className="text-sm font-medium text-text-muted uppercase tracking-wider">
+        🔴 Live Now ({streams.length})
+      </h3>
       {streams.map((s) => (
         <button
           key={s.id}
           onClick={() => setWatching(s)}
-          className={`w-full text-left rounded-xl border border-border hover:border-red-500/50 bg-surface-raised transition-all ${
-            compact ? "p-2.5" : "p-3"
-          }`}
+          className="w-full text-left rounded-xl border border-border hover:border-red-500/50 bg-surface-raised transition-all p-3"
         >
           <div className="flex items-center gap-3">
             <div className="relative shrink-0">
