@@ -86,6 +86,16 @@ if (get("AWS_ACCESS_KEY_ID") && get("AWS_SECRET_ACCESS_KEY")) {
 
 const sessionSecret = get("SESSION_SECRET");
 
+// Optional Sentry config, shared by all apps. Only include keys that are
+// actually set — passing SENTRY_DSN=undefined would make Sentry try (and fail)
+// to initialise with an invalid DSN, so we omit it entirely when absent.
+const sentryEnv = {};
+for (const k of ["SENTRY_DSN", "SENTRY_RELEASE", "SENTRY_TRACES_SAMPLE_RATE"]) {
+  const v = get(k);
+  if (v) sentryEnv[k] = v;
+}
+Object.assign(apiEnv, sentryEnv);
+
 module.exports = {
   apps: [
     {
@@ -108,6 +118,7 @@ module.exports = {
         SESSION_SECRET: sessionSecret,
         API_URL: get("API_URL") ?? "http://localhost:4000",
         PUBLIC_ORIGIN: get("PUBLIC_ORIGIN") ?? "https://secretlink.life",
+        ...sentryEnv,
       },
     },
     {
@@ -121,6 +132,7 @@ module.exports = {
         PORT: "3002",
         SESSION_SECRET: sessionSecret,
         API_URL: get("API_URL") ?? "http://localhost:4000",
+        ...sentryEnv,
       },
     },
   ],

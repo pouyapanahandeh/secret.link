@@ -3,8 +3,17 @@ import type { EntryContext } from "@remix-run/node";
 import { createReadableStreamFromReadable } from "@remix-run/node";
 import { RemixServer } from "@remix-run/react";
 import { renderToPipeableStream } from "react-dom/server";
+import { captureRemixError } from "./lib/sentry.server";
 
 const ABORT_DELAY = 5_000;
+
+// Remix calls this for any error thrown during loaders, actions, or rendering.
+export function handleError(error: unknown, { request }: { request: Request }): void {
+  // Don't report client-cancelled requests (navigations, aborted fetches).
+  if (request.signal.aborted) return;
+  captureRemixError(error, request);
+  console.error(error);
+}
 
 export default function handleRequest(
   request: Request,
