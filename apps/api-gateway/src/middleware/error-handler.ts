@@ -1,6 +1,7 @@
 import type { Context, Next } from "koa";
 import { ZodError } from "zod";
 import { logger } from "./logger.js";
+import { captureException } from "../lib/sentry.js";
 
 export function errorHandler() {
   return async (ctx: Context, next: Next) => {
@@ -14,6 +15,7 @@ export function errorHandler() {
       }
 
       logger.error({ err, path: ctx.path }, "Unhandled error");
+      captureException(err, { path: ctx.path, method: ctx.method });
       ctx.status = 500;
       ctx.body = { error: "internal_error" };
     }

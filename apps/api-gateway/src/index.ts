@@ -9,6 +9,10 @@ import { rateLimiter } from "./middleware/rate-limiter.js";
 import { optionalAuth } from "./middleware/auth.js";
 import { router } from "./routes/index.js";
 import { startDeletionJob } from "./jobs/deletion.js";
+import { initSentry, flushSentry } from "./lib/sentry.js";
+
+// Initialise error monitoring before anything else. No-op unless SENTRY_DSN set.
+initSentry();
 
 const app = new Koa();
 
@@ -58,11 +62,23 @@ app.use(router.allowedMethods());
 const port = Number(process.env["PORT"] ?? 4000);
 
 if (process.env["NODE_ENV"] !== "test") {
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`API Gateway listening on :${port}`);
   });
   // Background job: execute due GDPR account-deletion requests.
   startDeletionJob();
+
+  // Graceful shutdown: stop accepting connections and flush pending error events.
+  const shutdown = (signal: string) => {
+    console.log(`Received ${signal}, shutting down...`);
+    server.close(() => {
+      void flushSentry().finally(() => process.exit(0));
+    });
+    // Hard cap so a stuck connection can't block the restart indefinitely.
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 export { app };
