@@ -73,32 +73,9 @@ export function LiveStreams({ compact }: LiveStreamsProps) {
 
   if (compact) {
     return (
-      <div className="mb-4 flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+      <div className="mb-5 flex gap-3 overflow-x-auto scrollbar-hide pb-1 -mx-1 px-1">
         {streams.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setWatching(s)}
-            className="flex items-center gap-2 shrink-0 rounded-full border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 pl-1 pr-3 py-1 transition-all"
-          >
-            <div className="relative">
-              <div className="w-8 h-8 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center text-xs font-bold text-red-400">
-                {s.handle ? s.handle[0]!.toUpperCase() : "?"}
-              </div>
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-xs font-semibold text-text truncate max-w-[7rem]">
-                @{s.handle ?? "anon"}
-              </span>
-              <span className="text-[10px] bg-red-600 text-white px-1.5 py-px rounded font-bold leading-tight">LIVE</span>
-            </div>
-            <span className="text-[10px] text-text-muted shrink-0 tabular-nums">
-              👁 {s.viewerCount}
-            </span>
-          </button>
+          <CompactLiveCard key={s.id} stream={s} onWatch={() => setWatching(s)} />
         ))}
       </div>
     );
@@ -110,37 +87,75 @@ export function LiveStreams({ compact }: LiveStreamsProps) {
         🔴 Live Now ({streams.length})
       </h3>
       {streams.map((s) => (
-        <button
-          key={s.id}
-          onClick={() => setWatching(s)}
-          className="w-full text-left rounded-xl border border-border hover:border-red-500/50 bg-surface-raised transition-all p-3"
-        >
-          <div className="flex items-center gap-3">
-            <div className="relative shrink-0">
-              <div className="w-10 h-10 rounded-full bg-red-600/20 flex items-center justify-center text-lg">
-                📹
-              </div>
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                {s.handle && (
-                  <span className="text-sm font-medium text-text">@{s.handle}</span>
-                )}
-                <span className="text-xs bg-red-600 text-white px-1.5 py-0.5 rounded font-bold">LIVE</span>
-              </div>
-              <p className="text-xs text-text-muted truncate">{s.title || "Untitled stream"}</p>
-            </div>
-            <span className="text-xs text-text-muted shrink-0">
-              👁 {s.viewerCount}
-            </span>
-          </div>
-        </button>
+        <CompactLiveCard key={s.id} stream={s} onWatch={() => setWatching(s)} />
       ))}
     </div>
+  );
+}
+
+function formatElapsed(startedAt: string): string {
+  const diff = Math.max(0, Date.now() - new Date(startedAt).getTime());
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return `${hrs}h ${rem}m`;
+}
+
+function CompactLiveCard({ stream: s, onWatch }: { stream: LiveStream; onWatch: () => void }) {
+  const [elapsed, setElapsed] = useState(() => formatElapsed(s.startedAt));
+
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(formatElapsed(s.startedAt)), 30_000);
+    return () => clearInterval(id);
+  }, [s.startedAt]);
+
+  return (
+    <button
+      onClick={onWatch}
+      className="group shrink-0 w-52 text-left rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-950/40 via-surface-raised to-surface-raised hover:border-red-500/40 hover:shadow-lg hover:shadow-red-500/5 transition-all duration-200"
+    >
+      {/* Top: avatar + handle + LIVE badge */}
+      <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-2">
+        <div className="relative shrink-0">
+          <div className="w-9 h-9 rounded-full bg-red-500/20 border-2 border-red-500/50 flex items-center justify-center text-sm font-bold text-red-400">
+            {s.handle ? s.handle[0]!.toUpperCase() : "?"}
+          </div>
+          <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold text-text truncate">@{s.handle ?? "anon"}</span>
+            <span className="text-[10px] bg-red-600 text-white px-1.5 py-px rounded font-bold leading-tight shrink-0">LIVE</span>
+          </div>
+          <p className="text-xs text-text-muted truncate mt-0.5">{s.title || "Untitled stream"}</p>
+        </div>
+      </div>
+
+      {/* Bottom: stats row */}
+      <div className="flex items-center gap-3 px-3.5 pb-3 pt-1 text-[11px] text-text-muted">
+        <span className="flex items-center gap-1 tabular-nums">
+          <svg className="w-3.5 h-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          {s.viewerCount}
+        </span>
+        <span className="flex items-center gap-1 tabular-nums">
+          <svg className="w-3.5 h-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+            <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {elapsed}
+        </span>
+        <span className="ml-auto text-accent opacity-0 group-hover:opacity-100 transition-opacity text-xs font-medium">
+          Watch →
+        </span>
+      </div>
+    </button>
   );
 }
 
