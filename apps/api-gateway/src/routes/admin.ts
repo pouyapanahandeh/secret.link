@@ -30,8 +30,47 @@ adminRouter.get("/stats", async (ctx: Context) => {
     pendingAppeals: (db.prepare("SELECT count(*) as c FROM appeals WHERE status = 'pending'").get() as any).c,
     suspendedUsers: (db.prepare("SELECT count(*) as c FROM user_suspensions WHERE lifted_at IS NULL AND (expires_at IS NULL OR expires_at > ?)").get(new Date().toISOString()) as any).c,
     pendingDeletions: (db.prepare("SELECT count(*) as c FROM deletion_requests WHERE status = 'pending'").get() as any).c,
+    newContactMessages: (db.prepare("SELECT count(*) as c FROM contact_messages WHERE status = 'new'").get() as any).c,
   };
   ctx.body = stats;
+});
+
+// ─── Contact Messages ───────────────────────────────────────────────────────
+
+adminRouter.get("/contact-messages", async (ctx: Context) => {
+  const status = String(ctx.query.status ?? "new");
+  const limit = Math.min(Number(ctx.query.limit) || 50, 100);
+  const offset = Number(ctx.query.offset) || 0;
+
+  const messages = db.prepare(`
+    SELECT cm.*, u.handle as user_handle
+    FROM contact_messages cm
+    LEFT JOIN users u ON cm.user_id = u.id
+    WHERE cm.status = ?
+    ORDER BY cm.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(status, limit, offset);
+
+  const total = (db.prepare("SELECT count(*) as c FROM contact_messages WHERE status = ?").get(status) as any).c;
+
+  ctx.body = { messages, total, limit, offset };
+});
+
+adminRouter.patch("/contact-messages/:id", async (ctx: Context) => {
+  const body = ctx.request.body as Record<string, unknown>;
+  const status = body.status;
+
+  if (!status || !["new", "read", "archived"].includes(status as string)) {
+    ctx.status = 400;
+    ctx.body = { error: "invalid_status", message: "status must be: new, read, or archived" };
+    return;
+  }
+
+  const message = db.prepare("SELECT id FROM contact_messages WHERE id = ?").get(ctx.params.id);
+  if (!message) { ctx.status = 404; ctx.body = { error: "not_found" }; return; }
+
+  db.prepare("UPDATE contact_messages SET status = ? WHERE id = ?").run(status, ctx.params.id);
+  ctx.body = { ok: true };
 });
 
 // ─── Reports ────────────────────────────────────────────────────────────────

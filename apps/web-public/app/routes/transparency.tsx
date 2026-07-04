@@ -81,10 +81,8 @@ export default function Transparency() {
           and transparency in content moderation.
         </p>
         <p>
-          Questions? Contact{" "}
-          <a href="mailto:transparency@secretlink.life" className="text-[#FFFC00] underline">
-            transparency@secretlink.life
-          </a>
+          Questions? Reach out via our{" "}
+          <a href="/contact" className="text-[#FFFC00] underline">contact form</a>.
         </p>
       </div>
     </div>

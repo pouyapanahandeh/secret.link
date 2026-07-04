@@ -251,7 +251,7 @@ export default function Index() {
         {" · "}
         <Link to="/privacy" className="hover:text-text transition-colors">Privacy Policy</Link>
         {" · "}
-        <a href="https://teams.secretlink.life" className="hover:text-text transition-colors">For Teams</a>
+        <Link to="/contact" className="hover:text-text transition-colors">Contact</Link>
         {" · "}
         <span>© 2026 Secretlink.life</span>
       </footer>

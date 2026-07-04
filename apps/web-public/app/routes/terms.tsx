@@ -146,8 +146,8 @@ export default function Terms() {
         <section>
           <h2 className="text-lg font-semibold text-white mb-2">12. Contact</h2>
           <p>
-            Questions about these terms? Contact:{" "}
-            <a href="mailto:legal@secretlink.life" className="text-[#FFFC00] underline">legal@secretlink.life</a>
+            Questions about these terms? Reach out via our{" "}
+            <a href="/contact" className="text-[#FFFC00] underline">contact form</a>.
           </p>
         </section>
       </div>

@@ -183,7 +183,7 @@ export default function Privacy() {
             <li><strong>Withdraw consent:</strong> You may stop using the service and delete your account at any time</li>
           </ul>
           <p className="text-candle/80 leading-relaxed mt-3">
-            To exercise these rights, contact us at <a href="mailto:privacy@secretlink.life" className="text-blush hover:underline">privacy@secretlink.life</a>.
+            To exercise these rights, reach out via our <a href="/contact" className="text-blush hover:underline">contact form</a>.
           </p>
         </section>
 
@@ -199,15 +199,14 @@ export default function Privacy() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-blush mb-3">14. Contact</h2>
           <p className="text-candle/80 leading-relaxed">
-            For privacy-related inquiries, contact us at{" "}
-            <a href="mailto:privacy@secretlink.life" className="text-blush hover:underline">privacy@secretlink.life</a>.
+            For privacy-related inquiries, use our <a href="/contact" className="text-blush hover:underline">contact form</a>.
           </p>
         </section>
 
         <footer className="border-t border-candle/10 pt-6 text-center">
-          <a href="/" className="text-candle/40 text-sm hover:text-candle/60 transition-colors">
-            ← Back to Secretlink.life
-          </a>
+          <a href="/contact" className="text-candle/40 text-sm hover:text-candle/60 transition-colors">Contact us</a>
+          <span className="text-candle/20 mx-2">·</span>
+          <a href="/" className="text-candle/40 text-sm hover:text-candle/60 transition-colors">← Back to Secretlink.life</a>
         </footer>
       </article>
     </main>

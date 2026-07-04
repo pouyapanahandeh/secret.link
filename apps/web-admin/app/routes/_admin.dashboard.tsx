@@ -16,6 +16,7 @@ export default function Dashboard() {
   const cards = [
     { label: "Open Reports", value: s.openReports, icon: "🚩", color: "var(--warning)" },
     { label: "Pending Appeals", value: s.pendingAppeals, icon: "⚖️", color: "var(--accent)" },
+    { label: "New Contact Messages", value: s.newContactMessages, icon: "📬", color: "var(--accent)" },
     { label: "Total Users", value: s.users, icon: "👥", color: "var(--text)" },
     { label: "Active Secrets", value: s.activeSecrets, icon: "🗺️", color: "var(--success)" },
     { label: "Suspended Users", value: s.suspendedUsers, icon: "🚫", color: "var(--danger)" },
