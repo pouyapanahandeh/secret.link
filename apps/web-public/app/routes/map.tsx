@@ -11,7 +11,7 @@ export const meta: MetaFunction = () => [
 
 interface MapSecret {
   id: string;
-  message: string;
+  message?: string;
   lat: number;
   lng: number;
   emoji: string;
@@ -23,6 +23,8 @@ interface MapSecret {
 export default function MapPage() {
   const [, setSecrets] = useState<MapSecret[]>([]);
   const [selectedSecret, setSelectedSecret] = useState<MapSecret | null>(null);
+  const [secretRevealed, setSecretRevealed] = useState(false);
+  const [revealLoading, setRevealLoading] = useState(false);
   const [showPost, setShowPost] = useState(false);
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState("");
@@ -108,6 +110,7 @@ export default function MapPage() {
         marker._isSecretMarker = true;
         marker.on("click", () => {
           setSelectedSecret(s);
+          setSecretRevealed(false);
           setShowPost(false);
         });
       });
@@ -185,27 +188,57 @@ export default function MapPage() {
         {selectedSecret && (
           <div className="absolute bottom-6 left-4 right-4 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-sm z-[1000] bg-surface rounded-2xl border border-border p-5 shadow-xl">
             <button
-              onClick={() => setSelectedSecret(null)}
+              onClick={() => { setSelectedSecret(null); setSecretRevealed(false); }}
               className="absolute top-3 right-3 text-text-muted hover:text-text text-lg"
             >
               ×
             </button>
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">{selectedSecret.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-text text-sm leading-relaxed break-words">{selectedSecret.message}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  {selectedSecret.handle && (
-                    <Link to={`/${selectedSecret.handle}`} className="text-xs text-accent hover:text-accent-soft">
-                      @{selectedSecret.handle}
-                    </Link>
-                  )}
-                  <span className="text-xs text-text-muted">
-                    ⏳ {timeRemaining(selectedSecret.expiresAt)}
-                  </span>
+
+            {!secretRevealed ? (
+              <div className="text-center py-2">
+                <span className="text-3xl block mb-2">{selectedSecret.emoji}</span>
+                <p className="text-xs text-text-muted mb-1">
+                  {selectedSecret.handle ? `@${selectedSecret.handle} dropped a secret` : "Someone dropped a secret"}
+                </p>
+                <p className="text-xs text-text-muted mb-3">⏳ {timeRemaining(selectedSecret.expiresAt)}</p>
+                <button
+                  onClick={async () => {
+                    setRevealLoading(true);
+                    try {
+                      const res = await fetch(`${getApiBase()}/v1/secrets/map/${selectedSecret.id}/reveal`, { method: "POST" });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setSelectedSecret({ ...selectedSecret, ...data });
+                        setSecretRevealed(true);
+                      }
+                    } catch {} finally {
+                      setRevealLoading(false);
+                    }
+                  }}
+                  disabled={revealLoading}
+                  className="rounded-full bg-accent px-5 py-2 text-sm font-bold text-black hover:scale-[1.03] transition-all disabled:opacity-50"
+                >
+                  {revealLoading ? "Revealing…" : "Tap to reveal 👁️"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">{selectedSecret.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-text text-sm leading-relaxed break-words">{selectedSecret.message}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {selectedSecret.handle && (
+                      <Link to={`/${selectedSecret.handle}`} className="text-xs text-accent hover:text-accent-soft">
+                        @{selectedSecret.handle}
+                      </Link>
+                    )}
+                    <span className="text-xs text-text-muted">
+                      ⏳ {timeRemaining(selectedSecret.expiresAt)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 

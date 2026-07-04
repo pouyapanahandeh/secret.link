@@ -14,6 +14,11 @@ interface StoryViewerProps {
 const STORY_DURATION_MS = 6000;
 const HOLD_MS = 200;
 
+/** Revealed story data (full content from /reveal endpoint). */
+interface RevealedStory extends MapSecret {
+  message: string;
+}
+
 /**
  * Full-screen, Instagram-style viewer for a user's active map "stories".
  * Auto-advances through each story with a progress bar; tap left/right to go
@@ -23,6 +28,7 @@ const HOLD_MS = 200;
 export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewerProps) {
   const cleanHandle = handle.replace(/^@/, "");
   const [stories, setStories] = useState<MapSecret[] | null>(null);
+  const [revealedCache, setRevealedCache] = useState<Record<string, RevealedStory>>({});
   const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -34,7 +40,7 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
   const holdTimerRef = useRef<number | null>(null);
   const holdingRef = useRef(false);
 
-  // Load this user's active stories.
+  // Load this user's active stories (metadata only).
   useEffect(() => {
     let cancelled = false;
     fetch(`${getApiBase()}/v1/secrets/map/by-handle/${encodeURIComponent(cleanHandle)}`)
@@ -50,6 +56,22 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
     };
   }, [cleanHandle]);
 
+  // Reveal the current story's content when it becomes visible.
+  useEffect(() => {
+    if (!stories || stories.length === 0) return;
+    const current = stories[index];
+    if (!current || revealedCache[current.id]) return;
+
+    fetch(`${getApiBase()}/v1/secrets/map/${current.id}/reveal`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setRevealedCache((prev) => ({ ...prev, [current.id]: data as RevealedStory }));
+        }
+      })
+      .catch(() => {});
+  }, [stories, index, revealedCache]);
+
   const advance = useCallback(() => {
     setIndex((i) => {
       const total = stories?.length ?? 0;
@@ -63,18 +85,19 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
     elapsedRef.current = 0;
   }, [stories, onClose]);
 
-  // Current story + whether its media has loaded (gates the progress timer so
-  // the countdown only starts once the image/video is actually on screen).
-  const current = stories?.[index] ?? null;
+  // Current story metadata + revealed content.
+  const currentMeta = stories?.[index] ?? null;
+  const current = currentMeta ? (revealedCache[currentMeta.id] ?? null) : null;
   const curMediaPath = current ? (current.mediaPath ?? null) : null;
   const curMediaType = current ? (current.mediaType ?? "") : "";
   const curHasMedia = !!curMediaPath && (curMediaType.startsWith("image/") || curMediaType.startsWith("video/"));
   const mediaReady = !curHasMedia || mediaLoaded;
+  const contentReady = !!current;
 
   // Drive the progress bar / auto-advance.
   useEffect(() => {
     if (!stories || stories.length === 0) return;
-    if (paused || !mediaReady) return;
+    if (paused || !mediaReady || !contentReady) return;
 
     startRef.current = performance.now() - elapsedRef.current;
 
@@ -94,7 +117,7 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [stories, index, paused, mediaReady, advance]);
+  }, [stories, index, paused, mediaReady, contentReady, advance]);
 
   // Reset the media-loaded flag whenever the visible story changes.
   useEffect(() => {
@@ -111,18 +134,21 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
     }
   }, [stories, index, onViewed]);
 
-  // Preload the next story's image for a smoother transition.
+  // Preload the next story's revealed content.
   useEffect(() => {
     if (!stories) return;
     const next = stories[index + 1];
-    if (!next) return;
-    const np = next.mediaPath ?? null;
-    const nt = next.mediaType ?? "";
-    if (np && nt.startsWith("image/")) {
-      const img = new Image();
-      img.src = `${getApiBase()}/v1/secrets/blob/${np}`;
-    }
-  }, [stories, index]);
+    if (!next || revealedCache[next.id]) return;
+
+    fetch(`${getApiBase()}/v1/secrets/map/${next.id}/reveal`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setRevealedCache((prev) => ({ ...prev, [next.id]: data as RevealedStory }));
+        }
+      })
+      .catch(() => {});
+  }, [stories, index, revealedCache]);
 
   // Keyboard navigation.
   useEffect(() => {
@@ -202,9 +228,9 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
     );
   }
 
-  const story = stories[index]!;
-  const mediaPath = story.mediaPath ?? null;
-  const mediaType = story.mediaType ?? "";
+  const story = currentMeta!;
+  const mediaPath = current?.mediaPath ?? null;
+  const mediaType = current?.mediaType ?? "";
 
   return (
     <div className="fixed inset-0 z-[60] bg-black flex flex-col select-none">
@@ -252,10 +278,16 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
         onPointerCancel={handlePointerLeave}
       >
         <div className="max-w-md w-full text-center">
-          {curHasMedia && !mediaReady && (
+          {!contentReady && (
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              <p className="text-white/50 text-sm">Revealing…</p>
+            </div>
+          )}
+          {contentReady && curHasMedia && !mediaReady && (
             <div className="w-full h-[50vh] rounded-xl bg-white/10 animate-pulse mb-4" />
           )}
-          {mediaPath && mediaType.startsWith("image/") && (
+          {contentReady && mediaPath && mediaType.startsWith("image/") && (
             <img
               src={`${getApiBase()}/v1/secrets/blob/${mediaPath}`}
               alt=""
@@ -264,7 +296,7 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
               className={`max-h-[60vh] w-auto mx-auto rounded-xl mb-4 object-contain ${mediaReady ? "" : "hidden"}`}
             />
           )}
-          {mediaPath && mediaType.startsWith("video/") && (
+          {contentReady && mediaPath && mediaType.startsWith("video/") && (
             <video
               src={`${getApiBase()}/v1/secrets/blob/${mediaPath}`}
               autoPlay
@@ -275,8 +307,10 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
               className={`max-h-[60vh] w-auto mx-auto rounded-xl mb-4 ${mediaReady ? "" : "hidden"}`}
             />
           )}
-          {story.emoji && <div className="text-4xl mb-3">{story.emoji}</div>}
-          <p className="text-white text-lg leading-relaxed whitespace-pre-wrap break-words">{story.message}</p>
+          {contentReady && story.emoji && <div className="text-4xl mb-3">{story.emoji}</div>}
+          {contentReady && current?.message && (
+            <p className="text-white text-lg leading-relaxed whitespace-pre-wrap break-words">{current.message}</p>
+          )}
         </div>
       </div>
     </div>

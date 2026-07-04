@@ -4,6 +4,7 @@ import type { ContentType } from "@secretlink/core";
 import { nanoid } from "nanoid";
 import type { Context } from "koa";
 import { requireAuth, type AuthPayload } from "../middleware/auth.js";
+import { mapPostRateLimiter, blobUploadRateLimiter } from "../middleware/rate-limiter.js";
 import db from "../db.js";
 import { wrapKey } from "../lib/crypto.js";
 import { blobStore } from "../lib/blob-store.js";
@@ -58,6 +59,27 @@ function normalizeMapSecret(row: any) {
     cityName: row.city_name ?? null,
     mediaPath: row.media_path ?? null,
     mediaType: row.media_type ?? null,
+    revealMode: row.reveal_mode ?? "timer",
+    revealTimerSeconds: row.reveal_timer_seconds ?? 30,
+    maxClicks: row.max_clicks ?? 0,
+    clickCount: row.click_count ?? 0,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  };
+}
+
+/** List-safe version: hides the actual secret content (message, media) so
+ *  clients must call POST /reveal to access it. */
+function normalizeMapSecretForList(row: any) {
+  return {
+    id: row.id,
+    lat: row.lat,
+    lng: row.lng,
+    emoji: row.emoji,
+    handle: row.handle ?? null,
+    locationName: row.location_name ?? null,
+    cityName: row.city_name ?? null,
+    hasMedia: !!(row.media_path),
     revealMode: row.reveal_mode ?? "timer",
     revealTimerSeconds: row.reveal_timer_seconds ?? 30,
     maxClicks: row.max_clicks ?? 0,
@@ -160,7 +182,7 @@ secretsRouter.post("/", async (ctx: Context) => {
 });
 
 // ─── Map Secrets (must be before /:id to avoid conflicts) ───────────────────
-secretsRouter.post("/map", async (ctx: Context) => {
+secretsRouter.post("/map", mapPostRateLimiter(), async (ctx: Context) => {
   const body = ctx.request.body as Record<string, unknown>;
   const message = String(body.message ?? "").trim();
   const lat = Number(body.lat);
@@ -170,6 +192,24 @@ secretsRouter.post("/map", async (ctx: Context) => {
   const locationName = body.locationName ? String(body.locationName).slice(0, 160) : null;
   const cityName = body.cityName ? String(body.cityName).slice(0, 80) : null;
   const ttlMinutes = Math.min(Math.max(Number(body.ttlMinutes) || 60, 5), 1440);
+
+  // Verify handle ownership: if a handle is supplied, the user must be
+  // authenticated and the handle must match their account.
+  if (handle) {
+    const authUser = ctx.state?.user as { userId?: string; handle?: string } | undefined;
+    if (!authUser) {
+      ctx.status = 401;
+      ctx.body = { error: "Authentication required to post with a handle" };
+      return;
+    }
+    const normalizedHandle = handle.replace(/^@/, "").toLowerCase();
+    const normalizedAuth = (authUser.handle ?? "").replace(/^@/, "").toLowerCase();
+    if (normalizedHandle !== normalizedAuth) {
+      ctx.status = 403;
+      ctx.body = { error: "Cannot post as another user" };
+      return;
+    }
+  }
 
   if (!message || message.length > 500) {
     ctx.status = 400;
@@ -203,7 +243,7 @@ secretsRouter.get("/map", async (ctx: Context) => {
   // Clean up expired
   mapStmts.deleteExpired.run(new Date().toISOString());
   const rows = mapStmts.getActive.all(new Date().toISOString()) as any[];
-  ctx.body = rows.map(normalizeMapSecret);
+  ctx.body = rows.map(normalizeMapSecretForList);
 });
 
 // Active map secrets for a single handle (powers profile "stories")
@@ -211,7 +251,7 @@ secretsRouter.get("/map/by-handle/:handle", async (ctx: Context) => {
   const handle = String(ctx.params["handle"] ?? "").replace(/^@/, "");
   mapStmts.deleteExpired.run(new Date().toISOString());
   const rows = mapStmts.getActive.all(new Date().toISOString()) as any[];
-  ctx.body = rows.filter((r) => (r.handle ?? "").replace(/^@/, "") === handle).map(normalizeMapSecret);
+  ctx.body = rows.filter((r) => (r.handle ?? "").replace(/^@/, "") === handle).map(normalizeMapSecretForList);
 });
 
 secretsRouter.get("/map/:id", async (ctx: Context) => {
@@ -327,7 +367,7 @@ secretsRouter.get("/:id", async (ctx: Context) => {
 
 // Upload encrypted blob (binary body)
 // Client sends encrypted file data directly; returns the blob path
-secretsRouter.post("/blob", async (ctx: Context) => {
+secretsRouter.post("/blob", blobUploadRateLimiter(), async (ctx: Context) => {
   const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
   // Read raw body
