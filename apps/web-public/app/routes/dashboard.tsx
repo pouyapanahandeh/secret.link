@@ -17,6 +17,7 @@ import { API_URL } from "../lib/api.server";
 import { getApiBase } from "../lib/api.client";
 import { getViewedStoryIds, computeViewedHandles } from "../lib/story-views";
 import { getSocialMeta, detectPlatform, SOCIAL_META, SOCIAL_PLATFORMS } from "../lib/socials";
+import { UI_FEATURES } from "../lib/feature-flags";
 import { GoLiveButton } from "../components/GoLiveButton";
 import { LiveStreams } from "../components/LiveStreams";
 
@@ -186,8 +187,13 @@ export default function Dashboard() {
   // Read tab from URL hash on mount
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
-    if (hash === "map" || hash === "messages" || hash === "profile" || hash === "inbox") {
-      setActiveTab(hash);
+    if (hash === "messages" && !UI_FEATURES.messages) {
+      setActiveTab("inbox");
+      window.history.replaceState(null, "", "/dashboard#inbox");
+      return;
+    }
+    if (hash === "map" || hash === "profile" || hash === "inbox" || (hash === "messages" && UI_FEATURES.messages)) {
+      setActiveTab(hash as typeof activeTab);
     }
   }, []);
 
@@ -342,12 +348,16 @@ export default function Dashboard() {
   const navItems = [
     { id: "inbox" as const, label: "Home", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg> },
     { id: "map" as const, label: "Map", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503-11.307l4.994-2.497A.75.75 0 0121 4.196v13.608a.75.75 0 01-.497.708l-5.006 2.503m-6.994-3.015l-5.006 2.503A.75.75 0 013 19.804V6.196a.75.75 0 01.497-.708l5.006-2.503m6.994 3.015L9 4.485m6.497 1.53L9 8.515" /></svg> },
-    { id: "messages" as const, label: "Messages", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443h.004c2.174-.063 4.322-.258 6.426-.573 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg> },
+    ...(UI_FEATURES.messages ? [{ id: "messages" as const, label: "Messages", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443h.004c2.174-.063 4.322-.258 6.426-.573 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg> }] : []),
     { id: "profile" as const, label: "Profile", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg> },
   ];
 
   function handleNavClick(id: string) {
-    setActiveTab(id as any);
+    if (id === "messages" && !UI_FEATURES.messages) {
+      setActiveTab("inbox");
+      return;
+    }
+    setActiveTab(id as typeof activeTab);
   }
 
   return (
@@ -400,7 +410,7 @@ export default function Dashboard() {
       </aside>
 
       {/* ─── Mobile Header ─── */}
-      {activeTab !== "messages" && (
+      {!(UI_FEATURES.messages && activeTab === "messages") && (
       <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
         <Link to="/dashboard" className="flex items-center gap-2">
           <img src="/secretlink.png" alt="" className="w-6 h-6" />
@@ -418,7 +428,7 @@ export default function Dashboard() {
       )}
 
       {/* Content area */}
-      {activeTab === "messages" ? (
+      {UI_FEATURES.messages && activeTab === "messages" ? (
         <div className="flex-1 min-h-0 flex overflow-hidden">
           <MessagingPanel token={token} />
         </div>
@@ -449,7 +459,7 @@ export default function Dashboard() {
               </div>
 
               {/* Live Streams */}
-              <LiveStreams compact />
+              {UI_FEATURES.live && <LiveStreams compact />}
 
               {/* Quick link */}
               <div className="flex items-center gap-2 mb-6 bg-surface-raised rounded-xl border border-border px-3 py-2.5">
@@ -800,7 +810,7 @@ export default function Dashboard() {
             {fabOpen && (
               <div className="flex flex-col items-end gap-3 mb-1">
                 {[
-                  { label: "Go live", emoji: "🔴", onClick: () => { setFabOpen(false); setShowBroadcast(true); } },
+                  ...(UI_FEATURES.live ? [{ label: "Go live", emoji: "🔴", onClick: () => { setFabOpen(false); setShowBroadcast(true); } }] : []),
                   { label: "Post story", emoji: "✨", onClick: () => { setFabOpen(false); setShowStoryComposer(true); } },
                   { label: "Post secret", emoji: "🔐", onClick: () => { setFabOpen(false); navigate("/send"); } },
                   { label: "Pin on map", emoji: "📍", onClick: () => { setFabOpen(false); setActiveTab("map"); } },
@@ -830,7 +840,7 @@ export default function Dashboard() {
       )}
 
       {/* ─── Bottom Navigation (mobile only) ─── */}
-      {activeTab !== "messages" && (
+      {!(UI_FEATURES.messages && activeTab === "messages") && (
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border/50 z-30">
         <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
           {navItems.map((item) => (
@@ -882,7 +892,7 @@ export default function Dashboard() {
       )}
 
       {/* Broadcast overlay (Go Live from FAB) */}
-      {showBroadcast && (
+      {UI_FEATURES.live && showBroadcast && (
         <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-surface rounded-2xl border border-border max-w-md w-full p-5 relative">
             <div className="flex items-center justify-between mb-4">

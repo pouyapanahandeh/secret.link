@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ensurePushSubscription, getPushState, type PushState } from "../lib/push.client";
+import { UI_FEATURES } from "../lib/feature-flags";
 
 const DISMISS_KEY = "sl_notif_prompt_dismissed";
 
@@ -56,7 +57,7 @@ export function NotificationPrompt({ token }: { token: string }) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-text">Notifications are blocked</p>
           <p className="text-xs text-text-muted mt-0.5">
-            To get alerts for messages and secrets, allow notifications for
+            To get alerts for {UI_FEATURES.messages ? "messages and secrets" : "secrets"}, allow notifications for
             secretlink.life in your browser&apos;s site settings, then reload.
           </p>
         </div>
@@ -78,7 +79,7 @@ export function NotificationPrompt({ token }: { token: string }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-text">Turn on notifications</p>
         <p className="text-xs text-text-muted mt-0.5">
-          Get notified the moment someone sends you a message or secret.
+          Get notified the moment someone sends you a {UI_FEATURES.messages ? "message or secret" : "secret"}.
         </p>
       </div>
       <button

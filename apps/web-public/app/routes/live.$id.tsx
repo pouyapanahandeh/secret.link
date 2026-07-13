@@ -1,8 +1,9 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useState, useEffect } from "react";
 import { API_URL } from "../lib/api.server";
+import { UI_FEATURES } from "../lib/feature-flags";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const title = data?.stream?.title
@@ -12,6 +13,9 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 };
 
 export async function loader({ params }: LoaderFunctionArgs) {
+  if (!UI_FEATURES.live) {
+    return redirect("/dashboard");
+  }
   const id = params["id"];
   const res = await fetch(`${API_URL}/v1/streams/${id}`);
   if (!res.ok) return json({ stream: null }, { status: 404 });
