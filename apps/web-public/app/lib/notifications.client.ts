@@ -1,6 +1,8 @@
 // Client-side notification types + presentation helpers (DRY: single source
 // of truth for how each notification type is rendered across the UI).
 
+import { UI_FEATURES } from "./feature-flags";
+
 export type NotificationType =
   | "message"
   | "message_read"
@@ -66,7 +68,9 @@ export function notificationIcon(n: NotificationDTO): string {
 }
 
 export function notificationTab(n: NotificationDTO): "inbox" | "messages" | "profile" {
-  return NOTIFICATION_META[n.type]?.tab ?? "inbox";
+  const tab = NOTIFICATION_META[n.type]?.tab ?? "inbox";
+  if (!UI_FEATURES.messages && tab === "messages") return "inbox";
+  return tab;
 }
 
 /** Compact relative time, e.g. "now", "5m", "3h", "2d". */

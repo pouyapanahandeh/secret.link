@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Avatar } from "./Avatar";
 import type { UserLite } from "../lib/users";
+import { UI_FEATURES } from "../lib/feature-flags";
 
 interface ProfileActionSheetProps {
   user: UserLite;
@@ -29,7 +30,9 @@ export function ProfileActionSheet({ user, hasStory, onViewStory, onClose }: Pro
   if (hasStory && onViewStory) {
     actions.push({ icon: "📖", label: "View story", onClick: () => { onClose(); onViewStory(); } });
   }
-  actions.push({ icon: "💬", label: "Send message", onClick: () => onClose(), href: `/messages?to=${user.handle}` });
+  if (UI_FEATURES.messages) {
+    actions.push({ icon: "💬", label: "Send message", onClick: () => onClose(), href: `/messages?to=${user.handle}` });
+  }
   actions.push({ icon: "🔒", label: "Send secret", onClick: () => onClose(), href: `/${user.handle}` });
   actions.push({ icon: "👤", label: "Open profile", onClick: () => onClose(), href: `/${user.handle}` });
 

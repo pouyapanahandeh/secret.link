@@ -1,11 +1,16 @@
 import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useSearchParams, Link } from "@remix-run/react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { MessagingPanel } from "../components/MessagingPanel";
 import { requireToken } from "../lib/session.server";
+import { UI_FEATURES } from "../lib/feature-flags";
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireToken(request);
+  if (!UI_FEATURES.messages) {
+    return redirect("/dashboard");
+  }
   const token = await requireToken(request);
   return json({ token });
 }
