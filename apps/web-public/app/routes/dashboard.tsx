@@ -33,7 +33,7 @@ import { ProfileStatsModal } from "../components/ProfileStatsModal";
 import { ProfileEditForm } from "../components/ProfileEditForm";
 import { GoLiveButton } from "../components/GoLiveButton";
 import { LiveStreams } from "../components/LiveStreams";
-import { DashboardSkeleton } from "../components/DashboardSkeleton";
+import { DashboardSkeleton, readDashboardTabFromHash } from "../components/DashboardSkeleton";
 
 export const meta: MetaFunction = () => [
   { title: "Dashboard — Secretlink.life" },
@@ -169,7 +169,7 @@ export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
 clientLoader.hydrate = true;
 
 export function HydrateFallback() {
-  return <DashboardSkeleton />;
+  return <DashboardSkeleton tab={readDashboardTabFromHash()} />;
 }
 
 export default function Dashboard() {

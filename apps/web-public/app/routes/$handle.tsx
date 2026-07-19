@@ -1,6 +1,13 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, useFetcher, Link, useSearchParams } from "@remix-run/react";
+import {
+  useLoaderData,
+  useActionData,
+  useFetcher,
+  Link,
+  useSearchParams,
+  type ClientLoaderFunctionArgs,
+} from "@remix-run/react";
 import { useState, useEffect } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ProfileView } from "../components/ProfileView";
@@ -16,6 +23,7 @@ import { FollowListModal, type FollowListTab } from "../components/FollowListMod
 import { ProfileActionSheet } from "../components/ProfileActionSheet";
 import type { UserLite } from "../lib/users";
 import { UI_FEATURES } from "../lib/feature-flags";
+import { ProfilePageSkeleton } from "../components/DashboardSkeleton";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -66,6 +74,15 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     apiBase: new URL(request.url).origin,
     notFound: !profile,
   });
+}
+
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  return serverLoader<typeof loader>();
+}
+clientLoader.hydrate = true;
+
+export function HydrateFallback() {
+  return <ProfilePageSkeleton />;
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
