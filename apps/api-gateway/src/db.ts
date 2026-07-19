@@ -165,6 +165,19 @@ migrate("map_secrets.columns.v1", () => {
   addColumn("map_secrets", "click_count", "INTEGER DEFAULT 0");
 });
 
+// Client-encrypted map drops: store ciphertext + nonce + MASTER_KEY-wrapped DEK.
+// Legacy plaintext rows are expired immediately so we never keep serving them.
+migrate("map_secrets.encrypt.v1", () => {
+  addColumn("map_secrets", "ciphertext", "TEXT");
+  addColumn("map_secrets", "nonce", "TEXT");
+  addColumn("map_secrets", "wrapped_key", "TEXT");
+  db.exec(`
+    UPDATE map_secrets
+    SET expires_at = datetime('now')
+    WHERE ciphertext IS NULL OR ciphertext = '';
+  `);
+});
+
 // E2E key delivery for profile-addressed secrets (wrapped to recipient's X25519 key)
 migrate("secrets.wrap.v1", () => {
   addColumn("secrets", "wrapped_key", "TEXT");

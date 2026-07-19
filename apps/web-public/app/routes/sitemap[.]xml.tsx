@@ -1,9 +1,11 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
+import { API_URL } from "../lib/api.server";
 
 // Public, crawlable pages only. Authenticated app routes (dashboard, messages,
 // send, auth) are intentionally excluded and disallowed in robots.txt.
 const PUBLIC_PATHS = [
   { path: "/", priority: "1.0", changefreq: "daily" },
+  { path: "/map", priority: "0.8", changefreq: "hourly" },
   { path: "/about", priority: "0.6", changefreq: "monthly" },
   { path: "/privacy", priority: "0.5", changefreq: "monthly" },
   { path: "/terms", priority: "0.5", changefreq: "monthly" },
@@ -18,7 +20,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const origin = process.env["PUBLIC_ORIGIN"] ?? new URL(request.url).origin;
   const today = new Date().toISOString().slice(0, 10);
 
-  const urls = PUBLIC_PATHS.map(
+  let handles: string[] = [];
+  try {
+    const res = await fetch(`${API_URL}/v1/users/sitemap-handles`);
+    if (res.ok) {
+      const data = (await res.json()) as { handles?: string[] };
+      handles = Array.isArray(data.handles) ? data.handles : [];
+    }
+  } catch {
+    // Sitemap still returns static pages if API is unreachable.
+  }
+
+  const staticUrls = PUBLIC_PATHS.map(
     ({ path, priority, changefreq }) => `  <url>
     <loc>${origin}${path}</loc>
     <lastmod>${today}</lastmod>
@@ -27,9 +40,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   </url>`,
   ).join("\n");
 
+  const profileUrls = handles
+    .filter((h) => /^[a-zA-Z0-9_]{2,30}$/.test(h))
+    .map(
+      (h) => `  <url>
+    <loc>${origin}/${encodeURIComponent(h)}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>`,
+    )
+    .join("\n");
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
+${staticUrls}
+${profileUrls}
 </urlset>`;
 
   return new Response(xml, {

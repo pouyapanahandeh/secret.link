@@ -1,8 +1,13 @@
 /** Normalized map secret from the API (camelCase). */
 export interface MapSecret {
   id: string;
-  /** Only present after calling /reveal — list endpoints omit this. */
+  /** Client-decrypted plaintext after /reveal. Never stored on the server. */
   message?: string;
+  /** Encrypted reveal fields (client decrypts to message). */
+  ciphertext?: string;
+  nonce?: string;
+  key?: string;
+  legacy?: boolean;
   lat: number;
   lng: number;
   emoji: string;

@@ -42,6 +42,44 @@ export async function decryptBlob(
   return new Uint8Array(decrypted);
 }
 
+/** Encrypt a map-drop message for server storage (AES-256-GCM). */
+export async function encryptMapMessage(text: string): Promise<{
+  ciphertext: string;
+  nonce: string;
+  key: string;
+}> {
+  const { key, keyBase64, rawKey: _raw } = await generateKeyBase64();
+  const data = new TextEncoder().encode(text);
+  const { ciphertext, nonce } = await encryptBlob(data, key);
+  return {
+    ciphertext: uint8ToBase64Url(ciphertext),
+    nonce,
+    key: keyBase64,
+  };
+}
+
+/**
+ * Resolve a /map/:id/reveal response into plaintext.
+ * Encrypted reveals include ciphertext + nonce + key; legacy may include message.
+ */
+export async function decryptMapReveal(data: {
+  message?: string;
+  legacy?: boolean;
+  ciphertext?: string;
+  nonce?: string;
+  key?: string;
+}): Promise<string> {
+  if (data.message != null && (data.legacy || !data.ciphertext)) {
+    return data.message;
+  }
+  if (!data.ciphertext || !data.nonce || !data.key) {
+    throw new Error("Missing encrypted map payload");
+  }
+  const key = await keyFromBase64(data.key);
+  const plaintext = await decryptBlob(base64UrlToUint8(data.ciphertext), data.nonce, key);
+  return new TextDecoder().decode(plaintext);
+}
+
 // --- Base64url helpers (no padding) ---
 
 function uint8ToBase64Url(bytes: Uint8Array): string {

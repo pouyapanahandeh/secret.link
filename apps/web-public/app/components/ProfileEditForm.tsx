@@ -1,5 +1,7 @@
+import { useRef, useState } from "react";
 import { getSocialMeta, detectPlatform, SOCIAL_META, SOCIAL_PLATFORMS } from "../lib/socials";
 import { SocialIcon } from "./SocialIcon";
+import { getApiBase } from "../lib/api.client";
 
 export interface SocialLink {
   platform: string;
@@ -9,22 +11,32 @@ export interface SocialLink {
 interface ProfileEditFormProps {
   bio: string;
   socials: SocialLink[];
+  avatarUrl: string | null;
   onBioChange: (bio: string) => void;
   onSocialsChange: (socials: SocialLink[]) => void;
+  onAvatarUrlChange: (url: string | null) => void;
   onSave: () => void;
   onCancel: () => void;
   saving?: boolean;
+  handle?: string;
 }
 
 export function ProfileEditForm({
   bio,
   socials,
+  avatarUrl,
   onBioChange,
   onSocialsChange,
+  onAvatarUrlChange,
   onSave,
   onCancel,
   saving = false,
+  handle = "?",
 }: ProfileEditFormProps) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   function updateSocial(index: number, field: "platform" | "url", value: string) {
     const updated = socials.map((s, i) => {
       if (i !== index) return s;
@@ -46,8 +58,79 @@ export function ProfileEditForm({
     onSocialsChange(socials.filter((_, i) => i !== index));
   }
 
+  async function handleAvatarFile(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Please choose an image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("Image must be under 5MB.");
+      return;
+    }
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const res = await fetch(`${getApiBase()}/v1/secrets/blob`, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      onAvatarUrlChange(`${getApiBase()}/v1/secrets/blob/${data.blobPath}`);
+    } catch {
+      setUploadError("Couldn't upload avatar. Try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="bg-surface-raised rounded-2xl border border-border p-4 sm:p-6 space-y-5">
+      <div>
+        <label className="block text-xs font-medium text-text-muted mb-1.5">Avatar</label>
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center overflow-hidden shrink-0">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-2xl font-bold text-accent">
+                {handle[0]?.toUpperCase() ?? "?"}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => handleAvatarFile(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              disabled={uploading || saving}
+              onClick={() => fileRef.current?.click()}
+              className="rounded-lg bg-surface border border-border px-3 py-1.5 text-xs font-semibold text-text hover:border-accent/50 transition-all disabled:opacity-50"
+            >
+              {uploading ? "Uploading…" : "Upload photo"}
+            </button>
+            {avatarUrl && (
+              <button
+                type="button"
+                disabled={uploading || saving}
+                onClick={() => onAvatarUrlChange(null)}
+                className="text-xs text-text-muted hover:text-red-400 text-left"
+              >
+                Remove
+              </button>
+            )}
+            {uploadError && <p className="text-xs text-red-400">{uploadError}</p>}
+          </div>
+        </div>
+      </div>
+
       <div>
         <label className="block text-xs font-medium text-text-muted mb-1.5">Bio</label>
         <textarea
@@ -68,7 +151,7 @@ export function ProfileEditForm({
           {socials.map((s, i) => {
             const meta = getSocialMeta(s.platform);
             return (
-              <div key={i} className="space-y-1">
+              <div key={`${s.platform}-${i}`} className="space-y-1">
                 <div className="flex gap-2 items-center">
                   <div
                     className="w-9 h-9 shrink-0 rounded-lg bg-surface border border-border flex items-center justify-center"
@@ -123,7 +206,7 @@ export function ProfileEditForm({
         <button
           type="button"
           onClick={onCancel}
-          disabled={saving}
+          disabled={saving || uploading}
           className="flex-1 rounded-xl bg-surface border border-border px-4 py-3 text-sm font-bold text-text hover:border-accent/50 transition-all disabled:opacity-50"
         >
           Cancel
@@ -131,7 +214,7 @@ export function ProfileEditForm({
         <button
           type="button"
           onClick={onSave}
-          disabled={saving}
+          disabled={saving || uploading}
           className="flex-1 rounded-xl bg-accent px-4 py-3 text-sm font-bold text-black hover:scale-[1.01] transition-all disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save profile"}

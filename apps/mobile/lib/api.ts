@@ -277,7 +277,9 @@ export const secretsApi = {
     api<MapSecret[]>("/secrets/map"),
 
   createMapSecret: (params: {
-    message: string;
+    ciphertext: string;
+    nonce: string;
+    key: string;
     lat: number;
     lng: number;
     emoji: string;
@@ -292,7 +294,10 @@ export const secretsApi = {
     api<MapSecret>("/secrets/map", { method: "POST", body: params, auth: true }),
 
   revealMapSecret: (id: string) =>
-    api<MapSecret>(`/secrets/map/${id}/reveal`, { method: "POST" }),
+    api<MapSecret & { ciphertext?: string; nonce?: string; key?: string; legacy?: boolean }>(
+      `/secrets/map/${id}/reveal`,
+      { method: "POST" },
+    ),
 
   getMapSecretsByHandle: (handle: string) =>
     api<MapSecret[]>(`/secrets/map/by-handle/${encodeURIComponent(handle)}`),

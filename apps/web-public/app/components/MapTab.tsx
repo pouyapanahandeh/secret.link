@@ -364,7 +364,9 @@ export function MapTab({ user, following, token }: MapTabProps) {
                       }
                       return;
                     }
-                    setSelectedMapSecret({ ...selectedMapSecret, ...data });
+                    const { decryptMapReveal } = await import("../lib/crypto");
+                    const plaintext = await decryptMapReveal(data);
+                    setSelectedMapSecret({ ...selectedMapSecret, ...data, message: plaintext });
                     setMapSecretRevealed(true);
                     if (data.revealMode === "timer") {
                       const secs = data.revealTimerSeconds ?? 30;

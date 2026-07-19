@@ -19,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import { useTheme, spacing, radius, fontSize } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { secretsApi, type MapSecret } from "@/lib/api";
+import { decryptMapReveal, encryptMapMessage } from "@/lib/secret-crypto";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -158,8 +159,9 @@ export default function MapTab() {
     if (!selected) return;
     try {
       const data = await secretsApi.revealMapSecret(selected.id);
+      const plaintext = decryptMapReveal(data);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setSelected({ ...selected, ...data });
+      setSelected({ ...selected, ...data, message: plaintext });
       setRevealed(true);
       if (data.revealMode === "timer") {
         const secs = data.revealTimerSeconds ?? 30;
@@ -188,8 +190,9 @@ export default function MapTab() {
     if (!postCoords || !postMessage.trim()) return;
     setPosting(true);
     try {
+      const encrypted = encryptMapMessage(postMessage.trim());
       await secretsApi.createMapSecret({
-        message: postMessage.trim(),
+        ...encrypted,
         lat: postCoords.lat,
         lng: postCoords.lng,
         emoji: postEmoji,

@@ -81,7 +81,8 @@ adminRouter.get("/reports", async (ctx: Context) => {
   const offset = Number(ctx.query.offset) || 0;
 
   const reports = db.prepare(`
-    SELECT sr.*, ms.message as secret_message, ms.emoji, ms.handle as secret_handle, ms.lat, ms.lng,
+    SELECT sr.*, ms.emoji, ms.handle as secret_handle, ms.lat, ms.lng,
+           CASE WHEN ms.ciphertext IS NOT NULL AND ms.ciphertext != '' THEN 1 ELSE 0 END as secret_encrypted,
            u.handle as reporter_handle
     FROM secret_reports sr
     LEFT JOIN map_secrets ms ON sr.secret_id = ms.id
@@ -98,7 +99,8 @@ adminRouter.get("/reports", async (ctx: Context) => {
 
 adminRouter.get("/reports/:id", async (ctx: Context) => {
   const report = db.prepare(`
-    SELECT sr.*, ms.message as secret_message, ms.emoji, ms.handle as secret_handle, ms.lat, ms.lng,
+    SELECT sr.*, ms.emoji, ms.handle as secret_handle, ms.lat, ms.lng,
+           CASE WHEN ms.ciphertext IS NOT NULL AND ms.ciphertext != '' THEN 1 ELSE 0 END as secret_encrypted,
            ms.location_name, ms.city_name, ms.created_at as secret_created_at, ms.expires_at as secret_expires_at,
            u.handle as reporter_handle
     FROM secret_reports sr

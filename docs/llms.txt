@@ -1,31 +1,22 @@
 # secret.link
 
-Secret.link is a privacy-first platform where every message, link, and post self-destructs. It offers end-to-end encryption, reveal-once mechanics, and anti-capture protection.
-
-Secret.link for Teams is an anonymous feedback and team-building platform for companies, providing always-on feedback channels, pulse surveys, and collaborative games.
+Secret.link (secretlink.life) is a privacy-first public platform where secrets and map drops self-destruct. Users claim an @handle, receive anonymous encrypted messages, and share ephemeral map stories.
 
 ## Key URLs
 
-- Homepage: https://secret.link
-- Teams product: https://secret.link/teams
-- Documentation: https://secret.link/docs
-- API reference: https://secret.link/docs/api
-- Blog: https://secret.link/blog
-- Changelog: https://secret.link/changelog
-- Status: https://status.secret.link
+- Homepage: https://secretlink.life
+- Public profiles: https://secretlink.life/@{handle}
 
-## What Secret.link does
+## Product focus
 
-Secret.link provides two products:
-
-1. **Secret.link (public)** — A "secret social" network where messages self-destruct after one read. Users claim a handle (secret.link/@name) and receive anonymous, encrypted messages.
-
-2. **Secret.link for Teams** — Anonymous feedback channels, pulse surveys, 360s, and team-building games for companies. Features k-anonymity guards, sentiment analysis, and zero-knowledge encryption.
+1. **Public product (active)** — Encrypted self-destructing secrets, @handle profiles, map drops, follows, admin moderation, GDPR export/deletion.
+2. **Teams / B2B (parked)** — Not in active development.
+3. **Mobile (Expo)** — Kickoff planned; Capacitor shells are parked.
+4. **DMs, live streaming, magic-link login** — May exist in the API; UI feature flags keep them off.
 
 ## Technical overview
 
-- End-to-end encrypted (XChaCha20-Poly1305 client-side + Cloud KMS envelope)
-- Self-destructing messages with configurable TTL (60s to 30 days)
-- Anti-capture protection (FLAG_SECURE on Android, isCaptured on iOS, DRM-style rendering on web)
-- SOC 2-ready architecture on Google Cloud Platform
-- GDPR compliant with data residency options (EU/US)
+- Client AES-256-GCM for secrets and map drops; server stores ciphertext
+- Map DEKs wrapped with application `MASTER_KEY` for multi-viewer reveal
+- SQLite + Litestream on AWS EC2; blobs on S3; email via SES
+- Remix web + Koa API; Expo mobile app in the monorepo

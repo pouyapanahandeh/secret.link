@@ -90,4 +90,43 @@ export function encodeCiphertextBase64(ciphertext: Uint8Array): string {
   return bytesToBase64(ciphertext);
 }
 
+/** Encrypt a map-drop message (AES-256-GCM) for server storage. */
+export function encryptMapMessage(text: string): {
+  ciphertext: string;
+  nonce: string;
+  key: string;
+} {
+  const { keyBase64, rawKey } = (() => {
+    const rawKey = getRandomBytes(32);
+    return { keyBase64: bytesToBase64Url(rawKey), rawKey };
+  })();
+  const { ciphertext, nonce } = encryptSecretPayload(new TextEncoder().encode(text), rawKey);
+  return {
+    ciphertext: bytesToBase64Url(ciphertext),
+    nonce,
+    key: keyBase64,
+  };
+}
+
+/** Resolve a map /reveal response into plaintext. */
+export function decryptMapReveal(data: {
+  message?: string;
+  legacy?: boolean;
+  ciphertext?: string;
+  nonce?: string;
+  key?: string;
+}): string {
+  if (data.message != null && (data.legacy || !data.ciphertext)) {
+    return data.message;
+  }
+  if (!data.ciphertext || !data.nonce || !data.key) {
+    throw new Error("Missing encrypted map payload");
+  }
+  const rawKey = base64UrlToBytes(data.key);
+  const iv = base64UrlToBytes(data.nonce);
+  const ciphertext = base64UrlToBytes(data.ciphertext);
+  const aes = gcm(rawKey, iv);
+  return new TextDecoder().decode(aes.decrypt(ciphertext));
+}
+
 export { base64UrlToBytes, bytesToBase64Url };

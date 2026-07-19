@@ -25,12 +25,11 @@ import { requireToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 import { getApiBase } from "../lib/api.client";
 import { getViewedStoryIds, computeViewedHandles } from "../lib/story-views";
-import { getSocialMeta } from "../lib/socials";
-import { SocialIcon } from "../components/SocialIcon";
 import { UI_FEATURES } from "../lib/feature-flags";
 import { ProfileShareModal } from "../components/ProfileShareModal";
 import { ProfileStatsModal } from "../components/ProfileStatsModal";
 import { ProfileEditForm } from "../components/ProfileEditForm";
+import { ProfileView } from "../components/ProfileView";
 import { GoLiveButton } from "../components/GoLiveButton";
 import { LiveStreams } from "../components/LiveStreams";
 import { DashboardSkeleton, readDashboardTabFromHash } from "../components/DashboardSkeleton";
@@ -70,10 +69,19 @@ export async function action({ request }: ActionFunctionArgs) {
     case "save-profile": {
       const bio = String(form.get("bio") ?? "");
       const socials = JSON.parse(String(form.get("socials") ?? "[]"));
+      const avatarUrlRaw = form.get("avatarUrl");
+      const avatarUrl =
+        avatarUrlRaw === null || avatarUrlRaw === undefined
+          ? undefined
+          : String(avatarUrlRaw);
       const res = await fetch(`${API_URL}/v1/users/me/profile`, {
         method: "PATCH",
         headers,
-        body: JSON.stringify({ bio, socials }),
+        body: JSON.stringify({
+          bio,
+          socials,
+          ...(avatarUrl !== undefined ? { avatarUrl: avatarUrl || null } : {}),
+        }),
       });
       return json(await res.json());
     }
@@ -182,6 +190,7 @@ export default function Dashboard() {
   const [hasPasskey, setHasPasskey] = useState(user.hasPasskey);
   const [bio, setBio] = useState(user.bio ?? "");
   const [socials, setSocials] = useState<{ platform: string; url: string }[]>(user.socials ?? []);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatarUrl ?? null);
   // Idiomatic Remix data flow: fetchers run actions and auto-revalidate the loader.
   const searchFetcher = useFetcher<any[]>();
   const followFetcher = useFetcher<{ following: boolean; followersCount: number }>();
@@ -326,7 +335,8 @@ export default function Dashboard() {
       {
         intent: "save-profile",
         bio,
-        socials: JSON.stringify(socials.filter(s => s.url)),
+        socials: JSON.stringify(socials.filter((s) => s.url)),
+        avatarUrl: avatarUrl ?? "",
       },
       { method: "post" },
     );
@@ -347,12 +357,14 @@ export default function Dashboard() {
   function startEditProfile() {
     setBio(user.bio ?? "");
     setSocials(user.socials ?? []);
+    setAvatarUrl(user.avatarUrl ?? null);
     setEditingProfile(true);
   }
 
   function cancelEditProfile() {
     setBio(user.bio ?? "");
     setSocials(user.socials ?? []);
+    setAvatarUrl(user.avatarUrl ?? null);
     setEditingProfile(false);
   }
 
@@ -645,106 +657,55 @@ export default function Dashboard() {
           {/* ─── PROFILE TAB ─── */}
           {activeTab === "profile" && (
             <section>
-              {/* Profile header */}
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center mx-auto mb-3">
-                  <span className="text-2xl font-bold text-accent">{user.handle[0]?.toUpperCase()}</span>
-                </div>
-                <h2 className="text-lg font-bold">@{user.handle}</h2>
-                <p className="text-xs text-text-muted mt-1">{user.email ?? "No email set"}</p>
-                {hasPasskey && <span className="inline-block text-xs bg-success/10 text-success px-2 py-0.5 rounded-full mt-2">🔑 Passkey active</span>}
-                <div className="flex items-center justify-center gap-4 mt-3">
-                  <span className="text-xs text-text-muted"><strong className="text-text">{user.followersCount ?? 0}</strong> followers</span>
-                  <span className="text-xs text-text-muted"><strong className="text-text">{user.followingCount ?? 0}</strong> following</span>
-                </div>
-              </div>
-
-              {/* Share + Statistics */}
-              {!editingProfile && (
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => setShareOpen(true)}
-                    className="rounded-xl bg-surface-raised border border-border px-4 py-3 text-sm font-semibold text-text hover:border-accent/50 transition-all"
-                  >
-                    Share profile
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatsOpen(true)}
-                    className="rounded-xl bg-surface-raised border border-border px-4 py-3 text-sm font-semibold text-text hover:border-accent/50 transition-all"
-                  >
-                    Statistics
-                  </button>
-                </div>
-              )}
-
-              {/* Edit form */}
               {editingProfile ? (
-              <ProfileEditForm
-                bio={bio}
-                socials={socials}
-                onBioChange={setBio}
-                onSocialsChange={setSocials}
-                onSave={saveProfile}
-                onCancel={cancelEditProfile}
-                saving={profileSaving}
-              />
+                <ProfileEditForm
+                  bio={bio}
+                  socials={socials}
+                  avatarUrl={avatarUrl}
+                  handle={user.handle}
+                  onBioChange={setBio}
+                  onSocialsChange={setSocials}
+                  onAvatarUrlChange={setAvatarUrl}
+                  onSave={saveProfile}
+                  onCancel={cancelEditProfile}
+                  saving={profileSaving}
+                />
               ) : (
-              /* View mode */
-              <div className="bg-surface-raised rounded-2xl border border-border p-4 sm:p-6 space-y-5">
-                <div>
-                  <h3 className="text-xs font-medium text-text-muted mb-1.5">Bio</h3>
-                  {user.bio ? (
-                    <p className="text-sm text-text whitespace-pre-wrap leading-relaxed">{user.bio}</p>
-                  ) : (
-                    <p className="text-sm text-text-muted/50 italic">No bio yet</p>
-                  )}
-                </div>
-
-                <div>
-                  <h3 className="text-xs font-medium text-text-muted mb-2">Social links</h3>
-                  {(user.socials?.length ?? 0) > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {user.socials.map((s: { platform: string; url: string }, i: number) => {
-                        const meta = getSocialMeta(s.platform);
-                        return (
-                          <a
-                            key={i}
-                            href={s.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 rounded-full bg-surface border border-border px-3 py-1.5 text-sm text-text hover:border-accent/50 hover:scale-[1.03] transition-all"
-                            title={s.url}
-                          >
-                            <SocialIcon platform={s.platform} size={18} />
-                            <span className="text-xs font-medium">{meta.label}</span>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-text-muted/50 italic">No social links yet</p>
-                  )}
-                </div>
-
-                <button
-                  onClick={startEditProfile}
-                  className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-bold text-black hover:scale-[1.01] transition-all"
-                >
-                  {profileSaved ? "Saved ✓" : "Edit profile"}
-                </button>
-              </div>
+                <ProfileView
+                  profile={{
+                    id: user.id,
+                    handle: user.handle,
+                    bio: user.bio,
+                    avatarUrl: user.avatarUrl,
+                    socials: user.socials,
+                    isPro: user.isPro,
+                    followersCount: user.followersCount,
+                    followingCount: user.followingCount,
+                  }}
+                  handle={user.handle}
+                  mode="owner"
+                  apiBase={getApiBase()}
+                  followersCount={user.followersCount ?? 0}
+                  followingCount={user.followingCount ?? 0}
+                  onShare={() => setShareOpen(true)}
+                  onStats={() => setStatsOpen(true)}
+                  onEdit={startEditProfile}
+                />
               )}
 
-              {/* Passkey section */}
+              <p className="text-xs text-text-muted mt-4">
+                {user.email ?? "No email set"}
+                {hasPasskey ? " · Passkey active" : ""}
+                {profileSaved ? " · Saved ✓" : ""}
+              </p>
+
               {!hasPasskey && (
                 <button
                   onClick={handleAddPasskey}
                   disabled={passkeyStatus === "loading"}
                   className="w-full mt-4 text-sm bg-surface-raised border border-border text-text px-4 py-3 rounded-xl hover:border-accent/50 transition-colors disabled:opacity-50"
                 >
-                  {passkeyStatus === "loading" ? "Setting up..." : "🔑 Add passkey"}
+                  {passkeyStatus === "loading" ? "Setting up..." : "Add passkey"}
                 </button>
               )}
               {passkeyError && <p className="text-red-400 text-xs mt-2">{passkeyError}</p>}
