@@ -1,5 +1,5 @@
-const CACHE_NAME = "secretlink-admin-v1";
-const PRECACHE_URLS = ["/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
+const CACHE_NAME = "secretlink-admin-v2";
+const PRECACHE_URLS = ["/secretlink.png", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

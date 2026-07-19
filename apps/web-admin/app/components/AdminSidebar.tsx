@@ -10,9 +10,14 @@ interface AdminSidebarProps {
 export function AdminSidebar({ handle, role, onNavigate }: AdminSidebarProps) {
   return (
     <>
-      <div className="p-4 border-b border-[var(--border)]">
-        <h1 className="text-lg font-bold text-[var(--accent)]">🔒 Secretlink</h1>
-        <p className="text-xs text-[var(--text-muted)] mt-1">Admin Panel</p>
+      <div className="border-b border-[var(--border)] p-4">
+        <div className="flex items-center gap-3">
+          <img src="/secretlink.png" alt="Secretlink" className="h-9 w-9 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold text-[var(--accent)]">Secretlink</h1>
+            <p className="text-xs text-[var(--text-muted)]">Admin Panel</p>
+          </div>
+        </div>
       </div>
 
       <nav className="flex-1 p-2 overflow-y-auto">

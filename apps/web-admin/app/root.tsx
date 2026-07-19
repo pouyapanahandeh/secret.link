@@ -4,8 +4,9 @@ import stylesheet from "~/tailwind.css?url";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
-  { rel: "icon", type: "image/png", sizes: "32x32", href: "/icon-192.png" },
-  { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+  { rel: "icon", type: "image/png", sizes: "32x32", href: "/secretlink.png" },
+  { rel: "icon", type: "image/png", sizes: "16x16", href: "/secretlink.png" },
+  { rel: "apple-touch-icon", sizes: "180x180", href: "/secretlink.png" },
   { rel: "manifest", href: "/manifest.webmanifest" },
 ];
 

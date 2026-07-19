@@ -31,6 +31,8 @@ export function AdminMobileHeader({
         )}
       </button>
 
+      <img src="/secretlink.png" alt="" className="h-7 w-7 shrink-0" />
+
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-base font-semibold text-[var(--text)]">{title}</h1>
         <p className="truncate text-xs text-[var(--text-muted)]">@{handle}</p>

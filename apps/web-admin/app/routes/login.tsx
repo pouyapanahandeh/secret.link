@@ -90,8 +90,9 @@ export default function Login() {
     <div className="flex min-h-screen min-h-[100dvh] items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="card w-full max-w-sm">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-[var(--accent)]">🔒 Secretlink</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">Admin Panel</p>
+          <img src="/secretlink.png" alt="Secretlink" className="mx-auto mb-3 h-12 w-12" />
+          <h1 className="text-2xl font-bold text-[var(--accent)]">Secretlink</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Admin Panel</p>
         </div>
 
         {actionData?.error && (
