@@ -123,12 +123,24 @@ sleep 3
 # ─── 7. Health check (auto-rollback on failure) ──────────────────────────────
 echo "→ Health check..."
 WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://secretlink.life/ || echo 000)
-API_HEALTH=$(curl -s https://secretlink.life/v1/health || echo '{}')
-API_STATUS=$(echo "$API_HEALTH" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);process.stdout.write(j.status==="ok"&&j.checks?.db==="ok"?"200":"503")}catch{process.stdout.write("000")}}')
+API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://secretlink.life/v1/health || echo 000)
+# Require health JSON to report db ok (in addition to HTTP 200).
+API_DB_OK=$(curl -s https://secretlink.life/v1/health | node -e "
+let s = '';
+process.stdin.on('data', (d) => { s += d; });
+process.stdin.on('end', () => {
+  try {
+    const j = JSON.parse(s);
+    process.stdout.write(j.status === 'ok' && j.checks && j.checks.db === 'ok' ? 'yes' : 'no');
+  } catch {
+    process.stdout.write('no');
+  }
+});
+")
 MAP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://secretlink.life/v1/secrets/map || echo 000)
-echo "  Web: $WEB_STATUS   API health: $API_STATUS   Map list: $MAP_STATUS"
+echo "  Web: $WEB_STATUS   API: $API_STATUS   DB: $API_DB_OK   Map list: $MAP_STATUS"
 
-if [[ "$WEB_STATUS" == "200" && "$API_STATUS" == "200" && "$MAP_STATUS" == "200" ]]; then
+if [[ "$WEB_STATUS" == "200" && "$API_STATUS" == "200" && "$API_DB_OK" == "yes" && "$MAP_STATUS" == "200" ]]; then
   echo "→ Pruning old releases (keep 5)..."
   "${SSH_CMD[@]}" "cd $BASE_DIR/releases && ls -1 | sort | head -n -5 | xargs -r rm -rf --"
   echo "✅ Deploy $RELEASE successful."
