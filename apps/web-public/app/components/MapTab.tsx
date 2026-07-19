@@ -43,6 +43,7 @@ export function MapTab({
   const [pendingPin, setPendingPin] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedStory, setSelectedStory] = useState<MapSecret | null>(null);
   const [groupSheet, setGroupSheet] = useState<PlaceGroup | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   const openGroup = useCallback(
     (group: PlaceGroup) => {
@@ -86,12 +87,29 @@ export function MapTab({
 
   useEffect(() => {
     if (!isVisible) return;
+
+    refresh();
+
+    const poll = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(poll);
+  }, [isVisible, refresh]);
+
+  useEffect(() => {
+    if (!isVisible) return;
     let cancelled = false;
 
     import("../lib/leaflet.client")
       .then(({ loadLeaflet }) => loadLeaflet())
       .then((L) => {
-        if (cancelled || !mapContainerRef.current || mapInstanceRef.current) return;
+        if (cancelled || !mapContainerRef.current) return;
+
+        if (mapInstanceRef.current) {
+          leafletRef.current = L;
+          setMapReady(true);
+          setTimeout(() => mapInstanceRef.current?.invalidateSize(), 50);
+          return;
+        }
+
         leafletRef.current = L;
         const map = L.map(mapContainerRef.current, { zoomControl: false }).setView([51.505, -0.09], 3);
         mapInstanceRef.current = map;
@@ -118,6 +136,7 @@ export function MapTab({
         });
 
         setTimeout(() => map.invalidateSize(), 100);
+        setMapReady(true);
       });
 
     return () => {
@@ -132,8 +151,9 @@ export function MapTab({
   }, [isVisible]);
 
   useEffect(() => {
+    if (!mapReady || !isVisible) return;
     renderMarkers();
-  }, [renderMarkers]);
+  }, [mapReady, isVisible, renderMarkers]);
 
   useEffect(() => {
     if (!selectedPlaceKey) return;
@@ -177,7 +197,7 @@ export function MapTab({
     );
   }
 
-  const isEmpty = !loading && secrets.length === 0 && !error;
+  const isEmpty = !loading && secrets.length === 0 && !error && mapReady;
 
   return (
     <section className="flex flex-col flex-1 min-h-0 h-full">
