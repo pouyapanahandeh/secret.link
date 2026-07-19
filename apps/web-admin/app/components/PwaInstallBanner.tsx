@@ -59,7 +59,7 @@ export function PwaInstallBanner() {
   return (
     <div className="fixed bottom-4 left-0 right-0 z-50 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:bottom-6">
       <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-raised)] p-4 shadow-xl">
-        <img src="/icon-192.png" alt="Secretlink Admin" className="h-10 w-10 rounded-xl" />
+        <img src="/secretlink.png" alt="Secretlink Admin" className="h-10 w-10 shrink-0 rounded-xl" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-[var(--text)]">Install Secretlink Admin</p>
           {isIos ? (
