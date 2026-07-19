@@ -41,3 +41,21 @@ export async function userApi<T = unknown>(path: string, token: string, options:
 
   return res.json() as Promise<T>;
 }
+
+export async function uploadBlogCover(token: string, file: File): Promise<{ url: string; blobPath: string }> {
+  const res = await fetch(`${API_URL}/v1/admin/blog/cover`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": file.type,
+    },
+    body: file,
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Response(JSON.stringify(data), { status: res.status });
+  }
+
+  return res.json() as Promise<{ url: string; blobPath: string }>;
+}

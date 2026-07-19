@@ -14,6 +14,7 @@ export interface MapSecret {
   handle: string | null;
   locationName: string | null;
   cityName: string | null;
+  countryName: string | null;
   /** Only present after calling /reveal. */
   mediaPath?: string | null;
   /** Only present after calling /reveal. */

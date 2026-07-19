@@ -55,6 +55,7 @@ export default function Index() {
           </Link>
           <div className="hidden sm:flex items-center gap-4">
             <Link to="/about" className="text-sm text-text-muted hover:text-text transition-colors">About</Link>
+            <Link to="/blog" className="text-sm text-text-muted hover:text-text transition-colors">Blog</Link>
             <Link to="/send" className="text-sm text-text-muted hover:text-text transition-colors">Send</Link>
             <ThemeToggle />
             <Link
@@ -87,6 +88,7 @@ export default function Index() {
         {menuOpen && (
           <div className="sm:hidden border-t border-border/50 px-4 py-4 space-y-3 bg-surface/95 backdrop-blur-md">
             <Link to="/about" className="block text-sm text-text-muted hover:text-text transition-colors py-2">About</Link>
+            <Link to="/blog" className="block text-sm text-text-muted hover:text-text transition-colors py-2">Blog</Link>
             <Link to="/send" className="block text-sm text-text-muted hover:text-text transition-colors py-2">Send</Link>
             <div className="flex items-center justify-between py-2">
               <span className="text-sm text-text-muted">Theme</span>
@@ -219,14 +221,14 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Explore public secrets — interactive map */}
+      {/* Explore stories on the map */}
       <section className="px-4 py-16 border-t border-border/50">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-6">
             <div className="text-4xl mb-4">🗺️</div>
-            <h2 className="text-2xl font-bold mb-2">Explore public secrets</h2>
+            <h2 className="text-2xl font-bold mb-2">Explore stories on the map</h2>
             <p className="text-text-muted max-w-md mx-auto">
-              People are dropping anonymous secrets on the map right now. Tap anywhere to drop yours.
+              People are sharing geo-tagged stories near you right now. Tap anywhere to add yours.
             </p>
           </div>
           <LandingMap />
@@ -248,6 +250,8 @@ export default function Index() {
 
       <footer className="border-t border-border/50 py-6 text-center text-xs text-text-muted">
         <Link to="/about" className="hover:text-text transition-colors">About</Link>
+        {" · "}
+        <Link to="/blog" className="hover:text-text transition-colors">Blog</Link>
         {" · "}
         <Link to="/privacy" className="hover:text-text transition-colors">Privacy Policy</Link>
         {" · "}
@@ -497,7 +501,7 @@ function LandingMap() {
       {/* Map box — full width */}
       <div className="relative rounded-2xl border border-border overflow-hidden" style={{ height: "450px" }}>
         <div ref={mapContainerRef} className="w-full h-full" />
-        {/* Drop secret button */}
+        {/* Add story button */}
         <button
           onClick={() => {
             if (mapRef.current) {
@@ -511,7 +515,7 @@ function LandingMap() {
           }}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-accent/25 hover:scale-[1.03] transition-all"
         >
-          Drop secret 📍
+          Drop story 📍
         </button>
         {/* Locate me */}
         <button
@@ -532,11 +536,11 @@ function LandingMap() {
         </button>
       </div>
 
-      {/* Drop form */}
+      {/* Story form */}
       {showDropForm && (
         <div className="bg-surface-raised rounded-xl border border-border p-4 text-left">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">Drop a secret here</h3>
+            <h3 className="text-sm font-semibold">Add a story here</h3>
             <button onClick={() => { setShowDropForm(false); if (pinMarkerRef.current && mapRef.current) { mapRef.current.removeLayer(pinMarkerRef.current); pinMarkerRef.current = null; } }} className="text-text-muted hover:text-text text-lg">×</button>
           </div>
 
@@ -544,7 +548,7 @@ function LandingMap() {
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type your anonymous secret..."
+            placeholder="What's your story?"
             maxLength={500}
             className="w-full bg-surface border border-border rounded-lg p-3 text-sm text-text placeholder:text-text-muted resize-none focus:outline-none focus:border-accent/50"
             rows={3}
@@ -644,7 +648,7 @@ function LandingMap() {
               disabled={(!message.trim() && !file) || posting}
               className="rounded-full bg-accent px-5 py-2 text-xs font-bold text-black hover:scale-[1.03] transition-all disabled:opacity-50"
             >
-              {posting ? "Dropping..." : "Drop 📍"}
+              {posting ? "Sharing..." : "Share story 📍"}
             </button>
           </div>
         </div>
@@ -654,7 +658,7 @@ function LandingMap() {
       {posted && !showDropForm && (
         <div className="bg-surface-raised rounded-xl border border-border p-4 text-center">
           <span className="text-2xl block mb-2">✓</span>
-          <p className="text-sm font-medium">Secret dropped!</p>
+          <p className="text-sm font-medium">Story shared!</p>
           <p className="text-xs text-text-muted mt-1">It will expire in 1 hour</p>
         </div>
       )}
@@ -671,7 +675,7 @@ function LandingMap() {
             <div className="text-center py-4">
               <span className="text-4xl block mb-3">{selectedSecret.emoji}</span>
               <p className="text-sm text-text-muted mb-1">
-                {selectedSecret.handle ? `@${selectedSecret.handle}` : "Someone"} dropped a secret
+                {selectedSecret.handle ? `@${selectedSecret.handle}` : "Someone"} shared a story
               </p>
               <button
                 onClick={handleReveal}

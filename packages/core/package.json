@@ -11,7 +11,8 @@
     "./profile-url": "./src/profile-url.ts",
     "./profile-types": "./src/profile-types.ts",
     "./feature-flags": "./src/feature-flags.ts",
-    "./profile-share": "./src/profile-share.ts"
+    "./profile-share": "./src/profile-share.ts",
+    "./map": "./src/map/index.ts"
   },
   "scripts": {
     "build": "tsc --build",

@@ -1,5 +1,5 @@
 import { NavLink } from "@remix-run/react";
-import { navItems } from "~/lib/nav-items";
+import { navItemsForRole } from "~/lib/nav-items";
 
 interface AdminSidebarProps {
   handle: string;
@@ -21,7 +21,7 @@ export function AdminSidebar({ handle, role, onNavigate }: AdminSidebarProps) {
       </div>
 
       <nav className="flex-1 p-2 overflow-y-auto">
-        {navItems.map((item) => (
+        {navItemsForRole(role).map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

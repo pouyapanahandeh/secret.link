@@ -3,6 +3,8 @@ import Koa from "koa";
 import bodyParser from "koa-bodyparser";
 import { router } from "../src/routes/index.js";
 import type { Server } from "http";
+import db from "../src/db.js";
+import { signToken } from "../src/middleware/auth.js";
 
 let server: Server;
 let baseUrl: string;
@@ -246,5 +248,263 @@ describe("Map secrets encryption", () => {
       }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it("persists and lists cityName and countryName", async () => {
+    const payload = encryptMapPayload("located story");
+    const createRes = await fetch(`${baseUrl}/v1/secrets/map`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ciphertext: payload.ciphertext,
+        nonce: payload.nonce,
+        key: payload.key,
+        lat: 47.5,
+        lng: 19.0,
+        emoji: "📍",
+        ttlMinutes: 60,
+        cityName: "Budapest",
+        countryName: "Hungary",
+        locationName: "Budapest, Hungary",
+      }),
+    });
+    expect(createRes.status).toBe(201);
+    const created = await createRes.json();
+    expect(created.cityName).toBe("Budapest");
+    expect(created.countryName).toBe("Hungary");
+
+    const listRes = await fetch(`${baseUrl}/v1/secrets/map`);
+    const list = await listRes.json();
+    const listed = list.find((s: { id: string }) => s.id === created.id);
+    expect(listed?.cityName).toBe("Budapest");
+    expect(listed?.countryName).toBe("Hungary");
+  });
+});
+
+describe("Blog API", () => {
+  async function createUser(handle: string) {
+    const res = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { user: { id: string; handle: string } };
+    return body.user;
+  }
+
+  function authToken(userId: string, handle: string) {
+    return signToken({ userId, handle });
+  }
+
+  function setRole(userId: string, role: string) {
+    db.prepare("UPDATE users SET role = ? WHERE id = ?").run(role, userId);
+  }
+
+  it("rejects reserved blog handle at signup", async () => {
+    const res = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: "blog" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("reserved_handle");
+  });
+
+  it("public endpoints return only published posts", async () => {
+    const editor = await createUser("blogeditor");
+    setRole(editor.id, "editor");
+    const token = authToken(editor.id, editor.handle);
+
+    const draftRes = await fetch(`${baseUrl}/v1/admin/blog-posts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Draft Post",
+        slug: "draft-post",
+        excerpt: "Draft excerpt for SEO testing.",
+        body: "Draft body content.",
+        keywords: "privacy, draft",
+        status: "draft",
+      }),
+    });
+    expect(draftRes.status).toBe(201);
+
+    const publishRes = await fetch(`${baseUrl}/v1/admin/blog-posts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Published Post",
+        slug: "published-post",
+        excerpt: "Published excerpt for SEO testing.",
+        body: "Published body content.",
+        keywords: "privacy, ephemeral",
+        status: "published",
+      }),
+    });
+    expect(publishRes.status).toBe(201);
+
+    const listRes = await fetch(`${baseUrl}/v1/public/blog`);
+    expect(listRes.status).toBe(200);
+    const list = (await listRes.json()) as { posts: { slug: string }[] };
+    expect(list.posts.some((p) => p.slug === "published-post")).toBe(true);
+    expect(list.posts.some((p) => p.slug === "draft-post")).toBe(false);
+
+    const draftPublicRes = await fetch(`${baseUrl}/v1/public/blog/draft-post`);
+    expect(draftPublicRes.status).toBe(404);
+
+    const publishedPublicRes = await fetch(`${baseUrl}/v1/public/blog/published-post`);
+    expect(publishedPublicRes.status).toBe(200);
+    const published = await publishedPublicRes.json();
+    expect(published.title).toBe("Published Post");
+    expect(published.body).toContain("Published body");
+  });
+
+  it("editor can create and publish; regular user gets 403", async () => {
+    const editor = await createUser("blogeditor2");
+    setRole(editor.id, "editor");
+    const editorToken = authToken(editor.id, editor.handle);
+
+    const createRes = await fetch(`${baseUrl}/v1/admin/blog-posts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${editorToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Editor Post",
+        slug: "editor-post",
+        excerpt: "Editor can publish this post.",
+        body: "Editor body.",
+        status: "published",
+      }),
+    });
+    expect(createRes.status).toBe(201);
+
+    const regular = await createUser("regularuser");
+    const regularToken = authToken(regular.id, regular.handle);
+    const forbiddenRes = await fetch(`${baseUrl}/v1/admin/blog-posts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${regularToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Nope",
+        slug: "nope",
+        excerpt: "Should fail",
+        body: "No access",
+      }),
+    });
+    expect(forbiddenRes.status).toBe(403);
+  });
+
+  it("admin can delete; editor cannot", async () => {
+    const admin = await createUser("blogadmin");
+    setRole(admin.id, "admin");
+    const adminToken = authToken(admin.id, admin.handle);
+
+    const editor = await createUser("blogeditor3");
+    setRole(editor.id, "editor");
+    const editorToken = authToken(editor.id, editor.handle);
+
+    const createRes = await fetch(`${baseUrl}/v1/admin/blog-posts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${editorToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Delete Me",
+        slug: "delete-me",
+        excerpt: "Temporary post",
+        body: "Body",
+        status: "draft",
+      }),
+    });
+    const created = (await createRes.json()) as { id: string };
+
+    const editorDeleteRes = await fetch(`${baseUrl}/v1/admin/blog-posts/${created.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${editorToken}` },
+    });
+    expect(editorDeleteRes.status).toBe(403);
+
+    const adminDeleteRes = await fetch(`${baseUrl}/v1/admin/blog-posts/${created.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(adminDeleteRes.status).toBe(200);
+  });
+
+  it("validates slug uniqueness and format", async () => {
+    const editor = await createUser("blogeditor4");
+    setRole(editor.id, "editor");
+    const token = authToken(editor.id, editor.handle);
+
+    const first = await fetch(`${baseUrl}/v1/admin/blog-posts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Unique Slug",
+        slug: "unique-slug",
+        excerpt: "First post",
+        body: "Body",
+      }),
+    });
+    expect(first.status).toBe(201);
+
+    const duplicate = await fetch(`${baseUrl}/v1/admin/blog-posts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Unique Slug Again",
+        slug: "unique-slug",
+        excerpt: "Second post",
+        body: "Body",
+      }),
+    });
+    expect(duplicate.status).toBe(201);
+    const dupBody = await duplicate.json();
+    expect(dupBody.slug).not.toBe("unique-slug");
+
+    const invalid = await fetch(`${baseUrl}/v1/admin/blog-posts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Bad Slug",
+        slug: "Bad Slug!",
+        excerpt: "Invalid",
+        body: "Body",
+      }),
+    });
+    expect(invalid.status).toBe(400);
+  });
+
+  it("returns sitemap slugs for published posts", async () => {
+    const res = await fetch(`${baseUrl}/v1/public/blog/sitemap-slugs`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { slugs: { slug: string; updatedAt: string }[] };
+    expect(Array.isArray(body.slugs)).toBe(true);
+    if (body.slugs.length > 0) {
+      expect(body.slugs[0]?.slug).toBeTruthy();
+      expect(body.slugs[0]?.updatedAt).toBeTruthy();
+    }
   });
 });

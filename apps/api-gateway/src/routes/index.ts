@@ -11,6 +11,8 @@ import { complianceRouter } from "./compliance.js";
 import { transparencyRouter } from "./transparency.js";
 import { streamsRouter } from "./streams.js";
 import { contactRouter } from "./contact.js";
+import { blogRouter } from "./blog.js";
+import { adminBlogRouter } from "./admin-blog.js";
 
 export const router = new Router({ prefix: "/v1" });
 
@@ -22,7 +24,9 @@ router.use(feedbackRouter.routes());
 router.use(dmsRouter.routes());
 router.use(notificationsRouter.routes());
 router.use(transparencyRouter.routes());
+router.use(blogRouter.routes());
 router.use(contactRouter.routes());
+router.use(adminBlogRouter.routes());
 router.use(adminRouter.routes());
 router.use(complianceRouter.routes());
 router.use(streamsRouter.routes());

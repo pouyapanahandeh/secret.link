@@ -32,7 +32,21 @@ import { ProfileEditForm } from "../components/ProfileEditForm";
 import { ProfileView } from "../components/ProfileView";
 import { GoLiveButton } from "../components/GoLiveButton";
 import { LiveStreams } from "../components/LiveStreams";
+import type { MapSecret } from "../lib/map-types";
+
 import { DashboardSkeleton, readDashboardTabFromHash } from "../components/DashboardSkeleton";
+
+type DashboardTab = "inbox" | "map" | "messages" | "profile";
+
+function readTabFromHash(): DashboardTab {
+  if (typeof window === "undefined") return "inbox";
+  const hash = window.location.hash.replace("#", "");
+  if (hash === "messages" && !UI_FEATURES.messages) return "inbox";
+  if (hash === "map" || hash === "profile" || hash === "inbox" || (hash === "messages" && UI_FEATURES.messages)) {
+    return hash as DashboardTab;
+  }
+  return "inbox";
+}
 
 export const meta: MetaFunction = () => [
   { title: "Dashboard — Secretlink.life" },
@@ -168,7 +182,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     (storyIdsByHandle[h] ??= []).push(String(m.id));
   }
 
-  return json({ user, inbox, sent, token, following, storyHandles, storyIdsByHandle });
+  return json({ user, inbox, sent, token, following, storyHandles, storyIdsByHandle, mapSecrets });
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -181,10 +195,10 @@ export function HydrateFallback() {
 }
 
 export default function Dashboard() {
-  const { user, inbox, sent, token, following, storyHandles, storyIdsByHandle } = useLoaderData<typeof loader>();
+  const { user, inbox, sent, token, following, storyHandles, storyIdsByHandle, mapSecrets } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  const [activeTab, setActiveTab] = useState<"inbox" | "map" | "messages" | "profile">("inbox");
+  const [activeTab, setActiveTab] = useState<DashboardTab>(() => readTabFromHash());
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [passkeyError, setPasskeyError] = useState("");
   const [hasPasskey, setHasPasskey] = useState(user.hasPasskey);
@@ -213,23 +227,29 @@ export default function Dashboard() {
   }, [storyIdsByHandle]);
   const viewedHandles = computeViewedHandles(storyIdsByHandle, viewedStoryIds);
 
-  // Home "+" action button (post story / secret / pin on map).
+  // Add story composer (single entry point for all story posts)
   const [fabOpen, setFabOpen] = useState(false);
-  const [showStoryComposer, setShowStoryComposer] = useState(false);
+  const [storyComposer, setStoryComposer] = useState<
+    { open: true; initialCoords?: { lat: number; lng: number } } | { open: false }
+  >({ open: false });
   const [showBroadcast, setShowBroadcast] = useState(false);
 
-  // Read tab from URL hash on mount
+  function setTab(tab: DashboardTab) {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/dashboard#${tab}`);
+    }
+  }
+
   useEffect(() => {
-    const hash = window.location.hash.replace("#", "");
-    if (hash === "messages" && !UI_FEATURES.messages) {
-      setActiveTab("inbox");
-      window.history.replaceState(null, "", "/dashboard#inbox");
-      return;
-    }
-    if (hash === "map" || hash === "profile" || hash === "inbox" || (hash === "messages" && UI_FEATURES.messages)) {
-      setActiveTab(hash as typeof activeTab);
-    }
+    const onHash = () => setActiveTab(readTabFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  function openStoryComposer(initialCoords?: { lat: number; lng: number }) {
+    setStoryComposer({ open: true, initialCoords });
+  }
 
   // Ensure this user has a published X25519 key so they can receive
   // E2E-wrapped secrets sent from their profile (and DMs).
@@ -381,10 +401,10 @@ export default function Dashboard() {
       return;
     }
     if (id === "messages" && !UI_FEATURES.messages) {
-      setActiveTab("inbox");
+      setTab("inbox");
       return;
     }
-    setActiveTab(id as typeof activeTab);
+    setTab(id as DashboardTab);
   }
 
   return (
@@ -460,8 +480,8 @@ export default function Dashboard() {
           <MessagingPanel token={token} />
         </div>
       ) : (
-      <div className="flex-1 overflow-y-auto pb-20 sm:pb-6">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <div className={`flex-1 min-h-0 ${activeTab === "map" ? "flex flex-col overflow-hidden pb-20 sm:pb-6" : "overflow-y-auto pb-20 sm:pb-6"}`}>
+        <div className={`${activeTab === "map" ? "flex flex-col flex-1 min-h-0 max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6 w-full" : "max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6"}`}>
 
           {/* ─── INBOX TAB ─── */}
           {activeTab === "inbox" && (
@@ -712,16 +732,25 @@ export default function Dashboard() {
             </section>
           )}
 
-          {/* ─── MAP TAB ─── */}
-          {activeTab === "map" && (
-            <MapTab user={user} following={following as Array<{ handle?: string; avatarUrl?: string | null }>} token={token} />
-          )}
+          {/* ─── MAP TAB (keep mounted to preserve Leaflet state) ─── */}
+          <div className={activeTab === "map" ? "flex flex-col flex-1 min-h-0" : "hidden"}>
+            <MapTab
+              initialSecrets={mapSecrets as MapSecret[]}
+              isVisible={activeTab === "map"}
+              onRequestComposer={(coords) => openStoryComposer(coords)}
+              onViewUserStories={(handle) => {
+                const clean = handle.replace(/^@/, "").toLowerCase();
+                const u = (following as UserLite[]).find((f) => f.handle.toLowerCase() === clean);
+                setStoryViewer(u ?? { id: "", handle: handle.replace(/^@/, ""), avatarUrl: null });
+              }}
+            />
+          </div>
         </div>
       </div>
       )}
 
-      {/* ─── Home create button (post story / secret / pin on map) ─── */}
-      {activeTab === "inbox" && (
+      {/* ─── Create FAB (home + map) ─── */}
+      {(activeTab === "inbox" || activeTab === "map") && (
         <>
           {fabOpen && (
             <button
@@ -735,9 +764,8 @@ export default function Dashboard() {
               <div className="flex flex-col items-end gap-3 mb-1">
                 {[
                   ...(UI_FEATURES.live ? [{ label: "Go live", emoji: "🔴", onClick: () => { setFabOpen(false); setShowBroadcast(true); } }] : []),
-                  { label: "Post story", emoji: "✨", onClick: () => { setFabOpen(false); setShowStoryComposer(true); } },
+                  { label: "Add story", emoji: "✨", onClick: () => { setFabOpen(false); openStoryComposer(); } },
                   { label: "Post secret", emoji: "🔐", onClick: () => { setFabOpen(false); navigate("/send"); } },
-                  { label: "Pin on map", emoji: "📍", onClick: () => { setFabOpen(false); setActiveTab("map"); } },
                 ].map((a) => (
                   <button key={a.label} onClick={a.onClick} className="flex items-center gap-2">
                     <span className="text-xs font-medium bg-surface-raised border border-border rounded-full px-3 py-1.5 shadow-lg">
@@ -813,12 +841,13 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Quick "add to your story" composer (current-location) */}
-      {showStoryComposer && (
+      {/* Add story composer */}
+      {storyComposer.open && (
         <StoryComposer
           handle={user.handle}
           token={token}
-          onClose={() => setShowStoryComposer(false)}
+          initialCoords={storyComposer.initialCoords}
+          onClose={() => setStoryComposer({ open: false })}
           onPosted={() => revalidator.revalidate()}
         />
       )}
