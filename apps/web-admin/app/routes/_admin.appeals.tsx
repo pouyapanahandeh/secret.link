@@ -2,6 +2,8 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { requireAdminSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
 import { useLoaderData, useSearchParams, Form, useNavigation } from "@remix-run/react";
+import { FilterTabs } from "~/components/FilterTabs";
+import { PageHeader } from "~/components/PageHeader";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { token } = await requireAdminSession(request);
@@ -36,41 +38,35 @@ export default function Appeals() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">Appeals</h2>
-        <span className="text-sm text-[var(--text-muted)]">{total} total</span>
-      </div>
+      <PageHeader title="Appeals" count={total} />
 
-      <div className="flex gap-2 mb-6">
-        {statuses.map((s) => (
-          <button
-            key={s}
-            onClick={() => setSearchParams({ status: s })}
-            className={`btn ${currentStatus === s ? "btn-primary" : "btn-outline"}`}
-          >
-            {s.charAt(0).toUpperCase() + s.slice(1)}
-          </button>
-        ))}
-      </div>
+      <FilterTabs
+        tabs={statuses.map((s) => ({
+          id: s,
+          label: s.charAt(0).toUpperCase() + s.slice(1),
+        }))}
+        activeId={currentStatus}
+        onChange={(id) => setSearchParams({ status: id })}
+      />
 
       <div className="space-y-4">
         {(appeals as any[]).length === 0 && (
-          <p className="text-[var(--text-muted)] text-center py-8">No {currentStatus} appeals</p>
+          <p className="py-8 text-center text-[var(--text-muted)]">No {currentStatus} appeals</p>
         )}
         {(appeals as any[]).map((appeal: any) => (
           <div key={appeal.id} className="card">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className={`badge badge-${appeal.status}`}>{appeal.status}</span>
                   <span className="text-sm text-[var(--text)]">@{appeal.user_handle}</span>
                 </div>
 
-                <div className="bg-[var(--surface)] rounded-lg p-3 mb-2 border border-[var(--border)]">
+                <div className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
                   <p className="text-sm text-[var(--text-muted)]">
                     <strong>Original action:</strong> {appeal.action_type} — {appeal.report_reason}
                   </p>
-                  <p className="text-sm mt-2">
+                  <p className="mt-2 text-sm">
                     <strong>Appeal reason:</strong> {appeal.reason}
                   </p>
                 </div>
@@ -80,16 +76,22 @@ export default function Appeals() {
                 </p>
 
                 {appeal.resolution_note && (
-                  <p className="text-xs text-[var(--success)] mt-1">Resolution: {appeal.resolution_note}</p>
+                  <p className="mt-1 text-xs text-[var(--success)]">
+                    Resolution: {appeal.resolution_note}
+                  </p>
                 )}
               </div>
 
               {appeal.status === "pending" && (
-                <div className="flex flex-col gap-2 min-w-[140px]">
+                <div className="flex w-full flex-col gap-2 lg:min-w-[140px] lg:w-auto">
                   <Form method="post">
                     <input type="hidden" name="appealId" value={appeal.id} />
                     <input type="hidden" name="decision" value="reversed" />
-                    <input type="hidden" name="resolution_note" value="Appeal accepted - action reversed" />
+                    <input
+                      type="hidden"
+                      name="resolution_note"
+                      value="Appeal accepted - action reversed"
+                    />
                     <button type="submit" disabled={isActioning} className="btn btn-success w-full text-xs">
                       Accept (Reverse)
                     </button>

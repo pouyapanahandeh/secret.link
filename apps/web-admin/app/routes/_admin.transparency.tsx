@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { requireAdminSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
 import { useLoaderData } from "@remix-run/react";
+import { PageHeader } from "~/components/PageHeader";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { token } = await requireAdminSession(request);
@@ -14,15 +15,15 @@ export default function Transparency() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Transparency Report</h2>
-      <p className="text-sm text-[var(--text-muted)] mb-6">
-        Period: {new Date(stats.period.from).toLocaleDateString()} — {new Date(stats.period.to).toLocaleDateString()}
-      </p>
+      <PageHeader
+        title="Transparency Report"
+        subtitle={`Period: ${new Date(stats.period.from).toLocaleDateString()} — ${new Date(stats.period.to).toLocaleDateString()}`}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {/* Reports */}
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">🚩 Reports</h3>
+          <h3 className="mb-4 text-lg font-semibold">🚩 Reports</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-[var(--text-muted)]">Total received</span>
@@ -37,8 +38,8 @@ export default function Transparency() {
               <span className="font-medium">{stats.reports.dismissed}</span>
             </div>
             {stats.reports.byReason.length > 0 && (
-              <div className="pt-2 border-t border-[var(--border)]">
-                <p className="text-[var(--text-muted)] mb-1">By reason:</p>
+              <div className="border-t border-[var(--border)] pt-2">
+                <p className="mb-1 text-[var(--text-muted)]">By reason:</p>
                 {stats.reports.byReason.map((r: any) => (
                   <div key={r.reason} className="flex justify-between">
                     <span className="text-[var(--text-muted)]">{r.reason}</span>
@@ -52,7 +53,7 @@ export default function Transparency() {
 
         {/* Actions */}
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">⚡ Actions Taken</h3>
+          <h3 className="mb-4 text-lg font-semibold">⚡ Actions Taken</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-[var(--text-muted)]">Content removals</span>
@@ -75,7 +76,7 @@ export default function Transparency() {
 
         {/* Appeals */}
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">⚖️ Appeals</h3>
+          <h3 className="mb-4 text-lg font-semibold">⚖️ Appeals</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-[var(--text-muted)]">Total received</span>

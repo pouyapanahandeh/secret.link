@@ -2,6 +2,8 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { requireAdminSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
 import { useLoaderData, useSearchParams, Form, useNavigation } from "@remix-run/react";
+import { FilterTabs } from "~/components/FilterTabs";
+import { PageHeader } from "~/components/PageHeader";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { token } = await requireAdminSession(request);
@@ -36,73 +38,75 @@ export default function Reports() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">Reports</h2>
-        <span className="text-sm text-[var(--text-muted)]">{total} total</span>
-      </div>
+      <PageHeader title="Reports" count={total} />
 
-      {/* Status tabs */}
-      <div className="flex gap-2 mb-6">
-        {statuses.map((s) => (
-          <button
-            key={s}
-            onClick={() => setSearchParams({ status: s })}
-            className={`btn ${currentStatus === s ? "btn-primary" : "btn-outline"}`}
-          >
-            {s.charAt(0).toUpperCase() + s.slice(1)}
-          </button>
-        ))}
-      </div>
+      <FilterTabs
+        tabs={statuses.map((s) => ({
+          id: s,
+          label: s.charAt(0).toUpperCase() + s.slice(1),
+        }))}
+        activeId={currentStatus}
+        onChange={(id) => setSearchParams({ status: id })}
+      />
 
-      {/* Reports list */}
       <div className="space-y-4">
         {(reports as any[]).length === 0 && (
-          <p className="text-[var(--text-muted)] text-center py-8">No {currentStatus} reports</p>
+          <p className="py-8 text-center text-[var(--text-muted)]">No {currentStatus} reports</p>
         )}
         {(reports as any[]).map((report: any) => (
           <div key={report.id} className="card">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className={`badge badge-${report.status}`}>{report.status}</span>
-                  <span className="badge" style={{ background: "var(--border)", color: "var(--text-muted)" }}>
+                  <span
+                    className="badge"
+                    style={{ background: "var(--border)", color: "var(--text-muted)" }}
+                  >
                     {report.reason}
                   </span>
                 </div>
 
                 {report.secret_message && (
-                  <div className="bg-[var(--surface)] rounded-lg p-3 mb-2 border border-[var(--border)]">
+                  <div className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
                     <p className="text-sm">
                       <span className="mr-2">{report.emoji}</span>
                       {report.secret_message}
                     </p>
                     {report.secret_handle && (
-                      <p className="text-xs text-[var(--text-muted)] mt-1">by @{report.secret_handle}</p>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        by @{report.secret_handle}
+                      </p>
                     )}
                   </div>
                 )}
 
-                <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+                <div className="flex flex-col gap-1 text-xs text-[var(--text-muted)] sm:flex-row sm:gap-4">
                   <span>Reporter: @{report.reporter_handle ?? "anonymous"}</span>
                   <span>{new Date(report.created_at).toLocaleDateString()}</span>
-                  {report.details && <span>"{report.details}"</span>}
+                  {report.details && <span>&quot;{report.details}&quot;</span>}
                 </div>
 
                 {report.action_type && (
                   <div className="mt-2 text-xs">
                     <span className="text-[var(--success)]">Action: {report.action_type}</span>
-                    {report.action_reason && <span className="text-[var(--text-muted)]"> — {report.action_reason}</span>}
+                    {report.action_reason && (
+                      <span className="text-[var(--text-muted)]"> — {report.action_reason}</span>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Action buttons (only for open reports) */}
               {report.status === "open" && (
-                <div className="flex flex-col gap-2 min-w-[120px]">
+                <div className="flex w-full flex-col gap-2 lg:min-w-[120px] lg:w-auto">
                   <Form method="post">
                     <input type="hidden" name="reportId" value={report.id} />
                     <input type="hidden" name="action_type" value="remove" />
-                    <input type="hidden" name="action_reason" value="Content violates community guidelines" />
+                    <input
+                      type="hidden"
+                      name="action_reason"
+                      value="Content violates community guidelines"
+                    />
                     <button type="submit" disabled={isActioning} className="btn btn-danger w-full text-xs">
                       Remove
                     </button>
@@ -110,8 +114,17 @@ export default function Reports() {
                   <Form method="post">
                     <input type="hidden" name="reportId" value={report.id} />
                     <input type="hidden" name="action_type" value="warn" />
-                    <input type="hidden" name="action_reason" value="Warning issued for policy violation" />
-                    <button type="submit" disabled={isActioning} className="btn btn-outline w-full text-xs" style={{ borderColor: "var(--warning)", color: "var(--warning)" }}>
+                    <input
+                      type="hidden"
+                      name="action_reason"
+                      value="Warning issued for policy violation"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isActioning}
+                      className="btn btn-outline w-full text-xs"
+                      style={{ borderColor: "var(--warning)", color: "var(--warning)" }}
+                    >
                       Warn
                     </button>
                   </Form>
@@ -119,14 +132,22 @@ export default function Reports() {
                     <input type="hidden" name="reportId" value={report.id} />
                     <input type="hidden" name="action_type" value="ban" />
                     <input type="hidden" name="action_reason" value="Severe policy violation" />
-                    <button type="submit" disabled={isActioning} className="btn btn-danger w-full text-xs opacity-80">
+                    <button
+                      type="submit"
+                      disabled={isActioning}
+                      className="btn btn-danger w-full text-xs opacity-80"
+                    >
                       Ban
                     </button>
                   </Form>
                   <Form method="post">
                     <input type="hidden" name="reportId" value={report.id} />
                     <input type="hidden" name="action_type" value="dismiss" />
-                    <input type="hidden" name="action_reason" value="Report reviewed - no violation found" />
+                    <input
+                      type="hidden"
+                      name="action_reason"
+                      value="Report reviewed - no violation found"
+                    />
                     <button type="submit" disabled={isActioning} className="btn btn-outline w-full text-xs">
                       Dismiss
                     </button>
