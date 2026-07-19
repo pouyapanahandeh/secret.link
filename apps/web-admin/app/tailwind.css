@@ -68,3 +68,8 @@ body {
 }
 .input:focus { outline: none; border-color: var(--accent); }
 .input::placeholder { color: var(--text-muted); opacity: 0.6; }
+
+@media (max-width: 767px) {
+  .btn { min-height: 44px; }
+  .card { padding: 1rem; }
+}

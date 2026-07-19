@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { requireAdminSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
 import { useLoaderData } from "@remix-run/react";
+import { PageHeader } from "~/components/PageHeader";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { token } = await requireAdminSession(request);
@@ -26,12 +27,12 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
+      <PageHeader title="Dashboard" />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
           <div key={card.label} className="card">
-            <div className="flex items-center justify-between mb-2">
+            <div className="mb-2 flex items-center justify-between">
               <span className="text-2xl">{card.icon}</span>
               <span className="text-3xl font-bold" style={{ color: card.color }}>
                 {card.value}
