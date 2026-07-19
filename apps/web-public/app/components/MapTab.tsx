@@ -3,7 +3,6 @@ import { Link } from "@remix-run/react";
 import { getApiBase } from "../lib/api.client";
 import type { MapSecret } from "../lib/map-types";
 import { StoryComposer } from "./StoryComposer";
-import { MapContentSkeleton } from "./DashboardSkeleton";
 
 interface MapTabProps {
   user: { handle: string; avatarUrl?: string | null };
@@ -167,6 +166,13 @@ export function MapTab({ user, following, token }: MapTabProps) {
     renderMapMarkers(mapSecrets);
   }, [mapCityFilter, mapSecrets]);
 
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    setTimeout(() => map.invalidateSize(), 0);
+    setTimeout(() => map.invalidateSize(), 150);
+  }, [mapReady]);
+
   // ─── Load secrets ─────────────────────────────────────────────────────────
   async function loadMapSecrets(map?: any) {
     const m = map || mapInstanceRef.current;
@@ -239,14 +245,6 @@ export function MapTab({ user, following, token }: MapTabProps) {
     : mapSecrets;
 
   // ─── Render ───────────────────────────────────────────────────────────────
-  if (!mapReady) {
-    return (
-      <section>
-        <MapContentSkeleton />
-      </section>
-    );
-  }
-
   return (
     <section>
       <h2 className="text-lg font-bold mb-4">🗺️ Secret Map</h2>
@@ -290,9 +288,17 @@ export function MapTab({ user, following, token }: MapTabProps) {
         </div>
       )}
 
-      {/* Map container */}
+      {/* Map container — always mounted so Leaflet can initialize */}
       <div className="relative rounded-2xl border border-border overflow-hidden" style={{ height: "400px" }}>
         <div ref={mapContainerRef} className="w-full h-full" />
+        {!mapReady && (
+          <div className="absolute inset-0 z-[500] bg-surface flex flex-col">
+            <div className="flex-1 animate-pulse bg-surface-raised" />
+            <div className="absolute bottom-4 right-4">
+              <div className="w-10 h-10 rounded-full animate-pulse bg-surface-raised border border-border" />
+            </div>
+          </div>
+        )}
         {/* Locate me button */}
         <button
           onClick={() => {
@@ -313,7 +319,8 @@ export function MapTab({ user, following, token }: MapTabProps) {
               );
             }
           }}
-          className="absolute bottom-4 right-4 z-[1000] w-10 h-10 rounded-full bg-surface-raised border border-border shadow-lg flex items-center justify-center hover:border-accent/50 transition-colors"
+          className="absolute bottom-4 right-4 z-[1000] w-10 h-10 rounded-full bg-surface-raised border border-border shadow-lg flex items-center justify-center hover:border-accent/50 transition-colors disabled:opacity-50"
+          disabled={!mapReady}
           aria-label="Locate me"
         >
           <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
