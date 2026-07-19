@@ -26,17 +26,28 @@ import { UI_FEATURES } from "../lib/feature-flags";
 import { ProfilePageSkeleton } from "../components/DashboardSkeleton";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const handle = data?.profile?.handle ?? data?.handle ?? "user";
+  const title = `@${handle} — Secretlink.life`;
+  const description =
+    data?.profile?.bio ||
+    `Send an anonymous secret to @${handle} on Secretlink.life. It burns after one read.`;
+  const origin = data?.apiBase ?? "https://secretlink.life";
+  const url = `${origin}/${handle}`;
+  const image = data?.profile?.avatarUrl || `${origin}/og/${encodeURIComponent(handle)}`;
   return [
-    { title: `@${data?.profile?.handle ?? data?.handle} — Secretlink.life` },
-    {
-      name: "description",
-      content: `Send an anonymous secret to @${data?.profile?.handle ?? data?.handle} on Secretlink.life. It burns after one read.`,
-    },
-    { property: "og:title", content: `@${data?.profile?.handle ?? data?.handle} — Secretlink.life` },
-    {
-      property: "og:description",
-      content: data?.profile?.bio ?? "Send me a secret. It burns after I read it.",
-    },
+    { title },
+    { name: "description", content: description },
+    { tagName: "link", rel: "canonical", href: url },
+    { property: "og:type", content: "profile" },
+    { property: "og:site_name", content: "Secretlink.life" },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+    { property: "og:url", content: url },
+    { property: "og:image", content: image },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: title },
+    { name: "twitter:description", content: description },
+    { name: "twitter:image", content: image },
   ];
 };
 
@@ -64,16 +75,24 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     }
   }
 
-  return json({
-    handle,
-    profile,
-    isLoggedIn,
-    isOwnProfile,
-    ownHandle,
-    token: token ?? null,
-    apiBase: new URL(request.url).origin,
-    notFound: !profile,
-  });
+  // Short CDN/browser cache for anonymous public profiles; no-store when authed.
+  const cacheControl = isLoggedIn
+    ? "private, no-store"
+    : "public, max-age=60, s-maxage=300, stale-while-revalidate=600";
+
+  return json(
+    {
+      handle,
+      profile,
+      isLoggedIn,
+      isOwnProfile,
+      ownHandle,
+      token: token ?? null,
+      apiBase: new URL(request.url).origin,
+      notFound: !profile,
+    },
+    { headers: { "Cache-Control": cacheControl } },
+  );
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -96,10 +115,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     const bio = String(form.get("bio") ?? "");
     const socials = JSON.parse(String(form.get("socials") ?? "[]"));
+    const avatarUrl = String(form.get("avatarUrl") ?? "");
     const res = await fetch(`${API_URL}/v1/users/me/profile`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ bio, socials }),
+      body: JSON.stringify({ bio, socials, avatarUrl: avatarUrl || null }),
     });
     if (!res.ok) {
       return json({ error: "Failed to save profile", intent: "save-profile" });
@@ -181,10 +201,17 @@ export default function ProfilePage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [socials, setSocials] = useState<{ platform: string; url: string }[]>(profile?.socials ?? []);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl ?? null);
   const [searchParams] = useSearchParams();
 
   const mode = resolveProfileViewMode(isLoggedIn, isOwnProfile);
   const profileHref = ownHandle ? `/${ownHandle}` : "/dashboard#profile";
+
+  useEffect(() => {
+    if (isOwnProfile && searchParams.get("share") === "1") {
+      setShareOpen(true);
+    }
+  }, [isOwnProfile, searchParams]);
 
   useEffect(() => {
     if (searchParams.get("src") !== "qr" || isOwnProfile || !handle) return;
@@ -203,7 +230,8 @@ export default function ProfilePage() {
   useEffect(() => {
     setBio(profile?.bio ?? "");
     setSocials(profile?.socials ?? []);
-  }, [profile?.bio, profile?.socials]);
+    setAvatarUrl(profile?.avatarUrl ?? null);
+  }, [profile?.bio, profile?.socials, profile?.avatarUrl]);
 
   useEffect(() => {
     if (
@@ -219,12 +247,14 @@ export default function ProfilePage() {
   function startEditProfile() {
     setBio(profile?.bio ?? "");
     setSocials(profile?.socials ?? []);
+    setAvatarUrl(profile?.avatarUrl ?? null);
     setEditingProfile(true);
   }
 
   function cancelEditProfile() {
     setBio(profile?.bio ?? "");
     setSocials(profile?.socials ?? []);
+    setAvatarUrl(profile?.avatarUrl ?? null);
     setEditingProfile(false);
   }
 
@@ -234,6 +264,7 @@ export default function ProfilePage() {
         intent: "save-profile",
         bio,
         socials: JSON.stringify(socials.filter((s) => s.url.trim())),
+        avatarUrl: avatarUrl ?? "",
       },
       { method: "post" },
     );
@@ -322,16 +353,26 @@ export default function ProfilePage() {
               <span className="text-3xl">✓</span>
             </div>
             <h1 className="text-2xl font-bold mb-2">Secret sent!</h1>
-            <p className="text-text-muted mb-8">
+            <p className="text-text-muted mb-6">
               Your anonymous message has been delivered to{" "}
               <span className="text-accent">@{handle}</span>. It will self-destruct after being read.
             </p>
-            <Link
-              to={`/${handle}`}
-              className="inline-flex rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all"
-            >
-              Send another →
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                to={`/${handle}`}
+                className="inline-flex justify-center rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all"
+              >
+                Send another →
+              </Link>
+              {isLoggedIn && ownHandle && (
+                <Link
+                  to={`/${ownHandle}?share=1`}
+                  className="inline-flex justify-center rounded-full border border-border px-6 py-3 text-sm font-semibold text-text hover:border-accent transition-all"
+                >
+                  Share your profile
+                </Link>
+              )}
+            </div>
           </div>
         </div>
         {isLoggedIn && <MobileBottomNav profileHref={profileHref} />}
@@ -380,8 +421,11 @@ export default function ProfilePage() {
             <ProfileEditForm
               bio={bio}
               socials={socials}
+              avatarUrl={avatarUrl}
+              handle={handle}
               onBioChange={setBio}
               onSocialsChange={setSocials}
+              onAvatarUrlChange={setAvatarUrl}
               onSave={saveProfile}
               onCancel={cancelEditProfile}
               saving={profileSaving}

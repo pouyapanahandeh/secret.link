@@ -417,11 +417,15 @@ function LandingMap() {
         }
       }
 
+      const { encryptMapMessage } = await import("../lib/crypto");
+      const encrypted = await encryptMapMessage(
+        message.trim() || (file ? `[${mediaType ?? "file"}]` : ""),
+      );
       const res = await fetch(`${getApiBase()}/v1/secrets/map`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: message.trim() || (file ? `[${mediaType ?? "file"}]` : ""),
+          ...encrypted,
           lat: clickedPos.lat,
           lng: clickedPos.lng,
           emoji,
@@ -462,7 +466,9 @@ function LandingMap() {
         }
         return;
       }
-      setSelectedSecret({ ...selectedSecret, ...data });
+      const { decryptMapReveal } = await import("../lib/crypto");
+      const plaintext = await decryptMapReveal(data);
+      setSelectedSecret({ ...selectedSecret, ...data, message: plaintext });
       setSecretRevealed(true);
       const mode = data.reveal_mode || data.revealMode || "timer";
       if (mode === "timer") {

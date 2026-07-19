@@ -128,6 +128,15 @@ usersRouter.post("/", async (ctx: Context) => {
 });
 
 // ─── Search users (must be before /:handle) ─────────────────────────────────
+/** Public handles for sitemap generation (no PII beyond handle). */
+usersRouter.get("/sitemap-handles", async (ctx: Context) => {
+  const rows = db
+    .prepare(`SELECT handle FROM users ORDER BY created_at DESC LIMIT 5000`)
+    .all() as Array<{ handle: string }>;
+  ctx.set("Cache-Control", "public, max-age=3600");
+  ctx.body = { handles: rows.map((r) => r.handle) };
+});
+
 usersRouter.get("/search", async (ctx: Context) => {
   const q = String(ctx.query["q"] ?? "").trim().toLowerCase();
   if (!q || q.length < 2) {
@@ -337,7 +346,8 @@ usersRouter.patch("/me/profile", requireAuth(), async (ctx: Context) => {
   let socials = row.socials;
 
   if (typeof body.bio === "string") bio = body.bio.slice(0, 300);
-  if (typeof body.avatarUrl === "string") avatarUrl = body.avatarUrl.slice(0, 500);
+  if (body.avatarUrl === null) avatarUrl = null;
+  else if (typeof body.avatarUrl === "string") avatarUrl = body.avatarUrl.slice(0, 500) || null;
   if (Array.isArray(body.socials)) {
     socials = JSON.stringify((body.socials as any[]).slice(0, 10).map((s) => ({
       platform: String(s.platform ?? "").slice(0, 30),

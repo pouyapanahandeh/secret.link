@@ -54,7 +54,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ errors: { handle: "Something went wrong" }, values: { handle, email } }, { status: 500 });
   }
 
-  return createSessionRedirect(token, "/dashboard");
+  return createSessionRedirect(token, "/onboarding");
 }
 
 /** Pull the sl_token value out of an upstream Set-Cookie header. */

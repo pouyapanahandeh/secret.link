@@ -15,7 +15,7 @@ complianceRouter.get("/data-export", async (ctx: Context) => {
   const userId = user.userId;
 
   const profile = db.prepare("SELECT id, handle, email, bio, avatar_url, socials, created_at FROM users WHERE id = ?").get(userId);
-  const secrets = db.prepare("SELECT id, message, lat, lng, emoji, created_at, expires_at, location_name, city_name FROM map_secrets WHERE handle = (SELECT handle FROM users WHERE id = ?)").all(userId);
+  const secrets = db.prepare("SELECT id, lat, lng, emoji, created_at, expires_at, location_name, city_name, CASE WHEN ciphertext IS NOT NULL AND ciphertext != '' THEN 1 ELSE 0 END AS encrypted FROM map_secrets WHERE handle = (SELECT handle FROM users WHERE id = ?)").all(userId);
   const sentSecrets = db.prepare("SELECT id, content_type, recipient_handle, created_at FROM secrets WHERE sender_id = ?").all(userId);
   const conversations = db.prepare(`
     SELECT c.id, c.participant1_handle, c.participant2_handle, c.created_at, c.last_message_at

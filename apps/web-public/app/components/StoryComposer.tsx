@@ -189,11 +189,14 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords,
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (!anonymous) headers["Authorization"] = `Bearer ${token}`;
 
+      const { encryptMapMessage } = await import("../lib/crypto");
+      const encrypted = await encryptMapMessage(message.trim());
+
       const res = await fetch(`${getApiBase()}/v1/secrets/map`, {
         method: "POST",
         headers,
         body: JSON.stringify({
-          message: message.trim(),
+          ...encrypted,
           lat: coords.lat,
           lng: coords.lng,
           emoji,

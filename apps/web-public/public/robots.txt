@@ -5,10 +5,19 @@ Allow: /privacy
 Allow: /terms
 Allow: /community-guidelines
 Allow: /transparency
+Allow: /map
+Allow: /signup
+Allow: /login
+Allow: /contact
+Allow: /og/
 Disallow: /dashboard
 Disallow: /messages
 Disallow: /send
 Disallow: /auth/
+Disallow: /onboarding
+
+# Public @handle profiles are allow-listed via sitemap; do not crawl private app routes.
+# Profile paths are short alphanumeric handles — crawlers may fetch them via sitemap.
 
 # AI crawlers — explicitly allowed
 User-agent: GPTBot

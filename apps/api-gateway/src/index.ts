@@ -14,6 +14,12 @@ import { initSentry, flushSentry } from "./lib/sentry.js";
 // Initialise error monitoring before anything else. No-op unless SENTRY_DSN set.
 initSentry();
 
+// Optional OpenTelemetry traces — only when an OTLP endpoint is configured.
+if (process.env["OTEL_EXPORTER_OTLP_ENDPOINT"]) {
+  const { initTelemetry } = await import("@secretlink/telemetry");
+  initTelemetry("api-gateway");
+}
+
 const app = new Koa();
 
 // Trust the reverse proxy so ctx.ip reflects the real client IP from

@@ -6,7 +6,7 @@ import type { Context } from "koa";
 import { requireAuth, type AuthPayload } from "../middleware/auth.js";
 import { mapPostRateLimiter, blobUploadRateLimiter } from "../middleware/rate-limiter.js";
 import db from "../db.js";
-import { wrapKey } from "../lib/crypto.js";
+import { unwrapKey, wrapKey } from "../lib/crypto.js";
 import { blobStore } from "../lib/blob-store.js";
 import { createNotification, getUserIdByHandle } from "../notifications.js";
 
@@ -36,22 +36,35 @@ const secretStmts = {
 };
 
 const mapStmts = {
-  insert: db.prepare(`INSERT INTO map_secrets (id, message, lat, lng, emoji, handle, location_name, city_name, media_path, media_type, reveal_mode, reveal_timer_seconds, max_clicks, click_count, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`),
+  insert: db.prepare(`INSERT INTO map_secrets (id, message, ciphertext, nonce, wrapped_key, lat, lng, emoji, handle, location_name, city_name, media_path, media_type, reveal_mode, reveal_timer_seconds, max_clicks, click_count, created_at, expires_at) VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`),
   getActive: db.prepare(`SELECT * FROM map_secrets WHERE expires_at > ?`),
   getById: db.prepare(`SELECT * FROM map_secrets WHERE id = ? AND expires_at > ?`),
   deleteExpired: db.prepare(`DELETE FROM map_secrets WHERE expires_at <= ?`),
   incrementClicks: db.prepare(`UPDATE map_secrets SET click_count = click_count + 1 WHERE id = ?`),
 };
 
+function bytesToBase64Url(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function base64UrlToBytes(str: string): Uint8Array | null {
+  try {
+    const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    return new Uint8Array(Buffer.from(padded, "base64"));
+  } catch {
+    return null;
+  }
+}
+
 const reportStmts = {
   insert: db.prepare(`INSERT INTO secret_reports (id, secret_id, reporter_user_id, reason, details, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)`),
 };
 
-/** Normalize a raw SQLite map_secrets row to camelCase JSON. */
-function normalizeMapSecret(row: any) {
-  return {
+/** Reveal payload: ciphertext + key material for client decrypt (never plaintext). */
+function normalizeMapSecretReveal(row: any) {
+  const base = {
     id: row.id,
-    message: row.message,
     lat: row.lat,
     lng: row.lng,
     emoji: row.emoji,
@@ -67,6 +80,26 @@ function normalizeMapSecret(row: any) {
     createdAt: row.created_at,
     expiresAt: row.expires_at,
   };
+
+  if (row.ciphertext && row.nonce && row.wrapped_key) {
+    const dek = unwrapKey(String(row.wrapped_key));
+    if (!dek) {
+      return null;
+    }
+    return {
+      ...base,
+      ciphertext: String(row.ciphertext),
+      nonce: String(row.nonce),
+      key: bytesToBase64Url(dek),
+    };
+  }
+
+  // Legacy plaintext rows (should already be expired by migration).
+  if (row.message) {
+    return { ...base, message: String(row.message), legacy: true };
+  }
+
+  return null;
 }
 
 /** List-safe version: hides the actual secret content (message, media) so
@@ -193,7 +226,9 @@ secretsRouter.post("/", async (ctx: Context) => {
 // ─── Map Secrets (must be before /:id to avoid conflicts) ───────────────────
 secretsRouter.post("/map", mapPostRateLimiter(), async (ctx: Context) => {
   const body = ctx.request.body as Record<string, unknown>;
-  const message = String(body.message ?? "").trim();
+  const ciphertext = String(body.ciphertext ?? "").trim();
+  const nonce = String(body.nonce ?? "").trim();
+  const keyB64 = String(body.key ?? "").trim();
   const lat = Number(body.lat);
   const lng = Number(body.lng);
   const emoji = String(body.emoji ?? "💬").slice(0, 4);
@@ -220,9 +255,20 @@ secretsRouter.post("/map", mapPostRateLimiter(), async (ctx: Context) => {
     }
   }
 
-  if (!message || message.length > 500) {
+  if (!ciphertext || !nonce || !keyB64) {
     ctx.status = 400;
-    ctx.body = { error: "Message required (max 500 chars)" };
+    ctx.body = { error: "Encrypted payload required (ciphertext, nonce, key)" };
+    return;
+  }
+  if (ciphertext.length > 4096 || nonce.length > 64 || keyB64.length > 128) {
+    ctx.status = 400;
+    ctx.body = { error: "Encrypted payload too large" };
+    return;
+  }
+  const dek = base64UrlToBytes(keyB64);
+  if (!dek || dek.length !== 32) {
+    ctx.status = 400;
+    ctx.body = { error: "Invalid encryption key" };
     return;
   }
   if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
@@ -241,11 +287,20 @@ secretsRouter.post("/map", mapPostRateLimiter(), async (ctx: Context) => {
   const revealMode = body.revealMode === "clicks" ? "clicks" : "timer";
   const revealTimerSeconds = Math.min(Math.max(Number(body.revealTimerSeconds) || 30, 5), 300);
   const maxClicks = revealMode === "clicks" ? Math.min(Math.max(Number(body.maxClicks) || 1, 1), 100) : 0;
+  const wrappedKey = wrapKey(dek);
 
-  mapStmts.insert.run(id, message, lat, lng, emoji, handle ?? null, locationName, cityName, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks, createdAt, expiresAt);
+  mapStmts.insert.run(
+    id, ciphertext, nonce, wrappedKey, lat, lng, emoji, handle ?? null,
+    locationName, cityName, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks,
+    createdAt, expiresAt,
+  );
 
   ctx.status = 201;
-  ctx.body = { id, message, lat, lng, emoji, handle, locationName, cityName, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks, clickCount: 0, createdAt, expiresAt };
+  ctx.body = {
+    id, lat, lng, emoji, handle, locationName, cityName, mediaPath, mediaType,
+    revealMode, revealTimerSeconds, maxClicks, clickCount: 0, createdAt, expiresAt,
+    hasMedia: !!mediaPath,
+  };
 });
 
 secretsRouter.get("/map", async (ctx: Context) => {
@@ -273,7 +328,8 @@ secretsRouter.get("/map/:id", async (ctx: Context) => {
     return;
   }
 
-  ctx.body = normalizeMapSecret(row);
+  // Metadata only — content requires POST /reveal.
+  ctx.body = normalizeMapSecretForList(row);
 });
 
 secretsRouter.post("/map/:id/reveal", async (ctx: Context) => {
@@ -296,7 +352,13 @@ secretsRouter.post("/map/:id/reveal", async (ctx: Context) => {
     row.click_count += 1;
   }
 
-  ctx.body = normalizeMapSecret(row);
+  const payload = normalizeMapSecretReveal(row);
+  if (!payload) {
+    ctx.status = 500;
+    ctx.body = { error: "decrypt_failed" };
+    return;
+  }
+  ctx.body = payload;
 });
 
 secretsRouter.post("/map/:id/report", async (ctx: Context) => {

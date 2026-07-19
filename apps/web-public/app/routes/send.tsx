@@ -1,5 +1,6 @@
 import type { MetaFunction } from "@remix-run/node";
 import { useState, useRef } from "react";
+import { Link } from "@remix-run/react";
 import { CameraCapture } from "../components/CameraCapture";
 import { AppNav } from "../components/AppNav";
 import { getApiBase } from "../lib/api.client";
@@ -222,12 +223,20 @@ export default function Send() {
               🔐 End-to-end encrypted. The key is in the link — we never see it.
             </p>
 
-            <button
-              onClick={reset}
-              className="inline-block text-sm text-text-muted hover:text-accent transition-colors"
-            >
-              Send another secret →
-            </button>
+            <div className="flex flex-col gap-2 items-center">
+              <button
+                onClick={reset}
+                className="inline-block text-sm text-text-muted hover:text-accent transition-colors"
+              >
+                Send another secret →
+              </button>
+              <Link
+                to="/signup"
+                className="inline-block text-sm text-accent font-semibold hover:underline"
+              >
+                Get your @handle and share your inbox →
+              </Link>
+            </div>
           </div>
         ) : (
           /* Send form */

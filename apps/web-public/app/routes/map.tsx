@@ -126,11 +126,13 @@ export default function MapPage() {
     const apiBase = getApiBase();
 
     try {
+      const { encryptMapMessage } = await import("../lib/crypto");
+      const encrypted = await encryptMapMessage(message.trim());
       const res = await fetch(`${apiBase}/v1/secrets/map`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: message.trim(),
+          ...encrypted,
           lat: clickedPos.lat,
           lng: clickedPos.lng,
           emoji,
@@ -208,7 +210,9 @@ export default function MapPage() {
                       const res = await fetch(`${getApiBase()}/v1/secrets/map/${selectedSecret.id}/reveal`, { method: "POST" });
                       if (res.ok) {
                         const data = await res.json();
-                        setSelectedSecret({ ...selectedSecret, ...data });
+                        const { decryptMapReveal } = await import("../lib/crypto");
+                        const plaintext = await decryptMapReveal(data);
+                        setSelectedSecret({ ...selectedSecret, ...data, message: plaintext });
                         setSecretRevealed(true);
                       }
                     } catch {} finally {

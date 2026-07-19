@@ -58,3 +58,14 @@ export function decryptString(token: string): string | null {
 export function wrapKey(dek: Uint8Array): string {
   return encryptString(Buffer.from(dek).toString("base64"));
 }
+
+/** Unwrap a DEK previously stored via wrapKey. Returns null on any failure. */
+export function unwrapKey(token: string): Uint8Array | null {
+  const b64 = decryptString(token);
+  if (!b64) return null;
+  try {
+    return new Uint8Array(Buffer.from(b64, "base64"));
+  } catch {
+    return null;
+  }
+}

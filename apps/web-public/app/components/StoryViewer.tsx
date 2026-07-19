@@ -64,10 +64,14 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
 
     fetch(`${getApiBase()}/v1/secrets/map/${current.id}/reveal`, { method: "POST" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) {
-          setRevealedCache((prev) => ({ ...prev, [current.id]: data as RevealedStory }));
-        }
+      .then(async (data) => {
+        if (!data) return;
+        const { decryptMapReveal } = await import("../lib/crypto");
+        const message = await decryptMapReveal(data);
+        setRevealedCache((prev) => ({
+          ...prev,
+          [current.id]: { ...data, message } as RevealedStory,
+        }));
       })
       .catch(() => {});
   }, [stories, index, revealedCache]);
@@ -142,10 +146,14 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
 
     fetch(`${getApiBase()}/v1/secrets/map/${next.id}/reveal`, { method: "POST" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) {
-          setRevealedCache((prev) => ({ ...prev, [next.id]: data as RevealedStory }));
-        }
+      .then(async (data) => {
+        if (!data) return;
+        const { decryptMapReveal } = await import("../lib/crypto");
+        const message = await decryptMapReveal(data);
+        setRevealedCache((prev) => ({
+          ...prev,
+          [next.id]: { ...data, message } as RevealedStory,
+        }));
       })
       .catch(() => {});
   }, [stories, index, revealedCache]);
