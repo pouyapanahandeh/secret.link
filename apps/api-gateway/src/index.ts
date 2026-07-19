@@ -50,6 +50,9 @@ app.use(async (ctx, next) => {
   if (ctx.path === "/v1/secrets/blob" && ctx.method === "POST") {
     return next();
   }
+  if (ctx.path === "/v1/admin/blog/cover" && ctx.method === "POST") {
+    return next();
+  }
   return bodyParser({ jsonLimit: "1mb" })(ctx, next);
 });
 

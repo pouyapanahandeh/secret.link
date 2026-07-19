@@ -167,6 +167,10 @@ migrate("map_secrets.columns.v1", () => {
 
 // Client-encrypted map drops: store ciphertext + nonce + MASTER_KEY-wrapped DEK.
 // Legacy plaintext rows are expired immediately so we never keep serving them.
+migrate("map_secrets.country_name.v1", () => {
+  addColumn("map_secrets", "country_name", "TEXT");
+});
+
 migrate("map_secrets.encrypt.v1", () => {
   addColumn("map_secrets", "ciphertext", "TEXT");
   addColumn("map_secrets", "nonce", "TEXT");
@@ -520,6 +524,28 @@ migrate("profile_stats_daily.v1", () => {
 
     CREATE INDEX IF NOT EXISTS idx_profile_stats_daily_user_day
       ON profile_stats_daily(user_id, day);
+  `);
+});
+
+migrate("blog_posts.v1", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS blog_posts (
+      id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      excerpt TEXT NOT NULL,
+      body TEXT NOT NULL,
+      cover_image_url TEXT,
+      keywords TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      author_id TEXT REFERENCES users(id),
+      published_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status, published_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
   `);
 });
 

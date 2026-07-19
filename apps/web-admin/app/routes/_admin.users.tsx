@@ -34,7 +34,17 @@ export async function action({ request }: ActionFunctionArgs) {
       method: "PATCH",
       body: { role: "moderator" },
     });
+  } else if (actionType === "make_editor") {
+    await adminApi(`/users/${userId}`, token, {
+      method: "PATCH",
+      body: { role: "editor" },
+    });
   } else if (actionType === "remove_moderator") {
+    await adminApi(`/users/${userId}`, token, {
+      method: "PATCH",
+      body: { role: "user" },
+    });
+  } else if (actionType === "remove_editor") {
     await adminApi(`/users/${userId}`, token, {
       method: "PATCH",
       body: { role: "user" },
@@ -70,18 +80,36 @@ function UserActions({ user, isActioning }: { user: any; isActioning: boolean })
         </Form>
       )}
       {user.role === "user" && (
-        <Form method="post" className="inline">
-          <input type="hidden" name="userId" value={user.id} />
-          <input type="hidden" name="actionType" value="make_moderator" />
-          <button type="submit" disabled={isActioning} className="btn btn-outline text-xs py-1 px-2">
-            → Mod
-          </button>
-        </Form>
+        <>
+          <Form method="post" className="inline">
+            <input type="hidden" name="userId" value={user.id} />
+            <input type="hidden" name="actionType" value="make_moderator" />
+            <button type="submit" disabled={isActioning} className="btn btn-outline text-xs py-1 px-2">
+              → Mod
+            </button>
+          </Form>
+          <Form method="post" className="inline">
+            <input type="hidden" name="userId" value={user.id} />
+            <input type="hidden" name="actionType" value="make_editor" />
+            <button type="submit" disabled={isActioning} className="btn btn-outline text-xs py-1 px-2">
+              → Editor
+            </button>
+          </Form>
+        </>
       )}
       {user.role === "moderator" && (
         <Form method="post" className="inline">
           <input type="hidden" name="userId" value={user.id} />
           <input type="hidden" name="actionType" value="remove_moderator" />
+          <button type="submit" disabled={isActioning} className="btn btn-outline text-xs py-1 px-2">
+            → User
+          </button>
+        </Form>
+      )}
+      {user.role === "editor" && (
+        <Form method="post" className="inline">
+          <input type="hidden" name="userId" value={user.id} />
+          <input type="hidden" name="actionType" value="remove_editor" />
           <button type="submit" disabled={isActioning} className="btn btn-outline text-xs py-1 px-2">
             → User
           </button>

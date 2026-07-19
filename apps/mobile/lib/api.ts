@@ -180,6 +180,12 @@ export const usersApi = {
       { method: "DELETE", auth: true },
     ),
 
+  getFollowing: () =>
+    api<{ id: string; handle: string; avatarUrl?: string | null; bio?: string }[]>(
+      "/users/me/following",
+      { auth: true },
+    ),
+
   registerPushToken: (token: string, platform: string) =>
     api("/users/me/push-token", {
       method: "POST",
@@ -194,13 +200,14 @@ export const usersApi = {
 // Secrets
 export type MapSecret = {
   id: string;
-  message: string;
+  message?: string;
   lat: number;
   lng: number;
   emoji: string;
-  handle?: string;
+  handle?: string | null;
   locationName?: string | null;
   cityName?: string | null;
+  countryName?: string | null;
   mediaPath?: string | null;
   mediaType?: string | null;
   revealMode: "timer" | "clicks";
@@ -287,6 +294,7 @@ export const secretsApi = {
     handle?: string;
     locationName?: string;
     cityName?: string;
+    countryName?: string;
     revealMode?: "timer" | "clicks";
     revealTimerSeconds?: number;
     maxClicks?: number;

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   View,
@@ -7,14 +7,17 @@ import {
   Pressable,
   FlatList,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useTheme, spacing, radius, fontSize } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
-import { usersApi, secretsApi } from "@/lib/api";
+import { usersApi, secretsApi, type MapSecret } from "@/lib/api";
+import { StoriesRow, type StoryUser } from "@/components/StoriesRow";
+import { StoryViewerModal } from "@/components/StoryViewerModal";
+import { StoryComposerModal } from "@/components/StoryComposerModal";
+import { computeViewedHandles, getViewedStoryIds } from "@/lib/story-views";
 
 export default function HomeTab() {
   const { colors } = useTheme();
@@ -25,26 +28,66 @@ export default function HomeTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
+  const [following, setFollowing] = useState<StoryUser[]>([]);
+  const [mapSecrets, setMapSecrets] = useState<MapSecret[]>([]);
+  const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set());
+  const [storyViewer, setStoryViewer] = useState<StoryUser | null>(null);
+  const [showComposer, setShowComposer] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const loadInbox = useCallback(async () => {
+  const storyHandleSet = useMemo(
+    () =>
+      new Set(
+        mapSecrets
+          .map((m) => (m.handle ?? "").replace(/^@/, "").toLowerCase())
+          .filter(Boolean),
+      ),
+    [mapSecrets],
+  );
+
+  const storyIdsByHandle = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const m of mapSecrets) {
+      const h = (m.handle ?? "").replace(/^@/, "").toLowerCase();
+      if (!h || !m.id) continue;
+      (map[h] ??= []).push(m.id);
+    }
+    return map;
+  }, [mapSecrets]);
+
+  const viewedHandles = useMemo(
+    () => computeViewedHandles(storyIdsByHandle, viewedStoryIds),
+    [storyIdsByHandle, viewedStoryIds],
+  );
+
+  useEffect(() => {
+    getViewedStoryIds().then(setViewedStoryIds);
+  }, [storyIdsByHandle]);
+
+  const loadHome = useCallback(async () => {
     if (!user) return;
     try {
-      const data = await secretsApi.getInbox(user.handle);
-      setInbox(data);
+      const [inboxData, followingData, secretsData] = await Promise.all([
+        secretsApi.getInbox(user.handle),
+        usersApi.getFollowing().catch(() => []),
+        secretsApi.getMapSecrets().catch(() => []),
+      ]);
+      setInbox(inboxData);
+      setFollowing(followingData);
+      setMapSecrets(secretsData);
     } catch {}
   }, [user]);
 
   useFocusEffect(
     useCallback(() => {
-      loadInbox();
-    }, [loadInbox]),
+      loadHome();
+    }, [loadHome]),
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await loadInbox();
+    await loadHome();
     setRefreshing(false);
   }
 
@@ -179,6 +222,16 @@ export default function HomeTab() {
                 </Text>
               </Pressable>
             </View>
+
+            {/* Stories — people you follow */}
+            <StoriesRow
+              users={following}
+              storyHandles={storyHandleSet}
+              viewedHandles={viewedHandles}
+              onSelect={(u, hasStory) => {
+                if (hasStory) setStoryViewer(u);
+              }}
+            />
 
             {/* Search */}
             <TextInput
@@ -370,6 +423,40 @@ export default function HomeTab() {
           ) : null
         }
       />
+
+      <Pressable
+        onPress={() => setShowComposer(true)}
+        style={{
+          position: "absolute",
+          right: spacing.lg,
+          bottom: spacing.xl,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: colors.accent,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ fontSize: 28, color: "#000", lineHeight: 32 }}>+</Text>
+      </Pressable>
+
+      <StoryComposerModal
+        visible={showComposer}
+        handle={user?.handle}
+        onClose={() => setShowComposer(false)}
+        onPosted={loadHome}
+      />
+
+      {storyViewer && (
+        <StoryViewerModal
+          visible
+          handle={storyViewer.handle}
+          avatarUrl={storyViewer.avatarUrl}
+          onClose={() => setStoryViewer(null)}
+          onViewed={(id) => setViewedStoryIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))}
+        />
+      )}
     </SafeAreaView>
   );
 }

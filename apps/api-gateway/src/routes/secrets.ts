@@ -36,7 +36,7 @@ const secretStmts = {
 };
 
 const mapStmts = {
-  insert: db.prepare(`INSERT INTO map_secrets (id, message, ciphertext, nonce, wrapped_key, lat, lng, emoji, handle, location_name, city_name, media_path, media_type, reveal_mode, reveal_timer_seconds, max_clicks, click_count, created_at, expires_at) VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`),
+  insert: db.prepare(`INSERT INTO map_secrets (id, message, ciphertext, nonce, wrapped_key, lat, lng, emoji, handle, location_name, city_name, country_name, media_path, media_type, reveal_mode, reveal_timer_seconds, max_clicks, click_count, created_at, expires_at) VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`),
   getActive: db.prepare(`SELECT * FROM map_secrets WHERE expires_at > ?`),
   getById: db.prepare(`SELECT * FROM map_secrets WHERE id = ? AND expires_at > ?`),
   deleteExpired: db.prepare(`DELETE FROM map_secrets WHERE expires_at <= ?`),
@@ -71,6 +71,7 @@ function normalizeMapSecretReveal(row: any) {
     handle: row.handle ?? null,
     locationName: row.location_name ?? null,
     cityName: row.city_name ?? null,
+    countryName: row.country_name ?? null,
     mediaPath: row.media_path ?? null,
     mediaType: row.media_type ?? null,
     revealMode: row.reveal_mode ?? "timer",
@@ -113,6 +114,7 @@ function normalizeMapSecretForList(row: any) {
     handle: row.handle ?? null,
     locationName: row.location_name ?? null,
     cityName: row.city_name ?? null,
+    countryName: row.country_name ?? null,
     hasMedia: !!(row.media_path),
     revealMode: row.reveal_mode ?? "timer",
     revealTimerSeconds: row.reveal_timer_seconds ?? 30,
@@ -235,6 +237,7 @@ secretsRouter.post("/map", mapPostRateLimiter(), async (ctx: Context) => {
   const handle = body.handle ? String(body.handle) : undefined;
   const locationName = body.locationName ? String(body.locationName).slice(0, 160) : null;
   const cityName = body.cityName ? String(body.cityName).slice(0, 80) : null;
+  const countryName = body.countryName ? String(body.countryName).slice(0, 80) : null;
   const ttlMinutes = Math.min(Math.max(Number(body.ttlMinutes) || 60, 5), 1440);
 
   // Verify handle ownership: if a handle is supplied, the user must be
@@ -291,13 +294,13 @@ secretsRouter.post("/map", mapPostRateLimiter(), async (ctx: Context) => {
 
   mapStmts.insert.run(
     id, ciphertext, nonce, wrappedKey, lat, lng, emoji, handle ?? null,
-    locationName, cityName, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks,
+    locationName, cityName, countryName, mediaPath, mediaType, revealMode, revealTimerSeconds, maxClicks,
     createdAt, expiresAt,
   );
 
   ctx.status = 201;
   ctx.body = {
-    id, lat, lng, emoji, handle, locationName, cityName, mediaPath, mediaType,
+    id, lat, lng, emoji, handle, locationName, cityName, countryName, mediaPath, mediaType,
     revealMode, revealTimerSeconds, maxClicks, clickCount: 0, createdAt, expiresAt,
     hasMedia: !!mediaPath,
   };
@@ -483,7 +486,7 @@ secretsRouter.get("/blob/:path", async (ctx: Context) => {
   }
   ctx.status = 200;
   ctx.type = detectMimeType(data);
-  ctx.set("Cache-Control", "private, max-age=31536000, immutable");
+  ctx.set("Cache-Control", blobPath.startsWith("blog_") ? "public, max-age=86400" : "private, max-age=31536000, immutable");
   ctx.body = data;
 });
 

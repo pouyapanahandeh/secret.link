@@ -252,7 +252,7 @@ adminRouter.patch("/users/:id", async (ctx: Context) => {
     if (ctx.state.role !== "admin") {
       ctx.status = 403; ctx.body = { error: "forbidden", message: "Only admins can change roles" }; return;
     }
-    if (!["user", "moderator", "admin"].includes(body.role as string)) {
+    if (!["user", "moderator", "admin", "editor"].includes(body.role as string)) {
       ctx.status = 400; ctx.body = { error: "invalid_role" }; return;
     }
     db.prepare("UPDATE users SET role = ? WHERE id = ?").run(body.role, ctx.params.id);

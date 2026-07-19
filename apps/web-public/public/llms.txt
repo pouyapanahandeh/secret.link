@@ -17,6 +17,7 @@
 ## Key pages
 - Home: https://secretlink.life/
 - About: https://secretlink.life/about
+- Blog: https://secretlink.life/blog
 - Privacy: https://secretlink.life/privacy
 - Terms: https://secretlink.life/terms
 - Community guidelines: https://secretlink.life/community-guidelines

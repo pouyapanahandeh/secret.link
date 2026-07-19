@@ -12,6 +12,7 @@ import {
   recordSocialClick,
   getProfileStats,
 } from "../lib/profile-stats.js";
+import { RESERVED_HANDLES } from "../lib/blog.js";
 
 export const usersRouter = new Router({ prefix: "/users" });
 
@@ -98,6 +99,12 @@ usersRouter.post("/", async (ctx: Context) => {
   if (!/^[a-z0-9_-]+$/.test(handle)) {
     ctx.status = 400;
     ctx.body = { error: "invalid_handle_format" };
+    return;
+  }
+
+  if (RESERVED_HANDLES.has(handle)) {
+    ctx.status = 400;
+    ctx.body = { error: "reserved_handle" };
     return;
   }
 

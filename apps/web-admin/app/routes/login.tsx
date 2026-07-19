@@ -9,7 +9,8 @@ const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await getSession(request);
   if (session.get("token") && session.get("role")) {
-    return redirect("/dashboard");
+    const role = session.get("role") as string;
+    return redirect(role === "editor" ? "/blog" : "/dashboard");
   }
   return null;
 }
@@ -63,8 +64,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const me = (await meRes.json()) as any;
-    if (me.role !== "admin" && me.role !== "moderator") {
-      return { error: "Access denied. Admin or moderator role required." };
+    if (!["admin", "moderator", "editor"].includes(me.role)) {
+      return { error: "Access denied. Admin, moderator, or editor role required." };
     }
 
     // Set session
@@ -73,7 +74,8 @@ export async function action({ request }: ActionFunctionArgs) {
     session.set("handle", me.handle);
     session.set("role", me.role);
 
-    return redirect("/dashboard", {
+    const destination = me.role === "editor" ? "/blog" : "/dashboard";
+    return redirect(destination, {
       headers: { "Set-Cookie": await sessionStorage.commitSession(session) },
     });
   }
@@ -126,7 +128,7 @@ export default function Login() {
         )}
 
         <p className="text-xs text-[var(--text-muted)] text-center mt-6">
-          Only admin and moderator accounts can access this panel.
+          Only admin, moderator, and editor accounts can access this panel.
         </p>
       </div>
     </div>

@@ -34,3 +34,32 @@ export async function requireAdminSession(request: Request) {
 
   return { token, handle, role };
 }
+
+export async function requirePanelSession(request: Request) {
+  const session = await getSession(request);
+  const token = session.get("token");
+  const handle = session.get("handle");
+  const role = session.get("role");
+
+  if (!token || !handle || !role) {
+    throw new Response(null, { status: 302, headers: { Location: "/login" } });
+  }
+
+  if (!["admin", "moderator", "editor"].includes(role)) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+
+  return { token, handle, role };
+}
+
+export async function requireBlogEditorSession(request: Request) {
+  const session = await requirePanelSession(request);
+  if (session.role !== "admin" && session.role !== "editor") {
+    throw new Response("Forbidden", { status: 403 });
+  }
+  return session;
+}
+
+export async function requireBlogReaderSession(request: Request) {
+  return requirePanelSession(request);
+}
