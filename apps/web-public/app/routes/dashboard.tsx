@@ -759,9 +759,9 @@ export default function Dashboard() {
               onClick={() => setFabOpen(false)}
             />
           )}
-          <div className="fixed right-4 bottom-20 sm:bottom-6 z-50 flex flex-col items-end gap-3">
+          <div className="fixed right-4 bottom-24 sm:bottom-6 z-[200] flex flex-col items-end gap-3 pointer-events-none">
             {fabOpen && (
-              <div className="flex flex-col items-end gap-3 mb-1">
+              <div className="flex flex-col items-end gap-3 mb-1 pointer-events-auto">
                 {[
                   ...(UI_FEATURES.live ? [{ label: "Go live", emoji: "🔴", onClick: () => { setFabOpen(false); setShowBroadcast(true); } }] : []),
                   { label: "Add story", emoji: "✨", onClick: () => { setFabOpen(false); openStoryComposer(); } },
@@ -781,7 +781,7 @@ export default function Dashboard() {
             <button
               onClick={() => setFabOpen((o) => !o)}
               aria-label="Create"
-              className={`w-14 h-14 rounded-full bg-accent text-black shadow-lg flex items-center justify-center transition-transform ${fabOpen ? "rotate-45" : ""}`}
+              className={`pointer-events-auto w-14 h-14 rounded-full bg-accent text-black shadow-lg shadow-accent/20 flex items-center justify-center transition-transform ${fabOpen ? "rotate-45" : ""}`}
             >
               <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />

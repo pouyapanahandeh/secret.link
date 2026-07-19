@@ -5,6 +5,7 @@ import type { MapSecret } from "../lib/map-types";
 import { PlaceTagBar } from "./PlaceTagBar";
 import { StoryGroupSheet } from "./StoryGroupSheet";
 import { MapStorySheet } from "./MapStorySheet";
+import { MapControls } from "./MapControls";
 import { createClusterMarkerIcon, createEmojiMarkerIcon, createPinMarkerIcon } from "../lib/map-markers";
 
 interface MapTabProps {
@@ -92,7 +93,7 @@ export function MapTab({
       .then((L) => {
         if (cancelled || !mapContainerRef.current || mapInstanceRef.current) return;
         leafletRef.current = L;
-        const map = L.map(mapContainerRef.current, { zoomControl: true }).setView([51.505, -0.09], 3);
+        const map = L.map(mapContainerRef.current, { zoomControl: false }).setView([51.505, -0.09], 3);
         mapInstanceRef.current = map;
 
         L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
@@ -150,6 +151,14 @@ export function MapTab({
     if (group) openGroup(group);
   }
 
+  function zoomIn() {
+    mapInstanceRef.current?.zoomIn();
+  }
+
+  function zoomOut() {
+    mapInstanceRef.current?.zoomOut();
+  }
+
   function locateMe() {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -190,8 +199,10 @@ export function MapTab({
 
       <PlaceTagBar groupedPlaces={groupedPlaces} selectedPlaceKey={selectedPlaceKey} onSelect={handlePlaceTagSelect} />
 
-      <div className="relative flex-1 min-h-[50vh] sm:min-h-[60vh] rounded-2xl border border-border overflow-hidden">
-        <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+      <div className="relative flex-1 min-h-[45vh] sm:min-h-[55vh] rounded-2xl border border-border overflow-hidden isolate z-0 mb-2 sm:mb-0">
+        <div ref={mapContainerRef} className="absolute inset-0 w-full h-full z-0" />
+
+        <MapControls onZoomIn={zoomIn} onZoomOut={zoomOut} onLocate={locateMe} />
 
         {isEmpty && (
           <div className="absolute inset-0 z-[500] flex items-center justify-center pointer-events-none">
@@ -206,22 +217,11 @@ export function MapTab({
           <button
             type="button"
             onClick={() => onRequestComposer(pendingPin)}
-            className="absolute bottom-16 left-1/2 -translate-x-1/2 z-[1000] rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-black shadow-lg hover:scale-[1.03] transition-all"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-black shadow-lg hover:scale-[1.03] transition-all pointer-events-auto"
           >
             Add story here
           </button>
         )}
-
-        <button
-          type="button"
-          onClick={locateMe}
-          className="absolute bottom-4 right-4 z-[1000] w-10 h-10 rounded-full bg-surface-raised border border-border shadow-lg flex items-center justify-center hover:border-accent/50 transition-colors"
-          aria-label="Locate me"
-        >
-          <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.364-6.364l-1.414 1.414M7.05 16.95l-1.414 1.414m12.728 0l-1.414-1.414M7.05 7.05L5.636 5.636M12 8a4 4 0 100 8 4 4 0 000-8z" />
-          </svg>
-        </button>
       </div>
 
       {groupSheet && (

@@ -71,11 +71,13 @@ export default function BlogIndex() {
             >
               <Link to={`/blog/${post.slug}`} className="block">
                 {post.coverImageUrl ? (
-                  <img
-                    src={post.coverImageUrl}
-                    alt=""
-                    className="h-44 w-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-                  />
+                  <div className="flex h-44 w-full items-center justify-center bg-surface overflow-hidden">
+                    <img
+                      src={post.coverImageUrl}
+                      alt=""
+                      className="h-full w-full object-contain p-4 group-hover:scale-[1.02] transition-transform duration-300"
+                    />
+                  </div>
                 ) : (
                   <div className="h-44 w-full bg-accent/10 flex items-center justify-center">
                     <img src="/secretlink.png" alt="" className="w-16 h-16 opacity-60" />
