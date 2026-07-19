@@ -1,6 +1,15 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, Link, useRouteError, isRouteErrorResponse, useFetcher, useNavigate, useRevalidator } from "@remix-run/react";
+import {
+  useLoaderData,
+  Link,
+  useRouteError,
+  isRouteErrorResponse,
+  useFetcher,
+  useNavigate,
+  useRevalidator,
+  type ClientLoaderFunctionArgs,
+} from "@remix-run/react";
 import { useState, useEffect, useRef } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { MessagingPanel } from "../components/MessagingPanel";
@@ -16,10 +25,15 @@ import { requireToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 import { getApiBase } from "../lib/api.client";
 import { getViewedStoryIds, computeViewedHandles } from "../lib/story-views";
-import { getSocialMeta, detectPlatform, SOCIAL_META, SOCIAL_PLATFORMS } from "../lib/socials";
+import { getSocialMeta } from "../lib/socials";
+import { SocialIcon } from "../components/SocialIcon";
 import { UI_FEATURES } from "../lib/feature-flags";
+import { ProfileShareModal } from "../components/ProfileShareModal";
+import { ProfileStatsModal } from "../components/ProfileStatsModal";
+import { ProfileEditForm } from "../components/ProfileEditForm";
 import { GoLiveButton } from "../components/GoLiveButton";
 import { LiveStreams } from "../components/LiveStreams";
+import { DashboardSkeleton } from "../components/DashboardSkeleton";
 
 export const meta: MetaFunction = () => [
   { title: "Dashboard — Secretlink.life" },
@@ -149,6 +163,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({ user, inbox, sent, token, following, storyHandles, storyIdsByHandle });
 }
 
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  return serverLoader<typeof loader>();
+}
+clientLoader.hydrate = true;
+
+export function HydrateFallback() {
+  return <DashboardSkeleton />;
+}
+
 export default function Dashboard() {
   const { user, inbox, sent, token, following, storyHandles, storyIdsByHandle } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -166,6 +189,8 @@ export default function Dashboard() {
   const profileSaving = profileFetcher.state !== "idle";
   const [profileSaved, setProfileSaved] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   // Stories + profile action sheet (home tab social features)
   const storyHandleSet = new Set<string>(storyHandles);
@@ -331,20 +356,6 @@ export default function Dashboard() {
     setEditingProfile(false);
   }
 
-  function addSocial() { setSocials([...socials, { platform: "", url: "" }]); }
-  function removeSocial(i: number) { setSocials(socials.filter((_, idx) => idx !== i)); }
-  function updateSocial(i: number, field: "platform" | "url", value: string) {
-    const updated = [...socials];
-    if (field === "url") {
-      // Auto-detect platform from the URL (unless user manually overrode it)
-      const detected = detectPlatform(value);
-      updated[i] = { ...updated[i]!, url: value, platform: detected || updated[i]!.platform };
-    } else {
-      updated[i] = { ...updated[i]!, [field]: value };
-    }
-    setSocials(updated);
-  }
-
   const navItems = [
     { id: "inbox" as const, label: "Home", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg> },
     { id: "map" as const, label: "Map", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503-11.307l4.994-2.497A.75.75 0 0121 4.196v13.608a.75.75 0 01-.497.708l-5.006 2.503m-6.994-3.015l-5.006 2.503A.75.75 0 013 19.804V6.196a.75.75 0 01.497-.708l5.006-2.503m6.994 3.015L9 4.485m6.497 1.53L9 8.515" /></svg> },
@@ -353,6 +364,10 @@ export default function Dashboard() {
   ];
 
   function handleNavClick(id: string) {
+    if (id === "profile") {
+      navigate(`/${user.handle}`);
+      return;
+    }
     if (id === "messages" && !UI_FEATURES.messages) {
       setActiveTab("inbox");
       return;
@@ -644,89 +659,37 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* Share + Statistics */}
+              {!editingProfile && (
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setShareOpen(true)}
+                    className="rounded-xl bg-surface-raised border border-border px-4 py-3 text-sm font-semibold text-text hover:border-accent/50 transition-all"
+                  >
+                    Share profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatsOpen(true)}
+                    className="rounded-xl bg-surface-raised border border-border px-4 py-3 text-sm font-semibold text-text hover:border-accent/50 transition-all"
+                  >
+                    Statistics
+                  </button>
+                </div>
+              )}
+
               {/* Edit form */}
               {editingProfile ? (
-              <div className="bg-surface-raised rounded-2xl border border-border p-4 sm:p-6 space-y-5">
-                <div>
-                  <label className="block text-xs font-medium text-text-muted mb-1.5">Bio</label>
-                  <textarea
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    maxLength={300}
-                    rows={3}
-                    placeholder="Tell people about yourself..."
-                    className="w-full rounded-xl bg-surface border border-border px-3 py-2.5 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
-                  />
-                  <p className="text-xs text-text-muted mt-1">{bio.length}/300</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-text-muted mb-1.5">Social links</label>
-                  <p className="text-xs text-text-muted/70 mb-2">Paste a link — we'll detect the platform automatically.</p>
-                  <div className="space-y-2">
-                    {socials.map((s, i) => {
-                      const meta = getSocialMeta(s.platform);
-                      return (
-                      <div key={i} className="flex gap-2 items-center">
-                        <div className="w-9 h-9 shrink-0 rounded-lg bg-surface border border-border flex items-center justify-center text-base" title={meta.label}>
-                          {s.url ? meta.icon : "🔗"}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <input
-                            type="url"
-                            value={s.url}
-                            onChange={(e) => updateSocial(i, "url", e.target.value)}
-                            placeholder="https://instagram.com/yourname"
-                            className="w-full rounded-lg bg-surface border border-border px-2.5 py-2 text-xs sm:text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
-                          />
-                          {s.url && (
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-xs text-text-muted">{meta.label}</span>
-                              <select
-                                value={s.platform}
-                                onChange={(e) => updateSocial(i, "platform", e.target.value)}
-                                className="text-xs bg-transparent text-text-muted/60 border-none focus:outline-none cursor-pointer hover:text-accent"
-                                title="Change platform"
-                              >
-                                {SOCIAL_PLATFORMS.map((p) => (
-                                  <option key={p} value={p}>{SOCIAL_META[p]!.label}</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => removeSocial(i)}
-                          className="w-8 h-8 rounded-lg border border-border text-text-muted hover:text-red-400 hover:border-red-400/50 transition-colors flex items-center justify-center shrink-0 text-sm"
-                        >
-                          ×
-                        </button>
-                      </div>
-                      );
-                    })}
-                    {socials.length < 10 && (
-                      <button onClick={addSocial} className="text-xs text-accent">+ Add link</button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={cancelEditProfile}
-                    disabled={profileSaving}
-                    className="flex-1 rounded-xl bg-surface border border-border px-4 py-3 text-sm font-bold text-text hover:border-accent/50 transition-all disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveProfile}
-                    disabled={profileSaving}
-                    className="flex-1 rounded-xl bg-accent px-4 py-3 text-sm font-bold text-black hover:scale-[1.01] transition-all disabled:opacity-50"
-                  >
-                    {profileSaving ? "Saving..." : "Save profile"}
-                  </button>
-                </div>
-              </div>
+              <ProfileEditForm
+                bio={bio}
+                socials={socials}
+                onBioChange={setBio}
+                onSocialsChange={setSocials}
+                onSave={saveProfile}
+                onCancel={cancelEditProfile}
+                saving={profileSaving}
+              />
               ) : (
               /* View mode */
               <div className="bg-surface-raised rounded-2xl border border-border p-4 sm:p-6 space-y-5">
@@ -754,7 +717,7 @@ export default function Dashboard() {
                             className="inline-flex items-center gap-2 rounded-full bg-surface border border-border px-3 py-1.5 text-sm text-text hover:border-accent/50 hover:scale-[1.03] transition-all"
                             title={s.url}
                           >
-                            <span className="text-base">{meta.icon}</span>
+                            <SocialIcon platform={s.platform} size={18} />
                             <span className="text-xs font-medium">{meta.label}</span>
                           </a>
                         );
@@ -869,6 +832,14 @@ export default function Dashboard() {
           onViewStory={() => setStoryViewer(sheetUser.user)}
           onClose={() => setSheetUser(null)}
         />
+      )}
+
+      {shareOpen && (
+        <ProfileShareModal handle={user.handle} onClose={() => setShareOpen(false)} />
+      )}
+
+      {statsOpen && (
+        <ProfileStatsModal token={token} onClose={() => setStatsOpen(false)} />
       )}
 
       {/* Instagram-style story viewer */}

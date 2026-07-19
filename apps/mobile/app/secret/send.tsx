@@ -121,7 +121,7 @@ export default function SendSecretScreen() {
         mimeType,
         viewDurationSeconds: VIEW_DURATION_OPTIONS[durationIdx]!.value,
         recipientHandle: handle,
-      });
+      }, { auth: true });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSent(true);
     } catch (e: any) {

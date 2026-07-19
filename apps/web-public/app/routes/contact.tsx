@@ -75,7 +75,7 @@ export default function Contact() {
       <div className="max-w-2xl w-full">
         <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mb-4" />
         <h1 className="font-display text-4xl mb-2">Contact us</h1>
-        <p className="text-candle/60 mb-8">
+        <p className="text-text-muted mb-8">
           Questions, privacy requests, or feedback — we read every message.
           Leave an email if you'd like a reply.
         </p>
@@ -83,7 +83,7 @@ export default function Contact() {
         {submitted ? (
           <div className="rounded-xl border border-blush/30 bg-blush/10 p-6 text-center">
             <p className="text-lg mb-1">Message sent 🤫</p>
-            <p className="text-candle/60 text-sm mb-4">
+            <p className="text-text-muted text-sm mb-4">
               Thanks for reaching out. If you left an email, we'll get back to you soon.
             </p>
             <Link to="/" className="text-blush hover:underline text-sm">
@@ -93,8 +93,8 @@ export default function Contact() {
         ) : (
           <form method="post" className="space-y-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-candle/80 mb-1">
-                Name <span className="text-candle/40">(optional)</span>
+              <label htmlFor="name" className="block text-sm font-medium text-text mb-1">
+                Name <span className="text-text-muted">(optional)</span>
               </label>
               <input
                 id="name"
@@ -108,8 +108,8 @@ export default function Contact() {
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-candle/80 mb-1">
-                Email <span className="text-candle/40">(optional, only if you want a reply)</span>
+              <label htmlFor="email" className="block text-sm font-medium text-text mb-1">
+                Email <span className="text-text-muted">(optional, only if you want a reply)</span>
               </label>
               <input
                 id="email"
@@ -126,7 +126,7 @@ export default function Contact() {
             </div>
 
             <div>
-              <label htmlFor="message" className="block text-sm font-medium text-candle/80 mb-1">
+              <label htmlFor="message" className="block text-sm font-medium text-text mb-1">
                 Message
               </label>
               <textarea
@@ -156,7 +156,7 @@ export default function Contact() {
         )}
 
         <p className="mt-8 text-center">
-          <Link to="/" className="text-candle/40 text-sm hover:text-candle/60 transition-colors">
+          <Link to="/" className="text-text-muted text-sm hover:text-text transition-colors">
             ← Back to Secretlink.life
           </Link>
         </p>

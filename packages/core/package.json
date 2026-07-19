@@ -6,7 +6,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./secret": "./src/secret/index.ts",
-    "./result": "./src/result.ts"
+    "./result": "./src/result.ts",
+    "./socials": "./src/socials.ts",
+    "./profile-url": "./src/profile-url.ts",
+    "./profile-types": "./src/profile-types.ts",
+    "./feature-flags": "./src/feature-flags.ts",
+    "./profile-share": "./src/profile-share.ts"
   },
   "scripts": {
     "build": "tsc --build",

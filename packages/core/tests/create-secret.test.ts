@@ -24,6 +24,24 @@ describe("createSecret", () => {
     }
   });
 
+  it("defers link expiry for profile-addressed secrets until first reveal", async () => {
+    let saved: any;
+    const deps = {
+      ...makeDeps(),
+      repo: { save: async (record: any) => { saved = record; } },
+    };
+    const result = await createSecret(deps)({
+      ciphertext: "encrypted-data",
+      ttlSeconds: 3600,
+      recipientHandle: "alice",
+      maxViews: 1,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(saved.ttlSeconds).toBe(3600);
+    expect(saved.expiresAt).toEqual(new Date("2099-12-31T23:59:59.000Z"));
+  });
+
   it("rejects empty ciphertext", async () => {
     const deps = makeDeps();
     const result = await createSecret(deps)({

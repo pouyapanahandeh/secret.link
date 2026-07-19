@@ -160,7 +160,7 @@ export default function SignupScreen() {
           <TextInput
             value={email}
             onChangeText={setEmail}
-            placeholder="Email (optional — for magic link login)"
+            placeholder="Email (optional — for Pro features)"
             placeholderTextColor={colors.textMuted + "66"}
             keyboardType="email-address"
             autoCapitalize="none"

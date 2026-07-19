@@ -13,30 +13,12 @@ import { useTheme, spacing, radius, fontSize } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { usersApi, secretsApi } from "@/lib/api";
 import { passkeyRegister, isPasskeySupported } from "@/lib/passkey";
-
-const PLATFORMS = [
-  "instagram",
-  "twitter",
-  "tiktok",
-  "youtube",
-  "github",
-  "linkedin",
-  "snapchat",
-  "telegram",
-  "website",
-] as const;
-
-const PLATFORM_ICONS: Record<string, string> = {
-  instagram: "📷",
-  twitter: "𝕏",
-  tiktok: "🎵",
-  youtube: "▶️",
-  github: "🐙",
-  linkedin: "💼",
-  snapchat: "👻",
-  telegram: "✈️",
-  website: "🌐",
-};
+import { SOCIAL_PLATFORMS } from "@secretlink/core/socials";
+import { resolveProfileViewMode } from "@secretlink/core/profile-types";
+import { SocialIcon } from "@/components/SocialIcon";
+import { ProfileView } from "@/components/ProfileView";
+import { ProfileShareModal } from "@/components/ProfileShareModal";
+import { ProfileStatsDrawer } from "@/components/ProfileStatsDrawer";
 
 export default function ProfileTab() {
   const { colors } = useTheme();
@@ -50,6 +32,21 @@ export default function ProfileTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sentSecrets, setSentSecrets] = useState<any[]>([]);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [showEdit, setShowEdit] = useState(true);
+
+  const profileForView = user
+    ? {
+        id: user.id,
+        handle: user.handle,
+        bio: user.bio,
+        socials: user.socials,
+        followersCount: user.followersCount,
+        followingCount: user.followingCount,
+      }
+    : null;
+  const mode = resolveProfileViewMode(true, true);
 
   useFocusEffect(
     useCallback(() => {
@@ -140,48 +137,46 @@ export default function ProfileTab() {
           </View>
         </View>
 
-        {/* Avatar + handle */}
-        <View
-          style={{
+        {/* Public profile preview — same view visitors see */}
+        {user?.handle && (
+          <ProfileView
+            profile={profileForView}
+            handle={user.handle}
+            mode={mode}
+            followersCount={user.followersCount ?? 0}
+            followingCount={user.followingCount ?? 0}
+            onShare={() => setShareOpen(true)}
+            onStats={() => setStatsOpen(true)}
+            onEdit={() => setShowEdit((v) => !v)}
+          />
+        )}
+
+        <Pressable
+          onPress={() => user?.handle && router.push(`/user/${user.handle}` as any)}
+          style={({ pressed }) => ({
+            marginBottom: spacing.xl,
+            paddingVertical: spacing.md,
             alignItems: "center",
-            marginBottom: spacing["2xl"],
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Text style={{ fontSize: fontSize.sm, color: colors.accent, fontWeight: "600" }}>
+            Preview public profile →
+          </Text>
+        </Pressable>
+
+        {showEdit && (
+        <>
+        <Text
+          style={{
+            fontSize: fontSize.sm,
+            fontWeight: "600",
+            color: colors.textMuted,
+            marginBottom: spacing.lg,
           }}
         >
-          <View
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: 36,
-              backgroundColor: colors.accent + "33",
-              borderWidth: 2,
-              borderColor: colors.accent,
-              justifyContent: "center",
-              alignItems: "center",
-              marginBottom: spacing.md,
-            }}
-          >
-            <Text style={{ fontSize: 28, fontWeight: "700", color: colors.accent }}>
-              {user?.handle?.[0]?.toUpperCase() ?? "?"}
-            </Text>
-          </View>
-          <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text }}>
-            @{user?.handle}
-          </Text>
-          <View style={{ flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm }}>
-            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-              <Text style={{ fontWeight: "700", color: colors.text }}>
-                {user?.followersCount ?? 0}
-              </Text>{" "}
-              followers
-            </Text>
-            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-              <Text style={{ fontWeight: "700", color: colors.text }}>
-                {user?.followingCount ?? 0}
-              </Text>{" "}
-              following
-            </Text>
-          </View>
-        </View>
+          Edit profile
+        </Text>
 
         {/* Bio */}
         <View style={{ marginBottom: spacing.xl }}>
@@ -267,8 +262,8 @@ export default function ProfileTab() {
             >
               <Pressable
                 onPress={() => {
-                  const currentIdx = PLATFORMS.indexOf(s.platform as any);
-                  const next = PLATFORMS[(currentIdx + 1) % PLATFORMS.length]!;
+                  const currentIdx = SOCIAL_PLATFORMS.indexOf(s.platform);
+                  const next = SOCIAL_PLATFORMS[(currentIdx + 1) % SOCIAL_PLATFORMS.length]!;
                   updateSocial(i, "platform", next);
                 }}
                 style={{
@@ -282,9 +277,7 @@ export default function ProfileTab() {
                   alignItems: "center",
                 }}
               >
-                <Text style={{ fontSize: 16 }}>
-                  {PLATFORM_ICONS[s.platform] ?? "🔗"}
-                </Text>
+                <SocialIcon platform={s.platform} size={18} />
               </Pressable>
               <TextInput
                 value={s.url}
@@ -294,12 +287,13 @@ export default function ProfileTab() {
                 autoCapitalize="none"
                 style={{
                   flex: 1,
+                  height: 40,
                   backgroundColor: colors.surfaceRaised,
                   borderWidth: 1,
                   borderColor: colors.border,
                   borderRadius: radius.md,
                   paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.sm,
+                  paddingVertical: 0,
                   fontSize: fontSize.sm,
                   color: colors.text,
                 }}
@@ -449,7 +443,18 @@ export default function ProfileTab() {
             ))
           )}
         </View>
+        </>
+        )}
       </ScrollView>
+
+      {user?.handle && (
+        <ProfileShareModal
+          handle={user.handle}
+          visible={shareOpen}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
+      <ProfileStatsDrawer visible={statsOpen} onClose={() => setStatsOpen(false)} />
     </SafeAreaView>
   );
 }

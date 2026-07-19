@@ -2,6 +2,7 @@ import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useActionData, Link } from "@remix-run/react";
 import { useEffect, useState } from "react";
+import { UI_FEATURES } from "../lib/feature-flags";
 import { AppNav } from "../components/AppNav";
 import { createSessionRedirect } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
@@ -13,7 +14,7 @@ export const meta: MetaFunction = () => [
 
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
-  const method = String(form.get("method") ?? "magic-link");
+  const method = String(form.get("method") ?? (UI_FEATURES.magicLink ? "magic-link" : "passkey"));
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const handle = String(form.get("handle") ?? "").trim().toLowerCase();
 
@@ -151,6 +152,8 @@ export default function Login() {
             Log in to your Secretlink.life account
           </p>
 
+          {UI_FEATURES.magicLink && (
+          <>
           {/* Magic Link Login */}
           <form method="post" className="space-y-4 mb-8">
             <input type="hidden" name="method" value="magic-link" />
@@ -188,9 +191,11 @@ export default function Login() {
               <span className="px-3 bg-surface text-text-muted">or</span>
             </div>
           </div>
+          </>
+          )}
 
           {/* Passkey Login */}
-          <form method="post" className="space-y-4">
+          <form method="post" className={`space-y-4 ${UI_FEATURES.magicLink ? "" : "mb-8"}`}>
             <input type="hidden" name="method" value="passkey" />
             <div>
               <label htmlFor="handle" className="block text-sm font-medium text-text/80 mb-1">
@@ -221,7 +226,11 @@ export default function Login() {
             <button
               type="submit"
               disabled={passkeyStatus === "loading"}
-              className="w-full rounded-full bg-surface-raised border border-border px-6 py-3 text-sm font-semibold text-text hover:border-accent/50 transition-colors duration-200 disabled:opacity-50"
+              className={`w-full rounded-full px-6 py-3 text-sm font-bold transition-all duration-200 disabled:opacity-50 ${
+                UI_FEATURES.magicLink
+                  ? "bg-surface-raised border border-border text-text hover:border-accent/50"
+                  : "bg-accent text-black hover:scale-[1.02]"
+              }`}
             >
               {passkeyStatus === "loading" ? "Authenticating..." : "Log in with passkey 🔑"}
             </button>

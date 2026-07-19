@@ -40,7 +40,12 @@ export const createSecret =
 
     const id = deps.id();
     const now = deps.clock.now();
-    const expiresAt = new Date(now.getTime() + parsed.data.ttlSeconds * 1000);
+    const isProfileSecret = !!parsed.data.recipientHandle;
+    // Profile-addressed secrets sit in the recipient's inbox — the link TTL must
+    // start when they open the secret, not when it was sent.
+    const expiresAt = isProfileSecret
+      ? new Date("2099-12-31T23:59:59.000Z")
+      : new Date(now.getTime() + parsed.data.ttlSeconds * 1000);
 
     const record: SecretRecord = {
       id,
@@ -55,6 +60,7 @@ export const createSecret =
       viewCount: 0,
       createdAt: now,
       expiresAt,
+      ttlSeconds: isProfileSecret ? parsed.data.ttlSeconds : undefined,
       workspaceId: parsed.data.workspaceId,
       senderId: parsed.data.senderId,
       recipientHandle: parsed.data.recipientHandle,

@@ -5,67 +5,61 @@ import {
   Text,
   Pressable,
   ScrollView,
-  Linking,
   ActivityIndicator,
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { useTheme, spacing, radius, fontSize } from "@/lib/theme";
+import type { PublicProfile } from "@secretlink/core/profile-types";
+import { resolveProfileViewMode } from "@secretlink/core/profile-types";
+import { useTheme, spacing, fontSize } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { usersApi, dmsApi } from "@/lib/api";
-
-const SOCIAL_ICONS: Record<string, string> = {
-  instagram: "📷",
-  twitter: "𝕏",
-  tiktok: "🎵",
-  youtube: "▶️",
-  github: "🐙",
-  linkedin: "💼",
-  snapchat: "👻",
-  telegram: "✈️",
-  website: "🌐",
-};
-
-type Profile = {
-  id: string;
-  handle: string;
-  bio?: string;
-  socials?: { platform: string; url: string }[];
-  followersCount: number;
-  followingCount: number;
-};
+import { UI_FEATURES } from "@/lib/feature-flags";
+import { ProfileView } from "@/components/ProfileView";
+import { ProfileSecretForm } from "@/components/ProfileSecretForm";
+import { ProfileShareModal } from "@/components/ProfileShareModal";
+import { ProfileStatsDrawer } from "@/components/ProfileStatsDrawer";
 
 export default function UserProfileScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { handle } = useLocalSearchParams<{ handle: string }>();
+  const { handle, src } = useLocalSearchParams<{ handle: string; src?: string }>();
   const { user } = useAuth();
 
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const isOwnProfile = user?.handle?.toLowerCase() === handle?.toLowerCase();
+  const isLoggedIn = !!user;
+  const mode = resolveProfileViewMode(isLoggedIn, isOwnProfile);
 
   const loadProfile = useCallback(async () => {
     if (!handle) return;
     setLoading(true);
+    setError("");
     try {
       const data = await usersApi.getProfile(handle);
       setProfile(data);
-      setFollowersCount(data.followersCount);
-
-      // Check follow status
-      if (user && !isOwnProfile) {
+      if (isOwnProfile) {
+        setFollowersCount(data.followersCount ?? user?.followersCount ?? 0);
+        setFollowingCount(data.followingCount ?? user?.followingCount ?? 0);
+      } else if (user) {
         try {
           const status = await usersApi.getFollowStatus(data.id);
           setIsFollowing(status.isFollowing);
-        } catch {}
+          setFollowersCount(status.followersCount);
+        } catch {
+          /* follow status unavailable */
+        }
       }
-    } catch (e: any) {
+    } catch {
       setError("User not found");
     } finally {
       setLoading(false);
@@ -76,20 +70,31 @@ export default function UserProfileScreen() {
     loadProfile();
   }, [loadProfile]);
 
+  useEffect(() => {
+    if (src !== "qr" || isOwnProfile || !handle) return;
+    usersApi.trackQrScan(handle).catch(() => {});
+  }, [src, isOwnProfile, handle]);
+
   async function toggleFollow() {
     if (!profile) return;
+    if (!user) {
+      router.push("/login" as any);
+      return;
+    }
     try {
       if (isFollowing) {
-        await usersApi.unfollow(profile.id);
+        const res = await usersApi.unfollow(profile.id);
         setIsFollowing(false);
-        setFollowersCount((c) => c - 1);
+        setFollowersCount(res.followersCount);
       } else {
-        await usersApi.follow(profile.id);
+        const res = await usersApi.follow(profile.id);
         setIsFollowing(true);
-        setFollowersCount((c) => c + 1);
+        setFollowersCount(res.followersCount);
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {}
+    } catch {
+      Alert.alert("Error", "Could not update follow status");
+    }
   }
 
   if (loading) {
@@ -110,9 +115,23 @@ export default function UserProfileScreen() {
             <Text style={{ fontSize: fontSize.lg, color: colors.textMuted }}>← Back</Text>
           </Pressable>
         </View>
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing["3xl"] }}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: spacing["3xl"],
+          }}
+        >
           <Text style={{ fontSize: 48, marginBottom: spacing.lg }}>👻</Text>
-          <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text, textAlign: "center" }}>
+          <Text
+            style={{
+              fontSize: fontSize.xl,
+              fontWeight: "700",
+              color: colors.text,
+              textAlign: "center",
+            }}
+          >
             {error || "User not found"}
           </Text>
         </View>
@@ -123,7 +142,6 @@ export default function UserProfileScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
       <ScrollView contentContainerStyle={{ paddingBottom: spacing["4xl"] }}>
-        {/* Header */}
         <View
           style={{
             flexDirection: "row",
@@ -137,176 +155,49 @@ export default function UserProfileScreen() {
           </Pressable>
         </View>
 
-        {/* Profile card */}
-        <View style={{ alignItems: "center", paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
-          {/* Avatar */}
-          <View
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              backgroundColor: colors.accent + "33",
-              borderWidth: 3,
-              borderColor: colors.accent,
-              justifyContent: "center",
-              alignItems: "center",
-              marginBottom: spacing.md,
-            }}
-          >
-            <Text style={{ fontSize: 32, fontWeight: "700", color: colors.accent }}>
-              {profile.handle[0]?.toUpperCase() ?? "?"}
-            </Text>
-          </View>
-
-          {/* Handle */}
-          <Text style={{ fontSize: fontSize["2xl"], fontWeight: "800", color: colors.text, marginBottom: spacing.sm }}>
-            @{profile.handle}
-          </Text>
-
-          {/* Stats */}
-          <View style={{ flexDirection: "row", gap: spacing.xl, marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>
-              <Text style={{ fontWeight: "700", color: colors.text }}>{followersCount}</Text> followers
-            </Text>
-            <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>
-              <Text style={{ fontWeight: "700", color: colors.text }}>{profile.followingCount}</Text> following
-            </Text>
-          </View>
-
-          {/* Action buttons */}
-          {!isOwnProfile && (
-            <View style={{ gap: spacing.sm, marginBottom: spacing.xl, width: "100%" }}>
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
-                <Pressable
-                  onPress={toggleFollow}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    paddingVertical: spacing.md,
-                    borderRadius: radius.full,
-                    alignItems: "center",
-                    backgroundColor: isFollowing ? colors.surfaceRaised : colors.accent,
-                    borderWidth: isFollowing ? 1 : 0,
-                    borderColor: colors.border,
-                    opacity: pressed ? 0.9 : 1,
-                  })}
-                >
-                  <Text
-                    style={{
-                      fontSize: fontSize.base,
-                      fontWeight: "700",
-                      color: isFollowing ? colors.text : "#000",
-                    }}
-                  >
-                    {isFollowing ? "Following" : "Follow"}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => router.push(`/secret/send?handle=${profile.handle}` as any)}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    paddingVertical: spacing.md,
-                    borderRadius: radius.full,
-                    alignItems: "center",
-                    backgroundColor: colors.surfaceRaised,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    opacity: pressed ? 0.9 : 1,
-                  })}
-                >
-                  <Text style={{ fontSize: fontSize.base, fontWeight: "700", color: colors.text }}>
-                    Secret ✨
-                  </Text>
-                </Pressable>
-              </View>
-              <Pressable
-                onPress={async () => {
+        <ProfileView
+          profile={profile}
+          handle={handle!}
+          mode={mode}
+          followersCount={followersCount}
+          followingCount={followingCount}
+          isFollowing={isFollowing}
+          onFollow={toggleFollow}
+          onShare={isOwnProfile ? () => setShareOpen(true) : undefined}
+          onStats={isOwnProfile ? () => setStatsOpen(true) : undefined}
+          onEdit={isOwnProfile ? () => router.push("/(tabs)/profile" as any) : undefined}
+          onMessage={
+            UI_FEATURES.messages
+              ? async () => {
                   try {
                     const conv = await dmsApi.createConversation(profile.id);
                     router.push(`/messages/${conv.id}` as any);
                   } catch (e: any) {
                     Alert.alert("Error", e?.message ?? "Failed to start conversation");
                   }
-                }}
-                style={({ pressed }) => ({
-                  paddingVertical: spacing.md,
-                  borderRadius: radius.full,
-                  alignItems: "center",
-                  backgroundColor: colors.surfaceRaised,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={{ fontSize: fontSize.base, fontWeight: "700", color: colors.text }}>
-                  Message 🔒
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
+                }
+              : undefined
+          }
+        />
 
-        {/* Bio */}
-        {profile.bio && (
-          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
-            <Text
-              style={{
-                fontSize: fontSize.base,
-                color: colors.text,
-                lineHeight: 22,
-                textAlign: "center",
-              }}
-            >
-              {profile.bio}
-            </Text>
-          </View>
-        )}
-
-        {/* Social links */}
-        {profile.socials && profile.socials.length > 0 && (
-          <View style={{ paddingHorizontal: spacing.lg }}>
-            <Text
-              style={{
-                fontSize: fontSize.sm,
-                fontWeight: "600",
-                color: colors.textMuted,
-                marginBottom: spacing.md,
-              }}
-            >
-              Links
-            </Text>
-            {profile.socials.map((s, i) => (
-              <Pressable
-                key={i}
-                onPress={() => {
-                  const url = s.url.startsWith("http") ? s.url : `https://${s.url}`;
-                  Linking.openURL(url);
-                }}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: colors.surfaceRaised,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: radius.lg,
-                  padding: spacing.md,
-                  marginBottom: spacing.sm,
-                  opacity: pressed ? 0.8 : 1,
-                  gap: spacing.md,
-                })}
-              >
-                <Text style={{ fontSize: 18 }}>{SOCIAL_ICONS[s.platform] ?? "🔗"}</Text>
-                <Text
-                  style={{ fontSize: fontSize.sm, color: colors.accent, flex: 1 }}
-                  numberOfLines={1}
-                >
-                  {s.url}
-                </Text>
-                <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>↗</Text>
-              </Pressable>
-            ))}
-          </View>
+        {!isOwnProfile && (
+          <ProfileSecretForm
+            recipientHandle={profile.handle}
+            recipientPublicKey={profile.dmPublicKey}
+          />
         )}
       </ScrollView>
+
+      {isOwnProfile && handle && (
+        <ProfileShareModal
+          handle={handle}
+          visible={shareOpen}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
+      {isOwnProfile && (
+        <ProfileStatsDrawer visible={statsOpen} onClose={() => setStatsOpen(false)} />
+      )}
     </SafeAreaView>
   );
 }

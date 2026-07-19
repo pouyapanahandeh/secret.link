@@ -7,6 +7,7 @@ export type RevealSecretDeps = {
     findById: (id: string) => Promise<SecretRecord | null>;
     incrementViewCount: (id: string) => Promise<void>;
     burn: (id: string) => Promise<void>;
+    setExpiresAt: (id: string, expiresAt: Date) => Promise<void>;
   };
   readonly clock: { now: () => Date };
 };
@@ -35,12 +36,23 @@ export const revealSecret =
       return err({ kind: "burned" as const });
     }
 
-    if (deps.clock.now() > record.expiresAt) {
+    const revealActivatedTtl = record.ttlSeconds != null;
+    if (
+      (!revealActivatedTtl || record.viewCount > 0) &&
+      deps.clock.now() > record.expiresAt
+    ) {
       return err({ kind: "expired" as const });
     }
 
     if (record.viewCount >= record.maxViews) {
       return err({ kind: "max_views_reached" as const });
+    }
+
+    if (revealActivatedTtl && record.viewCount === 0) {
+      const activatedExpiry = new Date(
+        deps.clock.now().getTime() + record.ttlSeconds! * 1000,
+      );
+      await deps.repo.setExpiresAt(id, activatedExpiry);
     }
 
     await deps.repo.incrementViewCount(id);
