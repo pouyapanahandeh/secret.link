@@ -44,3 +44,29 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Leaflet — keep map tiles below app overlays (FAB, sheets, nav). */
+.leaflet-container {
+  z-index: 0 !important;
+  background: var(--color-surface-raised);
+  font-family: inherit;
+}
+
+.leaflet-control-container .leaflet-control {
+  display: none;
+}
+
+.leaflet-control-attribution {
+  display: block !important;
+  background: color-mix(in srgb, var(--color-surface-raised) 85%, transparent) !important;
+  backdrop-filter: blur(4px);
+  border-radius: 6px 0 0 0;
+  color: var(--color-text-muted) !important;
+  font-size: 9px !important;
+  padding: 2px 6px !important;
+  margin: 0 !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--color-text-muted) !important;
+}

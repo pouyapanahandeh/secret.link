@@ -98,11 +98,13 @@ export default function BlogPostPage() {
 
       <article className="max-w-3xl mx-auto">
         {post.coverImageUrl && (
-          <img
-            src={post.coverImageUrl}
-            alt=""
-            className="w-full max-h-[420px] rounded-2xl object-cover mb-8 border border-border"
-          />
+          <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-surface-raised">
+            <img
+              src={post.coverImageUrl}
+              alt=""
+              className="mx-auto w-full max-h-[420px] object-contain"
+            />
+          </div>
         )}
 
         <header className="mb-8">
