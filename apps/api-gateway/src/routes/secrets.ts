@@ -26,9 +26,10 @@ function detectMimeType(buf: Buffer): string {
 
 // ─── SQLite-backed secret store ─────────────────────────────────────────────
 const secretStmts = {
-  insert: db.prepare(`INSERT INTO secrets (id, ciphertext, content_type, blob_path, blob_size_bytes, mime_type, nonce, view_duration_seconds, max_views, view_count, burned, recipient_handle, sender_id, workspace_id, wrapped_key, wrap_nonce, wrap_epk, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)`),
+  insert: db.prepare(`INSERT INTO secrets (id, ciphertext, content_type, blob_path, blob_size_bytes, mime_type, nonce, view_duration_seconds, max_views, view_count, burned, recipient_handle, sender_id, workspace_id, wrapped_key, wrap_nonce, wrap_epk, ttl_seconds, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
   findById: db.prepare(`SELECT * FROM secrets WHERE id = ?`),
   incrementView: db.prepare(`UPDATE secrets SET view_count = view_count + 1 WHERE id = ?`),
+  setExpiresAt: db.prepare(`UPDATE secrets SET expires_at = ? WHERE id = ?`),
   burn: db.prepare(`UPDATE secrets SET burned = 1 WHERE id = ?`),
   inbox: db.prepare(`SELECT id, content_type, created_at, view_count, max_views, burned FROM secrets WHERE recipient_handle = ? AND burned = 0 ORDER BY created_at DESC`),
   sent: db.prepare(`SELECT id, content_type, recipient_handle, created_at, view_count, max_views, burned FROM secrets WHERE sender_id = ? ORDER BY created_at DESC`),
@@ -100,6 +101,7 @@ const deps = {
         record.recipientHandle ?? null, record.senderId ?? null,
         record.workspaceId ?? null,
         record.wrappedKey ?? null, record.wrapNonce ?? null, record.wrapEpk ?? null,
+        record.ttlSeconds ?? null,
         record.createdAt instanceof Date ? record.createdAt.toISOString() : record.createdAt,
         record.expiresAt instanceof Date ? record.expiresAt.toISOString() : record.expiresAt,
       );
@@ -120,6 +122,7 @@ const deps = {
         viewCount: row.view_count,
         createdAt: new Date(row.created_at),
         expiresAt: new Date(row.expires_at),
+        ttlSeconds: row.ttl_seconds ?? undefined,
         workspaceId: row.workspace_id,
         recipientHandle: row.recipient_handle,
         wrappedKey: row.wrapped_key,
@@ -130,6 +133,12 @@ const deps = {
     },
     incrementViewCount: async (id: string) => {
       secretStmts.incrementView.run(id);
+    },
+    setExpiresAt: async (id: string, expiresAt: Date) => {
+      secretStmts.setExpiresAt.run(
+        expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt,
+        id,
+      );
     },
     burn: async (id: string) => {
       const row = secretStmts.findById.get(id) as any;

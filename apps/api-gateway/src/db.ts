@@ -172,6 +172,19 @@ migrate("secrets.wrap.v1", () => {
   addColumn("secrets", "wrap_epk", "TEXT");
 });
 
+// Profile secrets: store configured TTL and defer link expiry until first reveal.
+migrate("secrets.ttl_on_reveal.v1", () => {
+  addColumn("secrets", "ttl_seconds", "INTEGER");
+  db.exec(`
+    UPDATE secrets
+    SET ttl_seconds = CAST((julianday(expires_at) - julianday(created_at)) * 86400 AS INTEGER)
+    WHERE recipient_handle IS NOT NULL AND ttl_seconds IS NULL;
+    UPDATE secrets
+    SET expires_at = '2099-12-31T23:59:59.000Z'
+    WHERE recipient_handle IS NOT NULL AND view_count = 0 AND burned = 0;
+  `);
+});
+
 // Challenges table for WebAuthn
 db.exec(`
   CREATE TABLE IF NOT EXISTS challenges (
@@ -469,6 +482,34 @@ db.exec(`
 //   - inbox:  WHERE recipient_handle = ? AND burned = 0 ORDER BY created_at DESC
 //   - sent:   WHERE sender_id = ? ORDER BY created_at DESC
 //   - map:    WHERE expires_at > ?   (and the expiry sweep: expires_at <= ?)
+// Aggregate profile engagement — counters only, no visitor logs (privacy-first).
+migrate("profile_stats.v1", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS profile_stats (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      profile_views INTEGER NOT NULL DEFAULT 0,
+      qr_scans INTEGER NOT NULL DEFAULT 0,
+      social_clicks INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+});
+
+migrate("profile_stats_daily.v1", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS profile_stats_daily (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day TEXT NOT NULL,
+      profile_views INTEGER NOT NULL DEFAULT 0,
+      qr_scans INTEGER NOT NULL DEFAULT 0,
+      social_clicks INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, day)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_profile_stats_daily_user_day
+      ON profile_stats_daily(user_id, day);
+  `);
+});
+
 migrate("perf-indexes.v1", () => {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_secrets_recipient_burned_created

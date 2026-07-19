@@ -78,6 +78,25 @@ export async function api<T = unknown>(
 
 // ─── Typed API helpers ──────────────────────────────────────────────────────
 
+export type ProfileStatsTotals = {
+  profileViews: number;
+  qrScans: number;
+  socialClicks: number;
+  secretsReceived: number;
+  secretsSent: number;
+};
+
+export type ProfileStatsDay = ProfileStatsTotals & { day: string };
+
+export type ProfileStatsResponse = {
+  days: number;
+  totals: ProfileStatsTotals;
+  series: ProfileStatsDay[];
+};
+
+/** @deprecated Use ProfileStatsTotals */
+export type ProfileStats = ProfileStatsTotals;
+
 // Auth
 export const authApi = {
   signup: (data: { handle: string; email?: string }) =>
@@ -117,16 +136,25 @@ export const usersApi = {
       id: string;
       handle: string;
       bio?: string;
+      avatarUrl?: string | null;
       socials?: { platform: string; url: string }[];
-      followersCount: number;
-      followingCount: number;
-    }>(`/users/${handle}`),
+      isPro?: boolean;
+      dmPublicKey?: string | null;
+      followersCount?: number | null;
+      followingCount?: number | null;
+    }>(`/users/${handle}`, { auth: true }),
 
   updateProfile: (data: {
     bio?: string;
     socials?: { platform: string; url: string }[];
   }) =>
     api("/users/me/profile", { method: "PATCH", body: data, auth: true }),
+
+  getStats: (days = 30) =>
+    api<ProfileStatsResponse>(`/users/me/stats?days=${days}`, { auth: true }),
+
+  trackQrScan: (handle: string) =>
+    api<void>(`/users/track/qr/${encodeURIComponent(handle)}`, { method: "POST", auth: true }),
 
   search: (q: string) =>
     api<{ id: string; handle: string; bio?: string }[]>(
@@ -184,22 +212,28 @@ export type MapSecret = {
 };
 
 export const secretsApi = {
-  create: (params: {
-    ciphertext: string;
-    contentType: string;
-    ttlSeconds: number;
-    maxViews: number;
-    mimeType?: string;
-    viewDurationSeconds?: number;
-    recipientHandle?: string;
-    nonce?: string;
-    blobPath?: string;
-    blobSizeBytes?: number;
-  }) =>
+  create: (
+    params: {
+      ciphertext: string;
+      contentType: string;
+      ttlSeconds: number;
+      maxViews: number;
+      mimeType?: string;
+      viewDurationSeconds?: number;
+      recipientHandle?: string;
+      nonce?: string;
+      wrappedKey?: string;
+      wrapNonce?: string;
+      wrapEpk?: string;
+      blobPath?: string;
+      blobSizeBytes?: number;
+    },
+    options?: { auth?: boolean },
+  ) =>
     api<{ id: string }>("/secrets", {
       method: "POST",
       body: params,
-      auth: true,
+      auth: options?.auth ?? false,
     }),
 
   reveal: (id: string) =>

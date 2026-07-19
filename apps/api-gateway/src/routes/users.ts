@@ -6,6 +6,12 @@ import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import { signToken, requireAuth, revokeToken, type AuthPayload } from "../middleware/auth.js";
 import db from "../db.js";
 import { createNotification } from "../notifications.js";
+import {
+  recordProfileView,
+  recordQrScan,
+  recordSocialClick,
+  getProfileStats,
+} from "../lib/profile-stats.js";
 
 export const usersRouter = new Router({ prefix: "/users" });
 
@@ -158,10 +164,77 @@ usersRouter.get("/me", requireAuth(), async (ctx: Context) => {
   ctx.body = dbUserToPublic(row);
 });
 
+// ─── Profile stats (owner only — aggregate counters, no visitor data) ────────
+usersRouter.get("/me/stats", requireAuth(), async (ctx: Context) => {
+  const { userId, handle } = ctx.state.user as AuthPayload;
+  const days = Number(ctx.query["days"] ?? 30);
+  ctx.body = getProfileStats(userId, handle, days);
+});
+
+// ─── Tracked social link redirect (public) ───────────────────────────────────
+usersRouter.get("/link/:handle/:platform", async (ctx: Context) => {
+  const handle = String(ctx.params["handle"] ?? "").toLowerCase();
+  const platform = String(ctx.params["platform"] ?? "").toLowerCase();
+  const row = stmts.getUserByHandle.get(handle) as any;
+  if (!row) {
+    ctx.status = 404;
+    ctx.body = { error: "user_not_found" };
+    return;
+  }
+
+  const socials: Array<{ platform: string; url: string }> = row.socials
+    ? JSON.parse(row.socials)
+    : [];
+  const link = socials.find((s) => s.platform.toLowerCase() === platform);
+  if (!link?.url) {
+    ctx.status = 404;
+    ctx.body = { error: "link_not_found" };
+    return;
+  }
+
+  let dest = link.url.trim();
+  if (!/^https?:\/\//i.test(dest)) dest = `https://${dest}`;
+  try {
+    const parsed = new URL(dest);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      ctx.status = 400;
+      ctx.body = { error: "invalid_url" };
+      return;
+    }
+  } catch {
+    ctx.status = 400;
+    ctx.body = { error: "invalid_url" };
+    return;
+  }
+
+  recordSocialClick(row.id);
+  ctx.redirect(dest);
+});
+
+// ─── QR scan beacon (public, non-owner only) ───────────────────────────────
+usersRouter.post("/track/qr/:handle", async (ctx: Context) => {
+  const handle = String(ctx.params["handle"] ?? "").toLowerCase();
+  const row = stmts.getUserByHandle.get(handle) as any;
+  if (!row) {
+    ctx.status = 404;
+    ctx.body = { error: "user_not_found" };
+    return;
+  }
+
+  const requester = ctx.state.user as AuthPayload | undefined;
+  if (requester?.userId === row.id) {
+    ctx.status = 204;
+    return;
+  }
+
+  recordQrScan(row.id);
+  ctx.status = 204;
+});
+
 // ─── Get user profile (public) ──────────────────────────────────────────────
 usersRouter.get("/:handle", async (ctx: Context) => {
   const handle = ctx.params["handle"];
-  if (handle === "me" || handle === "follow") return;
+  if (handle === "me" || handle === "follow" || handle === "link" || handle === "track") return;
   const row = stmts.getUserByHandle.get(handle!) as any;
 
   if (!row) {
@@ -177,6 +250,11 @@ usersRouter.get("/:handle", async (ctx: Context) => {
   // Follower/following counts are private — only the profile owner sees them.
   const requester = ctx.state.user as AuthPayload | undefined;
   const isOwner = requester?.userId === row.id;
+
+  // Aggregate profile view — skip owner self-views; no visitor identifiers stored.
+  if (!isOwner) {
+    recordProfileView(row.id);
+  }
 
   ctx.status = 200;
   ctx.body = {

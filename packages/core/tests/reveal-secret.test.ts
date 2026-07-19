@@ -13,14 +13,23 @@ const makeRecord = (overrides?: Partial<SecretRecord>): SecretRecord => ({
   ...overrides,
 });
 
-const makeDeps = (record: SecretRecord | null = makeRecord()) => ({
-  repo: {
-    findById: async () => record,
-    incrementViewCount: async () => {},
-    burn: async () => {},
-  },
-  clock: { now: () => new Date("2026-01-01T12:00:00Z") },
-});
+const makeDeps = (record: SecretRecord | null = makeRecord()) => {
+  let activatedExpiry: Date | null = null;
+  return {
+    repo: {
+      findById: async () => record,
+      incrementViewCount: async () => {},
+      burn: async () => {},
+      setExpiresAt: async (_id: string, expiresAt: Date) => {
+        activatedExpiry = expiresAt;
+      },
+    },
+    clock: { now: () => new Date("2026-01-01T12:00:00Z") },
+    get activatedExpiry() {
+      return activatedExpiry;
+    },
+  };
+};
 
 describe("revealSecret", () => {
   it("reveals a valid secret", async () => {
@@ -47,6 +56,40 @@ describe("revealSecret", () => {
     const deps = {
       ...makeDeps(),
       clock: { now: () => new Date("2026-01-03T00:00:00Z") },
+    };
+    const result = await revealSecret(deps)("test-id");
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.kind).toBe("expired");
+    }
+  });
+
+  it("allows unrevealed profile secrets past their send-time expiry", async () => {
+    const record = makeRecord({
+      recipientHandle: "alice",
+      ttlSeconds: 3600,
+      expiresAt: new Date("2026-01-01T01:00:00Z"),
+      viewCount: 0,
+    });
+    const deps = makeDeps(record);
+    const result = await revealSecret(deps)("test-id");
+
+    expect(result.isOk()).toBe(true);
+    expect(deps.activatedExpiry).toEqual(new Date("2026-01-01T13:00:00Z"));
+  });
+
+  it("returns expired for profile secrets after reveal-window elapses", async () => {
+    const record = makeRecord({
+      recipientHandle: "alice",
+      ttlSeconds: 3600,
+      expiresAt: new Date("2026-01-01T13:00:00Z"),
+      viewCount: 1,
+      maxViews: 3,
+    });
+    const deps = {
+      ...makeDeps(record),
+      clock: { now: () => new Date("2026-01-01T14:00:00Z") },
     };
     const result = await revealSecret(deps)("test-id");
 

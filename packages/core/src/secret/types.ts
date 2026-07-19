@@ -13,6 +13,8 @@ export type SecretRecord = {
   readonly viewCount: number;
   readonly createdAt: Date;
   readonly expiresAt: Date;
+  /** Profile secrets: link TTL starts on first reveal, not at send time. */
+  readonly ttlSeconds?: number;
   readonly workspaceId?: string;
   readonly senderId?: string;
   readonly recipientHandle?: string;
