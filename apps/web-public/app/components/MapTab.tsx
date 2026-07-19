@@ -3,6 +3,7 @@ import { Link } from "@remix-run/react";
 import { getApiBase } from "../lib/api.client";
 import type { MapSecret } from "../lib/map-types";
 import { StoryComposer } from "./StoryComposer";
+import { MapContentSkeleton } from "./DashboardSkeleton";
 
 interface MapTabProps {
   user: { handle: string; avatarUrl?: string | null };
@@ -43,6 +44,7 @@ export function MapTab({ user, following, token }: MapTabProps) {
   const mapPinMarkerRef = useRef<any>(null);
 
   // Data
+  const [mapReady, setMapReady] = useState(false);
   const [mapSecrets, setMapSecrets] = useState<MapSecret[]>([]);
   const [selectedMapSecret, setSelectedMapSecret] = useState<MapSecret | null>(null);
   const [mapSecretRevealed, setMapSecretRevealed] = useState(false);
@@ -74,6 +76,9 @@ export function MapTab({ user, following, token }: MapTabProps) {
       .then((L) => {
         if (cancelled) return;
         initMap(L);
+      })
+      .catch(() => {
+        if (!cancelled) setMapReady(true);
       });
 
     return () => {
@@ -165,7 +170,10 @@ export function MapTab({ user, following, token }: MapTabProps) {
   // ─── Load secrets ─────────────────────────────────────────────────────────
   async function loadMapSecrets(map?: any) {
     const m = map || mapInstanceRef.current;
-    if (!m) return;
+    if (!m) {
+      setMapReady(true);
+      return;
+    }
     try {
       const res = await fetch(`${getApiBase()}/v1/secrets/map`);
       if (!res.ok) return;
@@ -173,7 +181,9 @@ export function MapTab({ user, following, token }: MapTabProps) {
       const secrets: MapSecret[] = Array.isArray(data) ? data : [];
       setMapSecrets(secrets);
       renderMapMarkers(secrets, m);
-    } catch {}
+    } catch {} finally {
+      setMapReady(true);
+    }
   }
 
   // ─── Post ─────────────────────────────────────────────────────────────────
@@ -229,6 +239,14 @@ export function MapTab({ user, following, token }: MapTabProps) {
     : mapSecrets;
 
   // ─── Render ───────────────────────────────────────────────────────────────
+  if (!mapReady) {
+    return (
+      <section>
+        <MapContentSkeleton />
+      </section>
+    );
+  }
+
   return (
     <section>
       <h2 className="text-lg font-bold mb-4">🗺️ Secret Map</h2>
