@@ -1,5 +1,11 @@
 const API_URL = process.env["API_URL"] ?? "http://localhost:4000";
 
+function getPublicApiBase(): string {
+  const fromEnv = process.env["PUBLIC_API_URL"] ?? process.env["PUBLIC_ORIGIN"];
+  if (fromEnv) return fromEnv.replace(/\/v1\/?$/, "").replace(/\/$/, "");
+  return API_URL.replace(/\/$/, "");
+}
+
 export async function adminApi<T = unknown>(path: string, token: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const { method = "GET", body } = options;
   const headers: Record<string, string> = {
@@ -57,5 +63,9 @@ export async function uploadBlogCover(token: string, file: File): Promise<{ url:
     throw new Response(JSON.stringify(data), { status: res.status });
   }
 
-  return res.json() as Promise<{ url: string; blobPath: string }>;
+  const data = (await res.json()) as { url?: string; blobPath: string; sizeBytes?: number };
+  return {
+    url: `${getPublicApiBase()}/v1/secrets/blob/${data.blobPath}`,
+    blobPath: data.blobPath,
+  };
 }

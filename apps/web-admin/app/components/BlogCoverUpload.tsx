@@ -12,25 +12,37 @@ export function BlogCoverUpload({ coverUrl, onCoverUrlChange, disabled }: BlogCo
   const fileRef = useRef<HTMLInputElement>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
+  const uploadGeneration = useRef(0);
   const uploading = fetcher.state !== "idle";
 
   useEffect(() => {
-    if (fetcher.data?.coverImageUrl) {
+    if (fetcher.state !== "idle" || !fetcher.data) return;
+
+    const generation = Number((fetcher.formData as FormData | undefined)?.get("uploadGeneration") ?? 0);
+    if (generation !== uploadGeneration.current) return;
+
+    if (fetcher.data.coverImageUrl) {
       onCoverUrlChange(fetcher.data.coverImageUrl);
-      setLocalPreview(null);
       setClientError(null);
-    }
-    if (fetcher.data?.error) {
+      setLocalPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    } else if (fetcher.data.error) {
       setClientError(fetcher.data.message ?? "Upload failed. Try again.");
-      setLocalPreview(null);
     }
-  }, [fetcher.data, onCoverUrlChange]);
+  }, [fetcher.state, fetcher.data, fetcher.formData, onCoverUrlChange]);
 
   useEffect(() => {
     return () => {
       if (localPreview) URL.revokeObjectURL(localPreview);
     };
   }, [localPreview]);
+
+  function openFilePicker() {
+    if (fileRef.current) fileRef.current.value = "";
+    fileRef.current?.click();
+  }
 
   function handleFile(file: File | null) {
     if (!file) return;
@@ -48,13 +60,16 @@ export function BlogCoverUpload({ coverUrl, onCoverUrlChange, disabled }: BlogCo
     if (localPreview) URL.revokeObjectURL(localPreview);
     setLocalPreview(URL.createObjectURL(file));
 
+    uploadGeneration.current += 1;
     const formData = new FormData();
     formData.set("intent", "upload-cover");
+    formData.set("uploadGeneration", String(uploadGeneration.current));
     formData.set("cover", file);
     fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
   }
 
   function handleRemove() {
+    uploadGeneration.current += 1;
     if (localPreview) URL.revokeObjectURL(localPreview);
     setLocalPreview(null);
     setClientError(null);
@@ -63,7 +78,7 @@ export function BlogCoverUpload({ coverUrl, onCoverUrlChange, disabled }: BlogCo
   }
 
   const displayUrl = localPreview ?? coverUrl;
-  const error = clientError ?? (fetcher.data?.error ? fetcher.data.message ?? "Upload failed." : null);
+  const error = clientError;
 
   return (
     <div className="space-y-3">
@@ -80,7 +95,7 @@ export function BlogCoverUpload({ coverUrl, onCoverUrlChange, disabled }: BlogCo
         <button
           type="button"
           disabled={disabled || uploading}
-          onClick={() => fileRef.current?.click()}
+          onClick={openFilePicker}
           className="flex h-40 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text-muted)] transition-colors hover:border-[var(--accent)]/50 hover:text-[var(--text)] disabled:opacity-50"
         >
           <span className="text-2xl" aria-hidden="true">
@@ -105,7 +120,7 @@ export function BlogCoverUpload({ coverUrl, onCoverUrlChange, disabled }: BlogCo
           <button
             type="button"
             disabled={disabled || uploading}
-            onClick={() => fileRef.current?.click()}
+            onClick={openFilePicker}
             className="btn btn-outline text-sm"
           >
             {uploading ? "Uploading…" : "Replace photo"}

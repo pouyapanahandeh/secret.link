@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireSuperAdmin } from "../middleware/admin.js";
 import { requireBlogEditor, requireBlogReader } from "../middleware/blog-editor.js";
 import { blobStore } from "../lib/blob-store.js";
+import { publicBlobUrl } from "../lib/public-url.js";
 import { isValidBlogSlug, mapBlogPostRow, slugifyTitle } from "../lib/blog.js";
 
 export const adminBlogRouter = new Router({ prefix: "/admin" });
@@ -36,12 +37,6 @@ function resolveUniqueSlug(baseSlug: string, excludeId?: string): string {
     slug = `${baseSlug.slice(0, 75)}-${suffix}`;
     suffix += 1;
   }
-}
-
-function getApiBase(ctx: Context): string {
-  const proto = ctx.get("X-Forwarded-Proto") || ctx.protocol || "https";
-  const host = ctx.get("X-Forwarded-Host") || ctx.host || "secretlink.life";
-  return `${proto}://${host}`;
 }
 
 // ─── Blog posts list ─────────────────────────────────────────────────────────
@@ -285,7 +280,7 @@ adminBlogRouter.post("/blog/cover", requireBlogEditor(), async (ctx: Context) =>
   const blobPath = `blog_${nanoid()}.${ext}`;
   await blobStore.put(blobPath, Buffer.concat(chunks));
 
-  const url = `${getApiBase(ctx)}/v1/secrets/blob/${blobPath}`;
+  const url = publicBlobUrl(blobPath, ctx);
   ctx.status = 201;
   ctx.body = { url, blobPath, sizeBytes: totalSize };
 });

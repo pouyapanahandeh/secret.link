@@ -114,8 +114,8 @@ export default function BlogEditor() {
   const [coverUrl, setCoverUrl] = useState<string | null>(initial.coverImageUrl ?? null);
 
   useEffect(() => {
-    if (actionData && "coverImageUrl" in actionData && actionData.coverImageUrl) {
-      setCoverUrl(actionData.coverImageUrl);
+    if (actionData && "coverImageUrl" in actionData) {
+      setCoverUrl(actionData.coverImageUrl ?? null);
     }
   }, [actionData]);
 
