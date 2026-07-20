@@ -1,5 +1,6 @@
 import { Link, useFetcher } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
+import { Avatar } from "../../components/Avatar";
 import { NotificationPrompt } from "../../components/NotificationPrompt";
 import { StoriesRow } from "../../components/StoriesRow";
 import { LiveStreams } from "../../components/LiveStreams";
@@ -76,9 +77,13 @@ export function DashboardInboxTab({
       <NotificationPrompt token={token} />
 
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-12 h-12 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center shrink-0">
-          <span className="text-lg font-bold text-accent">{user.handle[0]?.toUpperCase()}</span>
-        </div>
+        <Avatar
+          handle={user.handle}
+          avatarUrl={user.avatarUrl}
+          sizeClass="w-12 h-12"
+          textClass="text-lg"
+          className="border-2 border-accent"
+        />
         <div className="flex-1 min-w-0">
           <h1 className="text-base sm:text-lg font-bold truncate">@{user.handle}</h1>
           <p className="text-xs text-text-muted truncate">
@@ -129,9 +134,7 @@ export function DashboardInboxTab({
             {searchResults.map((u) => (
               <div key={u.id} className="flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3">
                 <Link to={`/${u.handle}`} className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-accent/20 border border-accent/50 flex items-center justify-center shrink-0">
-                    <span className="text-xs font-bold text-accent">{u.handle[0]?.toUpperCase()}</span>
-                  </div>
+                  <Avatar handle={u.handle} avatarUrl={u.avatarUrl} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">@{u.handle} {u.isPro && "⭐"}</p>
                     {u.bio && <p className="text-xs text-text-muted truncate">{u.bio}</p>}

@@ -81,11 +81,16 @@ export function DashboardPage() {
     if (profileFetcher.state === "idle" && profileFetcher.data && !profileFetcher.data.error) {
       setEditingProfile(false);
       setProfileSaved(true);
+      revalidator.revalidate();
       const t = setTimeout(() => setProfileSaved(false), 3000);
       return () => clearTimeout(t);
     }
     return undefined;
-  }, [profileFetcher.state, profileFetcher.data]);
+  }, [profileFetcher.state, profileFetcher.data, revalidator]);
+
+  useEffect(() => {
+    setAvatarUrl(user.avatarUrl ?? null);
+  }, [user.avatarUrl]);
 
   const viewedHandles = computeViewedHandles(storyIdsByHandle, viewedStoryIds);
 
@@ -175,11 +180,18 @@ export function DashboardPage() {
         activeTab={activeTab}
         inboxCount={inbox.length}
         token={token}
+        userHandle={user.handle}
+        userAvatarUrl={avatarUrl}
         onNavClick={handleNavClick}
       />
 
       {!hideMobileChrome && (
-        <DashboardMobileHeader token={token} onNavClick={handleNavClick} />
+        <DashboardMobileHeader
+          token={token}
+          userHandle={user.handle}
+          userAvatarUrl={avatarUrl}
+          onNavClick={handleNavClick}
+        />
       )}
 
       {UI_FEATURES.messages && activeTab === "messages" ? (
@@ -241,7 +253,12 @@ export function DashboardPage() {
       )}
 
       {!hideMobileChrome && (
-        <DashboardBottomNav activeTab={activeTab} onNavClick={handleNavClick} />
+        <DashboardBottomNav
+          activeTab={activeTab}
+          userHandle={user.handle}
+          userAvatarUrl={avatarUrl}
+          onNavClick={handleNavClick}
+        />
       )}
 
       <DashboardOverlays

@@ -68,5 +68,7 @@ export type DashboardNavProps = {
   activeTab: DashboardTab;
   inboxCount: number;
   token: string;
+  userHandle: string;
+  userAvatarUrl?: string | null;
   onNavClick: (id: string) => void;
 };

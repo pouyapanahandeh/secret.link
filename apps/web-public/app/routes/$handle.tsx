@@ -6,6 +6,7 @@ import {
   useFetcher,
   Link,
   useSearchParams,
+  useRevalidator,
   type ClientLoaderFunctionArgs,
 } from "@remix-run/react";
 import { useState, useEffect } from "react";
@@ -21,6 +22,7 @@ import { getApiBase } from "../lib/api.client";
 import { resolveProfileViewMode } from "@secretlink/core/profile-types";
 import { FollowListModal, type FollowListTab } from "../components/FollowListModal";
 import { ProfileActionSheet } from "../components/ProfileActionSheet";
+import { Avatar } from "../components/Avatar";
 import type { UserLite } from "../lib/users";
 import { UI_FEATURES } from "../lib/feature-flags";
 import { ProfilePageSkeleton } from "../components/DashboardSkeleton";
@@ -64,6 +66,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   let isOwnProfile = false;
   let ownHandle: string | null = null;
+  let ownAvatarUrl: string | null = null;
   if (token) {
     const meRes = await fetch(`${API_URL}/v1/users/me/profile`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -71,6 +74,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     if (meRes.ok) {
       const me = await meRes.json();
       ownHandle = me.handle ?? null;
+      ownAvatarUrl = me.avatarUrl ?? null;
       isOwnProfile = me.handle?.toLowerCase() === handle.toLowerCase();
     }
   }
@@ -87,6 +91,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       isLoggedIn,
       isOwnProfile,
       ownHandle,
+      ownAvatarUrl,
       token: token ?? null,
       apiBase: new URL(request.url).origin,
       notFound: !profile,
@@ -185,6 +190,7 @@ export default function ProfilePage() {
     isLoggedIn,
     isOwnProfile,
     ownHandle,
+    ownAvatarUrl,
     token,
     apiBase,
     notFound,
@@ -192,6 +198,7 @@ export default function ProfilePage() {
   const actionData = useActionData<typeof action>();
   const secretFetcher = useFetcher<typeof action>();
   const profileFetcher = useFetcher<{ error?: string | null; intent?: string }>();
+  const revalidator = useRevalidator();
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersCount, setFollowersCount] = useState(profile?.followersCount ?? 0);
   const [followModal, setFollowModal] = useState<FollowListTab | null>(null);
@@ -207,6 +214,7 @@ export default function ProfilePage() {
 
   const mode = resolveProfileViewMode(isLoggedIn, isOwnProfile);
   const profileHref = ownHandle ? `/${ownHandle}` : "/dashboard#profile";
+  const navAvatarUrl = isOwnProfile ? avatarUrl : ownAvatarUrl;
 
   useEffect(() => {
     if (isOwnProfile && searchParams.get("share") === "1") {
@@ -255,8 +263,9 @@ export default function ProfilePage() {
       profileFetcher.data.intent === "save-profile"
     ) {
       setEditingProfile(false);
+      revalidator.revalidate();
     }
-  }, [profileFetcher.state, profileFetcher.data]);
+  }, [profileFetcher.state, profileFetcher.data, revalidator]);
 
   function startEditProfile() {
     setBio(profile?.bio ?? "");
@@ -343,7 +352,11 @@ export default function ProfilePage() {
       <main className={isLoggedIn ? "h-screen flex flex-col sm:flex-row bg-surface" : "min-h-screen flex flex-col"}>
         {isLoggedIn ? (
           <>
-            <Sidebar profileHref={profileHref} />
+            <Sidebar
+              profileHref={profileHref}
+              userHandle={ownHandle ?? handle}
+              userAvatarUrl={navAvatarUrl}
+            />
             <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
               <Link to="/dashboard" className="flex items-center gap-2">
                 <img src="/secretlink.png" alt="" className="w-7 h-7" />
@@ -351,7 +364,14 @@ export default function ProfilePage() {
                   secretlink<span className="text-accent">.</span>life
                 </span>
               </Link>
-              <ThemeToggle />
+              <div className="flex items-center gap-2">
+                {ownHandle && (
+                  <Link to={profileHref} aria-label="Your profile" className="rounded-full">
+                    <Avatar handle={ownHandle} avatarUrl={navAvatarUrl} sizeClass="w-8 h-8" textClass="text-xs" />
+                  </Link>
+                )}
+                <ThemeToggle />
+              </div>
             </header>
           </>
         ) : (
@@ -391,7 +411,13 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-        {isLoggedIn && <MobileBottomNav profileHref={profileHref} />}
+        {isLoggedIn && (
+          <MobileBottomNav
+            profileHref={profileHref}
+            userHandle={ownHandle ?? handle}
+            userAvatarUrl={navAvatarUrl}
+          />
+        )}
       </main>
     );
   }
@@ -400,7 +426,7 @@ export default function ProfilePage() {
     <main className={isLoggedIn ? "h-screen flex flex-col sm:flex-row bg-surface" : "min-h-screen"}>
       {isLoggedIn ? (
         <>
-          <Sidebar profileHref={profileHref} />
+          <Sidebar profileHref={profileHref} userHandle={ownHandle ?? handle} userAvatarUrl={navAvatarUrl} />
           <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
             <Link to="/dashboard" className="flex items-center gap-2">
               <img src="/secretlink.png" alt="" className="w-7 h-7" />
@@ -408,7 +434,14 @@ export default function ProfilePage() {
                 secretlink<span className="text-accent">.</span>life
               </span>
             </Link>
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              {ownHandle && (
+                <Link to={profileHref} aria-label="Your profile" className="rounded-full">
+                  <Avatar handle={ownHandle} avatarUrl={navAvatarUrl} sizeClass="w-8 h-8" textClass="text-xs" />
+                </Link>
+              )}
+              <ThemeToggle />
+            </div>
           </header>
         </>
       ) : (
@@ -418,7 +451,7 @@ export default function ProfilePage() {
       <div className={isLoggedIn ? "flex-1 overflow-y-auto" : ""}>
         <div className={`max-w-lg mx-auto px-4 ${isLoggedIn ? "pt-8 pb-20 sm:pb-8" : "pt-24 pb-16"}`}>
           <ProfileView
-            profile={profile}
+            profile={isOwnProfile ? { ...profile, avatarUrl, bio, socials } : profile}
             handle={handle}
             mode={mode}
             apiBase={apiBase}
@@ -466,7 +499,13 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {isLoggedIn && <MobileBottomNav profileHref={profileHref} />}
+      {isLoggedIn && (
+        <MobileBottomNav
+          profileHref={profileHref}
+          userHandle={ownHandle ?? handle}
+          userAvatarUrl={navAvatarUrl}
+        />
+      )}
 
       {isOwnProfile && token && followModal && (
         <FollowListModal
@@ -494,12 +533,33 @@ export default function ProfilePage() {
   );
 }
 
-function Sidebar({ profileHref }: { profileHref: string }) {
+function Sidebar({
+  profileHref,
+  userHandle,
+  userAvatarUrl,
+}: {
+  profileHref: string;
+  userHandle: string;
+  userAvatarUrl?: string | null;
+}) {
   const navItems = [
     { id: "inbox", label: "Home", href: "/dashboard", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg> },
     { id: "map", label: "Map", href: "/dashboard#map", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503-11.307l4.994-2.497A.75.75 0 0121 4.196v13.608a.75.75 0 01-.497.708l-5.006 2.503m-6.994-3.015l-5.006 2.503A.75.75 0 013 19.804V6.196a.75.75 0 01.497-.708l5.006-2.503m6.994 3.015L9 4.485m6.497 1.53L9 8.515" /></svg> },
     ...(UI_FEATURES.messages ? [{ id: "messages", label: "Messages", href: "/dashboard#messages", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443h.004c2.174-.063 4.322-.258 6.426-.573 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg> }] : []),
-    { id: "profile", label: "Profile", href: profileHref, icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg> },
+    {
+      id: "profile",
+      label: "Profile",
+      href: profileHref,
+      icon: (
+        <Avatar
+          handle={userHandle}
+          avatarUrl={userAvatarUrl}
+          sizeClass="w-5 h-5"
+          textClass="text-[10px]"
+          className="border-0"
+        />
+      ),
+    },
   ];
 
   return (
@@ -536,7 +596,15 @@ function Sidebar({ profileHref }: { profileHref: string }) {
   );
 }
 
-function MobileBottomNav({ profileHref }: { profileHref: string }) {
+function MobileBottomNav({
+  profileHref,
+  userHandle,
+  userAvatarUrl,
+}: {
+  profileHref: string;
+  userHandle: string;
+  userAvatarUrl?: string | null;
+}) {
   return (
     <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border/50 z-30">
       <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
@@ -555,7 +623,7 @@ function MobileBottomNav({ profileHref }: { profileHref: string }) {
         </Link>
         )}
         <Link to={profileHref} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-accent">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+          <Avatar handle={userHandle} avatarUrl={userAvatarUrl} sizeClass="w-5 h-5" textClass="text-[10px]" className="border-0" />
           <span className="text-[10px] font-medium">Profile</span>
         </Link>
       </div>

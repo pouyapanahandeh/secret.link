@@ -42,7 +42,7 @@ export function DashboardProfileTab({
             id: user.id,
             handle: user.handle,
             bio: user.bio,
-            avatarUrl: user.avatarUrl,
+            avatarUrl,
             socials: user.socials,
             isPro: user.isPro,
             followersCount: user.followersCount,
