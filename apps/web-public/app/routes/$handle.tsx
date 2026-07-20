@@ -203,6 +203,7 @@ export default function ProfilePage() {
   const [socials, setSocials] = useState<{ platform: string; url: string }[]>(profile?.socials ?? []);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl ?? null);
   const [searchParams] = useSearchParams();
+  const [showSentConfirmation, setShowSentConfirmation] = useState(false);
 
   const mode = resolveProfileViewMode(isLoggedIn, isOwnProfile);
   const profileHref = ownHandle ? `/${ownHandle}` : "/dashboard#profile";
@@ -222,10 +223,23 @@ export default function ProfilePage() {
   }, [searchParams, isOwnProfile, handle, token]);
 
   const secretFetcherData = secretFetcher.data;
-  const isSent =
-    (secretFetcherData && "sent" in secretFetcherData && secretFetcherData.sent) ||
-    (actionData && "sent" in actionData && actionData.sent);
   const profileSaving = profileFetcher.state !== "idle";
+
+  useEffect(() => {
+    if (secretFetcherData && "sent" in secretFetcherData && secretFetcherData.sent) {
+      setShowSentConfirmation(true);
+    }
+  }, [secretFetcherData]);
+
+  useEffect(() => {
+    if (actionData && "sent" in actionData && actionData.sent) {
+      setShowSentConfirmation(true);
+    }
+  }, [actionData]);
+
+  useEffect(() => {
+    setShowSentConfirmation(false);
+  }, [handle]);
 
   useEffect(() => {
     setBio(profile?.bio ?? "");
@@ -324,7 +338,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (isSent) {
+  if (showSentConfirmation) {
     return (
       <main className={isLoggedIn ? "h-screen flex flex-col sm:flex-row bg-surface" : "min-h-screen flex flex-col"}>
         {isLoggedIn ? (
@@ -358,15 +372,17 @@ export default function ProfilePage() {
               <span className="text-accent">@{handle}</span>. It will self-destruct after being read.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
-                to={`/${handle}`}
+              <button
+                type="button"
+                onClick={() => setShowSentConfirmation(false)}
                 className="inline-flex justify-center rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all"
               >
                 Send another →
-              </Link>
+              </button>
               {isLoggedIn && ownHandle && (
                 <Link
                   to={`/${ownHandle}?share=1`}
+                  onClick={() => setShowSentConfirmation(false)}
                   className="inline-flex justify-center rounded-full border border-border px-6 py-3 text-sm font-semibold text-text hover:border-accent transition-all"
                 >
                   Share your profile

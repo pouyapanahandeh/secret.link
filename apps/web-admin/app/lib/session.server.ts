@@ -52,6 +52,14 @@ export async function requirePanelSession(request: Request) {
   return { token, handle, role };
 }
 
+export async function requireSuperAdminSession(request: Request) {
+  const session = await requirePanelSession(request);
+  if (session.role !== "admin") {
+    throw new Response("Forbidden", { status: 403 });
+  }
+  return session;
+}
+
 export async function requireBlogEditorSession(request: Request) {
   const session = await requirePanelSession(request);
   if (session.role !== "admin" && session.role !== "editor") {

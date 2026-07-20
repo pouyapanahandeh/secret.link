@@ -56,12 +56,23 @@ export function ProfileView({
         </div>
 
         <div className="flex-1 min-w-0 pt-0.5">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="text-xl sm:text-2xl font-bold">@{handle}</h1>
-            {profile?.isPro && (
-              <span className="inline-flex items-center gap-1 text-xs bg-accent/10 text-accent px-2.5 py-0.5 rounded-full">
-                ⭐ Pro
-              </span>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold">@{handle}</h1>
+              {profile?.isPro && (
+                <span className="inline-flex items-center gap-1 text-xs bg-accent/10 text-accent px-2.5 py-0.5 rounded-full">
+                  ⭐ Pro
+                </span>
+              )}
+            </div>
+            {isOwner && onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="shrink-0 text-sm font-semibold text-accent hover:text-accent/80 transition-colors pt-0.5"
+              >
+                Edit
+              </button>
             )}
           </div>
 
@@ -118,37 +129,62 @@ export function ProfileView({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mt-4">
-        {isOwner && onShare && (
-          <button
-            type="button"
-            onClick={onShare}
-            className="rounded-full bg-surface-raised border border-border px-4 py-2 text-xs font-semibold text-text hover:border-accent/50 transition-all"
-          >
-            Share profile
-          </button>
-        )}
-        {isOwner && onStats && (
-          <button
-            type="button"
-            onClick={onStats}
-            className="rounded-full bg-surface-raised border border-border px-4 py-2 text-xs font-semibold text-text hover:border-accent/50 transition-all"
-          >
-            Statistics
-          </button>
-        )}
-        {isOwner && onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-full bg-surface-raised border border-border px-4 py-2 text-xs font-semibold text-text hover:border-accent/50 transition-all"
-          >
-            ✏️ Edit profile
-          </button>
-        )}
-        {isVisitor && (
-          <>
+      {isOwner && (onShare || onStats) && (
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          {onShare && (
             <button
+              type="button"
+              onClick={onShare}
+              className="group flex flex-col items-center rounded-2xl border border-border/60 bg-surface-raised px-3 py-5 text-center transition-all hover:border-accent/40 hover:bg-surface-raised/80 active:scale-[0.98]"
+            >
+              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors group-hover:bg-accent/25">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <span className="text-sm font-bold text-text">Share profile</span>
+              <span className="mt-0.5 text-[11px] text-text-muted">Copy link or QR</span>
+            </button>
+          )}
+          {onStats && (
+            <button
+              type="button"
+              onClick={onStats}
+              className="group flex flex-col items-center rounded-2xl border border-border/60 bg-surface-raised px-3 py-5 text-center transition-all hover:border-accent/40 hover:bg-surface-raised/80 active:scale-[0.98]"
+            >
+              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-text transition-colors group-hover:border-accent/30">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M5 19V9M12 19V5M19 19v-7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
+              <span className="text-sm font-bold text-text">Statistics</span>
+              <span className="mt-0.5 text-[11px] text-text-muted">Views & activity</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {isVisitor && (
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <button
               type="button"
               onClick={onFollow}
               className={`text-xs px-5 py-2 rounded-full font-semibold transition-all ${
@@ -167,9 +203,8 @@ export function ProfileView({
                 🔒 Message
               </a>
             )}
-          </>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

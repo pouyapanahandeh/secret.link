@@ -13,6 +13,7 @@ import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
 import * as Sharing from "expo-sharing";
 import { captureRef } from "react-native-view-shot";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getProfileUrl, getProfileQrUrl } from "@secretlink/core/profile-url";
 import {
   STORY_SHARE_PLATFORMS,
@@ -22,7 +23,7 @@ import {
 } from "@secretlink/core/profile-share";
 import { useTheme, spacing, radius, fontSize } from "@/lib/theme";
 import { SocialIcon } from "./SocialIcon";
-import { ProfileStoryCard, ProfileStoryCardCapture } from "./ProfileStoryCard";
+import { ProfileStoryCardCapture } from "./ProfileStoryCard";
 
 interface ProfileShareModalProps {
   handle: string;
@@ -32,16 +33,17 @@ interface ProfileShareModalProps {
 
 export function ProfileShareModal({ handle, visible, onClose }: ProfileShareModalProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const captureRefView = useRef<View>(null);
   const [copied, setCopied] = useState(false);
   const [generatingStory, setGeneratingStory] = useState(false);
   const [sharingPlatform, setSharingPlatform] = useState<StorySharePlatformId | null>(null);
-  const [storyHint, setStoryHint] = useState<string | null>(null);
 
   const origin = "https://secretlink.life";
   const profileUrl = getProfileUrl(handle, origin);
   const qrUrl = getProfileQrUrl(handle, origin);
   const shareText = getProfileShareText(handle, profileUrl);
+  const shortUrl = profileUrl.replace(/^https?:\/\//, "");
 
   async function copyLink() {
     await Clipboard.setStringAsync(profileUrl);
@@ -52,7 +54,7 @@ export function ProfileShareModal({ handle, visible, onClose }: ProfileShareModa
   async function shareLink() {
     try {
       await Share.share({
-        message: Platform.OS === "ios" ? shareText : shareText,
+        message: shareText,
         url: profileUrl,
         title: `@${handle} on Secretlink.life`,
       });
@@ -73,7 +75,6 @@ export function ProfileShareModal({ handle, visible, onClose }: ProfileShareModa
 
   async function shareStoryImage(platformId?: StorySharePlatformId) {
     setGeneratingStory(true);
-    setStoryHint(null);
     if (platformId) setSharingPlatform(platformId);
     try {
       const uri = await captureStoryUri();
@@ -89,7 +90,7 @@ export function ProfileShareModal({ handle, visible, onClose }: ProfileShareModa
       }
 
       await Share.share({
-        message: `${shareText}\n\n(Attach the story image from your photos if needed.)`,
+        message: shareText,
         url: Platform.OS === "ios" ? uri : profileUrl,
         title: `@${handle} on Secretlink.life`,
       });
@@ -124,165 +125,189 @@ export function ProfileShareModal({ handle, visible, onClose }: ProfileShareModa
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: spacing.lg }}
-        onPress={onClose}
-      >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable
-          onPress={(e) => e.stopPropagation()}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+          onPress={onClose}
+        />
+
+        <View
           style={{
             backgroundColor: colors.surface,
-            borderRadius: radius.xl,
+            borderTopLeftRadius: radius.xl,
+            borderTopRightRadius: radius.xl,
             borderWidth: 1,
+            borderBottomWidth: 0,
             borderColor: colors.border,
             maxHeight: "90%",
+            paddingBottom: insets.bottom + spacing.md,
           }}
         >
-          <ScrollView contentContainerStyle={{ padding: spacing.lg }}>
-            <Text style={{ fontSize: fontSize.base, fontWeight: "700", color: colors.text, marginBottom: spacing.lg }}>
-              Share profile
-            </Text>
+          <View style={{ alignItems: "center", paddingTop: spacing.sm, paddingBottom: spacing.xs }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+          </View>
 
-            <View
-              style={{
-                alignItems: "center",
-                backgroundColor: "#fff",
-                borderRadius: radius.lg,
-                padding: spacing.lg,
-                marginBottom: spacing.md,
-              }}
-            >
-              <QRCode value={qrUrl} size={140} />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: spacing.lg,
+              paddingBottom: spacing.md,
+            }}
+          >
+            <View>
+              <Text style={{ fontSize: fontSize.lg, fontWeight: "700", color: colors.text }}>
+                Share profile
+              </Text>
+              <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 }}>
+                @{handle}
+              </Text>
             </View>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <Text style={{ fontSize: fontSize.xl, color: colors.textMuted }}>×</Text>
+            </Pressable>
+          </View>
 
-            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center", marginBottom: spacing.md }}>
-              Scan to open @{handle}
+          <ScrollView
+            contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Link + copy */}
+            <Text style={{ fontSize: fontSize.xs, fontWeight: "600", color: colors.textMuted, marginBottom: spacing.sm }}>
+              Your link
             </Text>
-
-            <View
+            <Pressable
+              onPress={copyLink}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
                 backgroundColor: colors.surfaceRaised,
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: copied ? colors.accent : colors.border,
                 borderRadius: radius.lg,
                 paddingHorizontal: spacing.md,
-                paddingVertical: spacing.sm,
-                marginBottom: spacing.lg,
+                paddingVertical: spacing.md,
+                marginBottom: spacing.md,
                 gap: spacing.sm,
               }}
             >
-              <Text style={{ flex: 1, fontSize: fontSize.xs, color: colors.text }} numberOfLines={1}>
-                {profileUrl.replace(/^https?:\/\//, "")}
+              <Text style={{ flex: 1, fontSize: fontSize.sm, fontWeight: "600", color: colors.text }} numberOfLines={1}>
+                {shortUrl}
               </Text>
-              <Pressable onPress={copyLink}>
-                <Text style={{ fontSize: fontSize.xs, fontWeight: "600", color: colors.accent }}>
+              <View
+                style={{
+                  backgroundColor: copied ? colors.accent : colors.surface,
+                  borderWidth: 1,
+                  borderColor: copied ? colors.accent : colors.border,
+                  borderRadius: radius.full,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: spacing.xs,
+                }}
+              >
+                <Text style={{ fontSize: fontSize.xs, fontWeight: "700", color: copied ? "#000" : colors.text }}>
                   {copied ? "Copied!" : "Copy"}
                 </Text>
-              </Pressable>
-            </View>
-
-            <Text style={{ fontSize: fontSize.sm, fontWeight: "700", color: colors.text, marginBottom: spacing.xs }}>
-              Share as story
-            </Text>
-            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, marginBottom: spacing.md }}>
-              Post your QR code and profile link to Instagram, Facebook, WhatsApp, and more.
-            </Text>
-
-            <View style={{ alignItems: "center", marginBottom: spacing.md }}>
-              <ProfileStoryCard handle={handle} qrUrl={qrUrl} origin={origin} />
-            </View>
+              </View>
+            </Pressable>
 
             <Pressable
-              onPress={() => shareStoryImage()}
-              disabled={generatingStory}
+              onPress={shareLink}
+              style={({ pressed }) => ({
+                backgroundColor: colors.accent,
+                borderRadius: radius.lg,
+                paddingVertical: spacing.md,
+                alignItems: "center",
+                marginBottom: spacing.lg,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text style={{ fontSize: fontSize.sm, fontWeight: "700", color: "#000" }}>Share link</Text>
+            </Pressable>
+
+            {/* QR code — compact */}
+            <View
               style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
                 backgroundColor: colors.surfaceRaised,
                 borderWidth: 1,
                 borderColor: colors.border,
                 borderRadius: radius.lg,
-                paddingVertical: spacing.md,
-                alignItems: "center",
-                marginBottom: spacing.md,
-                opacity: generatingStory ? 0.6 : 1,
+                padding: spacing.md,
+                marginBottom: spacing.lg,
               }}
             >
-              {generatingStory && !sharingPlatform ? (
-                <ActivityIndicator color={colors.accent} />
-              ) : (
-                <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
-                  Share story image…
+              <View
+                style={{
+                  backgroundColor: "#fff",
+                  borderRadius: radius.md,
+                  padding: spacing.sm,
+                }}
+              >
+                <QRCode value={qrUrl} size={72} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text, marginBottom: 4 }}>
+                  QR code
                 </Text>
-              )}
-            </Pressable>
-
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md }}>
-              {STORY_SHARE_PLATFORMS.map((platform) => (
-                <Pressable
-                  key={platform.id}
-                  onPress={() => shareToPlatform(platform.id)}
-                  disabled={generatingStory}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: spacing.sm,
-                    backgroundColor: colors.surfaceRaised,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    borderRadius: radius.lg,
-                    paddingHorizontal: spacing.md,
-                    paddingVertical: spacing.sm,
-                    minWidth: "47%",
-                    opacity: generatingStory ? 0.6 : 1,
-                  }}
-                >
-                  <SocialIcon platform={platform.id} size={18} />
-                  <Text style={{ fontSize: fontSize.xs, fontWeight: "600", color: colors.text, flex: 1 }} numberOfLines={1}>
-                    {sharingPlatform === platform.id ? "Sharing…" : platform.label}
-                  </Text>
-                </Pressable>
-              ))}
+                <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, lineHeight: 16 }}>
+                  Let someone scan this to open your profile instantly.
+                </Text>
+              </View>
             </View>
 
-            {storyHint ? (
-              <Text style={{ fontSize: fontSize.xs, color: colors.accent, marginBottom: spacing.md }}>{storyHint}</Text>
-            ) : null}
-
-            <View style={{ flexDirection: "row", gap: spacing.sm }}>
-              <Pressable
-                onPress={shareLink}
-                style={{
-                  flex: 1,
-                  backgroundColor: colors.surfaceRaised,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: radius.lg,
-                  paddingVertical: spacing.md,
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>Share link…</Text>
-              </Pressable>
-              <Pressable
-                onPress={onClose}
-                style={{
-                  flex: 1,
-                  backgroundColor: colors.accent,
-                  borderRadius: radius.lg,
-                  paddingVertical: spacing.md,
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ fontSize: fontSize.sm, fontWeight: "700", color: "#000" }}>Done</Text>
-              </Pressable>
+            {/* Story platforms */}
+            <Text style={{ fontSize: fontSize.xs, fontWeight: "600", color: colors.textMuted, marginBottom: spacing.sm }}>
+              Share to stories
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: spacing.sm,
+                marginBottom: spacing.md,
+              }}
+            >
+              {STORY_SHARE_PLATFORMS.map((platform) => {
+                const busy = generatingStory && sharingPlatform === platform.id;
+                return (
+                  <Pressable
+                    key={platform.id}
+                    onPress={() => shareToPlatform(platform.id)}
+                    disabled={generatingStory}
+                    style={({ pressed }) => ({
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 52,
+                      height: 52,
+                      backgroundColor: colors.surfaceRaised,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: radius.lg,
+                      opacity: generatingStory ? 0.5 : pressed ? 0.85 : 1,
+                    })}
+                    accessibilityLabel={platform.label}
+                  >
+                    {busy ? (
+                      <ActivityIndicator size="small" color={colors.accent} />
+                    ) : (
+                      <SocialIcon platform={platform.id} size={22} />
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
+
+            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center", lineHeight: 16 }}>
+              Story buttons share a branded image with your QR code and link.
+            </Text>
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
 
-      {/* Off-screen view for high-res story capture */}
       <View
         ref={captureRefView}
         collapsable={false}

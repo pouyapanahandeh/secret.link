@@ -82,23 +82,47 @@ export function ProfileView({
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.sm }}>
-            <Text style={{ fontSize: fontSize.xl, fontWeight: "800", color: colors.text }}>
-              @{handle}
-            </Text>
-            {profile?.isPro && (
-              <View
-                style={{
-                  backgroundColor: colors.accent + "1A",
-                  borderRadius: radius.full,
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: spacing.sm,
+            }}
+          >
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.sm, flex: 1 }}>
+              <Text style={{ fontSize: fontSize.xl, fontWeight: "800", color: colors.text }}>
+                @{handle}
+              </Text>
+              {profile?.isPro && (
+                <View
+                  style={{
+                    backgroundColor: colors.accent + "1A",
+                    borderRadius: radius.full,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: fontSize.xs, color: colors.accent, fontWeight: "600" }}>
+                    ⭐ Pro
+                  </Text>
+                </View>
+              )}
+            </View>
+            {isOwner && onEdit && (
+              <Pressable
+                onPress={onEdit}
+                hitSlop={8}
+                style={({ pressed }) => ({
                   paddingHorizontal: spacing.sm,
-                  paddingVertical: 2,
-                }}
+                  paddingVertical: spacing.xs,
+                  opacity: pressed ? 0.7 : 1,
+                })}
               >
-                <Text style={{ fontSize: fontSize.xs, color: colors.accent, fontWeight: "600" }}>
-                  ⭐ Pro
+                <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.accent }}>
+                  Edit
                 </Text>
-              </View>
+              </Pressable>
             )}
           </View>
 
@@ -178,64 +202,112 @@ export function ProfileView({
         </View>
       </View>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md }}>
-        {isOwner && onShare && (
-          <Pressable
-            onPress={onShare}
-            style={({ pressed }) => ({
-              backgroundColor: colors.surfaceRaised,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radius.full,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.sm,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
-              Share profile
-            </Text>
-          </Pressable>
-        )}
-        {isOwner && onStats && (
-          <Pressable
-            onPress={onStats}
-            style={({ pressed }) => ({
-              backgroundColor: colors.surfaceRaised,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radius.full,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.sm,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
-              Statistics
-            </Text>
-          </Pressable>
-        )}
-        {isOwner && onEdit && (
-          <Pressable
-            onPress={onEdit}
-            style={({ pressed }) => ({
-              backgroundColor: colors.surfaceRaised,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radius.full,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.sm,
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
-              ✏️ Edit profile
-            </Text>
-          </Pressable>
-        )}
-        {isVisitor && (
-          <>
+      {isOwner && (onShare || onStats) && (
+        <View
+          style={{
+            flexDirection: "row",
+            gap: spacing.md,
+            marginTop: spacing.lg,
+          }}
+        >
+          {onShare && (
             <Pressable
+              onPress={onShare}
+              style={({ pressed }) => ({
+                flex: 1,
+                alignItems: "center",
+                backgroundColor: colors.surfaceRaised,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radius.xl,
+                paddingVertical: spacing.lg,
+                paddingHorizontal: spacing.sm,
+                opacity: pressed ? 0.88 : 1,
+              })}
+            >
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: colors.accent + "22",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: spacing.sm,
+                }}
+              >
+                <Text style={{ fontSize: 20, color: colors.accent, fontWeight: "600", marginTop: -2 }}>↗</Text>
+              </View>
+              <Text style={{ fontSize: fontSize.sm, fontWeight: "700", color: colors.text }}>
+                Share profile
+              </Text>
+              <Text
+                style={{
+                  fontSize: fontSize.xs,
+                  color: colors.textMuted,
+                  marginTop: 2,
+                  textAlign: "center",
+                }}
+              >
+                Copy link or QR
+              </Text>
+            </Pressable>
+          )}
+          {onStats && (
+            <Pressable
+              onPress={onStats}
+              style={({ pressed }) => ({
+                flex: 1,
+                alignItems: "center",
+                backgroundColor: colors.surfaceRaised,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radius.xl,
+                paddingVertical: spacing.lg,
+                paddingHorizontal: spacing.sm,
+                opacity: pressed ? 0.88 : 1,
+              })}
+            >
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: colors.surfaceHover,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: spacing.sm,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, height: 16 }}>
+                  <View style={{ width: 4, height: 8, borderRadius: 1, backgroundColor: colors.text }} />
+                  <View style={{ width: 4, height: 14, borderRadius: 1, backgroundColor: colors.text }} />
+                  <View style={{ width: 4, height: 10, borderRadius: 1, backgroundColor: colors.text }} />
+                </View>
+              </View>
+              <Text style={{ fontSize: fontSize.sm, fontWeight: "700", color: colors.text }}>
+                Statistics
+              </Text>
+              <Text
+                style={{
+                  fontSize: fontSize.xs,
+                  color: colors.textMuted,
+                  marginTop: 2,
+                  textAlign: "center",
+                }}
+              >
+                Views & activity
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {isVisitor && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm }}>
+          <Pressable
               onPress={onFollow}
               style={({ pressed }) => ({
                 paddingHorizontal: spacing.lg,
@@ -275,9 +347,8 @@ export function ProfileView({
                 </Text>
               </Pressable>
             )}
-          </>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }
