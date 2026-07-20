@@ -1,10 +1,9 @@
-import { randomBytes as nodeRandomBytes } from "node:crypto";
-
 export function randomBytes(length: number): Uint8Array {
-  if (typeof globalThis.crypto?.getRandomValues === "function") {
-    return globalThis.crypto.getRandomValues(new Uint8Array(length));
+  const crypto = globalThis.crypto;
+  if (typeof crypto?.getRandomValues !== "function") {
+    throw new Error("randomBytes requires Web Crypto getRandomValues");
   }
-  return new Uint8Array(nodeRandomBytes(length));
+  return crypto.getRandomValues(new Uint8Array(length));
 }
 
 export function bytesToBase64(bytes: Uint8Array): string {
