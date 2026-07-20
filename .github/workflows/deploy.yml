@@ -1,0 +1,28 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type deploy to confirm production deploy"
+        required: true
+        default: ""
+
+jobs:
+  deploy:
+    if: github.event.inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/secretlink-key.pem
+          chmod 600 ~/.ssh/secretlink-key.pem
+
+      - name: Deploy to production
+        env:
+          DEPLOY_SERVER: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KEY: ~/.ssh/secretlink-key.pem
+        run: bash scripts/deploy.sh

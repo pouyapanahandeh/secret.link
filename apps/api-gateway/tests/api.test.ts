@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import Koa from "koa";
 import bodyParser from "koa-bodyparser";
 import { router } from "../src/routes/index.js";
+import { errorHandler } from "../src/middleware/error-handler.js";
 import type { Server } from "http";
 import db from "../src/db.js";
 import { signToken } from "../src/middleware/auth.js";
@@ -11,6 +12,7 @@ let baseUrl: string;
 
 beforeAll(async () => {
   const app = new Koa();
+  app.use(errorHandler());
   app.use(bodyParser());
   app.use(router.routes());
   app.use(router.allowedMethods());
@@ -65,13 +67,16 @@ describe("Secrets API", () => {
     expect(burnedRes.status).toBe(410);
   });
 
-  it("rejects invalid input", async () => {
+  it("rejects invalid input with validation_error shape", async () => {
     const res = await fetch(`${baseUrl}/v1/secrets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ciphertext: "", ttlSeconds: 10 }),
     });
     expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("validation_error");
+    expect(Array.isArray(body.issues)).toBe(true);
   });
 
   it("returns 404 for non-existent secret", async () => {
@@ -149,6 +154,57 @@ describe("Users API", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body.handles)).toBe(true);
+  });
+
+  it("rejects invalid signup with validation_error", async () => {
+    const res = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: "x" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("validation_error");
+    expect(body.issues?.length).toBeGreaterThan(0);
+  });
+
+  it("rejects short search query with validation_error", async () => {
+    const res = await fetch(`${baseUrl}/v1/users/search?q=a`);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("validation_error");
+  });
+
+  it("follow and unfollow a user", async () => {
+    const aRes = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: "followera" }),
+    });
+    const bRes = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: "followerb" }),
+    });
+    const a = (await aRes.json()) as { user: { id: string } };
+    const b = (await bRes.json()) as { user: { id: string } };
+    const token = decodeURIComponent(/sl_token=([^;]+)/.exec(aRes.headers.get("set-cookie") ?? "")?.[1] ?? "");
+
+    const followRes = await fetch(`${baseUrl}/v1/users/follow/${b.user.id}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(followRes.status).toBe(200);
+    const followed = await followRes.json();
+    expect(followed.following).toBe(true);
+
+    const unfollowRes = await fetch(`${baseUrl}/v1/users/follow/${b.user.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(unfollowRes.status).toBe(200);
+    const unfollowed = await unfollowRes.json();
+    expect(unfollowed.following).toBe(false);
   });
 });
 

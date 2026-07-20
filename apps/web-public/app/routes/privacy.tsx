@@ -158,8 +158,10 @@ export default function Privacy() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-blush mb-3">10. Cookies & Local Storage</h2>
           <p className="text-text leading-relaxed">
-            We use a single authentication cookie (<code className="text-blush/80">sl_token</code>) to maintain
-            your login session. We use IndexedDB (browser local storage) to store your cryptographic
+            We use an encrypted session cookie (<code className="text-blush/80">sl_session</code>) to maintain
+            your login on the web. The API may also set a separate HttpOnly JWT cookie (<code className="text-blush/80">sl_token</code>) during signup.
+            Read our <a href="/security" className="text-accent hover:underline">security overview</a> for details.
+            We use IndexedDB (browser local storage) to store your cryptographic
             private keys — these never leave your device. We do not use third-party cookies,
             tracking pixels, or advertising identifiers.
           </p>

@@ -4,7 +4,7 @@ const SESSION_SECRET = process.env["SESSION_SECRET"] ?? "dev-secret-change-me";
 
 const sessionStorage = createCookieSessionStorage({
   cookie: {
-    name: "sl_token",
+    name: "sl_session",
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

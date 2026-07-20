@@ -1,0 +1,182 @@
+openapi: 3.0.3
+info:
+  title: Secretlink Public API v1
+  version: "1.0"
+  description: Stable mobile v1 contract. Additive changes only unless versioned.
+servers:
+  - url: https://secretlink.life/v1
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service healthy
+  /users:
+    post:
+      summary: Sign up
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [handle]
+              properties:
+                handle:
+                  type: string
+                  minLength: 3
+                  maxLength: 32
+                email:
+                  type: string
+                  format: email
+      responses:
+        "201":
+          description: User created
+        "400":
+          description: validation_error
+  /users/me/profile:
+    patch:
+      summary: Update profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bio:
+                  type: string
+                  maxLength: 300
+                avatarUrl:
+                  type: string
+                  nullable: true
+                socials:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: object
+                    properties:
+                      platform:
+                        type: string
+                      url:
+                        type: string
+  /users/search:
+    get:
+      summary: Search users by handle
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 64
+  /users/follow/{targetId}:
+    post:
+      summary: Follow user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: targetId
+          required: true
+          schema:
+            type: string
+    delete:
+      summary: Unfollow user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: targetId
+          required: true
+          schema:
+            type: string
+    get:
+      summary: Follow state
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: targetId
+          required: true
+          schema:
+            type: string
+  /secrets:
+    post:
+      summary: Create secret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ciphertext, ttlSeconds]
+              properties:
+                ciphertext:
+                  type: string
+                nonce:
+                  type: string
+                ttlSeconds:
+                  type: integer
+                  minimum: 5
+                  maximum: 2592000
+                maxViews:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                recipientHandle:
+                  type: string
+                wrappedKey:
+                  type: string
+                wrapNonce:
+                  type: string
+                wrapEpk:
+                  type: string
+  /secrets/map:
+    post:
+      summary: Create encrypted map drop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ciphertext, nonce, key, lat, lng]
+              properties:
+                ciphertext:
+                  type: string
+                nonce:
+                  type: string
+                key:
+                  type: string
+                lat:
+                  type: number
+                lng:
+                  type: number
+                emoji:
+                  type: string
+                handle:
+                  type: string
+                ttlMinutes:
+                  type: integer
+                  minimum: 5
+                  maximum: 1440
+    get:
+      summary: List active map drops (metadata only)
+  /secrets/map/{id}/reveal:
+    post:
+      summary: Reveal encrypted map payload
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

@@ -6,3 +6,10 @@ export {
   groupStoriesByPlace,
 } from "./groups.js";
 export { mapTimeRemaining } from "./time.js";
+export {
+  CreateMapSecretInput,
+  MapReportInput,
+  MapRevealParams,
+  type CreateMapSecretInput as CreateMapSecretPayload,
+  type MapReportInput as MapReportPayload,
+} from "./schemas.js";

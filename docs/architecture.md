@@ -31,6 +31,8 @@ Process manager: PM2 on a single EC2 instance behind nginx. See `ecosystem.confi
 
 Horizontal scale note: in-process rate limiting and SSE hubs are single-process only. Acceptable while on one EC2; revisit with Redis when scaling out.
 
+**Parked:** `packages/db` (Drizzle/Postgres schema) is a future migration target — not wired in production. API data access uses SQLite repositories under `apps/api-gateway/src/repositories/` until ~100k users / HA requirements.
+
 ## Encryption model
 
 | Content | Client | Server storage |

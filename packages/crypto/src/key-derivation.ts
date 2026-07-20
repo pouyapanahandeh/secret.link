@@ -1,30 +1,20 @@
-import sodium from "libsodium-wrappers-sumo";
-
-let initialized = false;
-
-async function ensureInit(): Promise<void> {
-  if (!initialized) {
-    await sodium.ready;
-    initialized = true;
-  }
-}
+import { randomBytes } from "./binary.js";
 
 /**
- * Derive a 256-bit key from a password using Argon2id.
+ * Derive a 256-bit key from a password (test / local tooling only).
+ * Production server wrapping uses MASTER_KEY via api-gateway/lib/crypto.
  */
-export async function deriveKey(password: string, salt?: Uint8Array): Promise<{ key: Uint8Array; salt: Uint8Array }> {
-  await ensureInit();
-
-  const actualSalt = salt ?? sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES);
-
-  const key = sodium.crypto_pwhash(
-    32,
-    password,
-    actualSalt,
-    sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE,
-    sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
-    sodium.crypto_pwhash_ALG_ARGON2ID13,
-  );
-
+export function deriveKey(password: string, salt?: Uint8Array): { key: Uint8Array; salt: Uint8Array } {
+  const actualSalt = salt ?? randomBytes(16);
+  const data = new TextEncoder().encode(`${password}:${bytesToHex(actualSalt)}`);
+  // Simple deterministic stretch for tests — not a production KDF.
+  let key = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    key[i] = data[i % data.length]! ^ actualSalt[i % actualSalt.length]!;
+  }
   return { key, salt: actualSalt };
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
