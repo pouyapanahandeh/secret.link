@@ -23,10 +23,10 @@ if [[ "${1:-}" == "--rollback" ]]; then
   echo "──── Rolling back to previous release ────"
   "${SSH_CMD[@]}" "
     set -e
-    cd $BASE_DIR
-    prev=\$(ls -1d 2* | sort | tail -2 | head -1)
+    cd $BASE_DIR/releases
+    prev=\$(ls -1d 2* 2>/dev/null | sort | tail -2 | head -1)
     [ -n \"\$prev\" ] || { echo 'No previous release found'; exit 1; }
-    ln -sfn $BASE_DIR/\$prev $BASE_DIR/current
+    ln -sfn $BASE_DIR/releases/\$prev $BASE_DIR/current
     cd $BASE_DIR/current && pm2 restart all --update-env
     echo \"Rolled back to \$prev\"
   "
@@ -35,7 +35,7 @@ fi
 
 echo "──── Secretlink Deploy ($RELEASE) ────"
 echo "Local:  $LOCAL_DIR"
-echo "Remote: $SERVER:$BASE_DIR/$RELEASE"
+echo "Remote: $SERVER:$BASE_DIR/releases/$RELEASE"
 echo ""
 
 # ─── 1. Pre-deploy DB backup ─────────────────────────────────────────────────
@@ -91,11 +91,11 @@ rsync -az --delete \
 # ─── 5. Install & build ──────────────────────────────────────────────────────
 echo "→ Installing dependencies + building..."
 "${SSH_CMD[@]}" "
-  set -e
+  set -euo pipefail
   cd $BASE_DIR/releases/$RELEASE
-  pnpm install --frozen-lockfile 2>&1 | tail -2 || pnpm install --no-frozen-lockfile 2>&1 | tail -2
-  (cd apps/web-public && pnpm build 2>&1 | tail -2)
-  (cd apps/web-admin && pnpm build 2>&1 | tail -2)
+  pnpm install --frozen-lockfile
+  (cd apps/web-public && pnpm build)
+  (cd apps/web-admin && pnpm build)
 "
 
 # ─── 6. Swap symlink + restart ───────────────────────────────────────────────

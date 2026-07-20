@@ -1,10 +1,23 @@
 import { Link } from "@remix-run/react";
+import { Avatar } from "../../components/Avatar";
 import { ThemeToggle } from "../../components/ThemeToggle";
 import { NotificationBell } from "../../components/NotificationBell";
 import { UI_FEATURES } from "../../lib/feature-flags";
 import type { DashboardNavProps, DashboardTab } from "./types";
 
-function navIcon(id: DashboardTab | "messages") {
+function navIcon(id: DashboardTab | "messages", userHandle?: string, userAvatarUrl?: string | null) {
+  if (id === "profile" && userHandle) {
+    return (
+      <Avatar
+        handle={userHandle}
+        avatarUrl={userAvatarUrl}
+        sizeClass="w-5 h-5"
+        textClass="text-[10px]"
+        className="border-0"
+      />
+    );
+  }
+
   switch (id) {
     case "inbox":
       return (
@@ -40,7 +53,7 @@ const NAV_ITEMS: { id: DashboardTab | "messages"; label: string }[] = [
   { id: "profile", label: "Profile" },
 ];
 
-export function DashboardSidebar({ activeTab, inboxCount, token, onNavClick }: DashboardNavProps) {
+export function DashboardSidebar({ activeTab, inboxCount, token, userHandle, userAvatarUrl, onNavClick }: DashboardNavProps) {
   return (
     <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border/50 bg-surface shrink-0">
       <div className="px-5 py-5 border-b border-border/50">
@@ -63,7 +76,7 @@ export function DashboardSidebar({ activeTab, inboxCount, token, onNavClick }: D
                 : "text-text-muted hover:text-text hover:bg-surface-raised"
             }`}
           >
-            {navIcon(item.id)}
+            {navIcon(item.id, userHandle, userAvatarUrl)}
             <span>{item.label}</span>
             {item.id === "inbox" && inboxCount > 0 && (
               <span className="ml-auto text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">{inboxCount}</span>
@@ -87,13 +100,26 @@ export function DashboardSidebar({ activeTab, inboxCount, token, onNavClick }: D
   );
 }
 
-export function DashboardMobileHeader({ token, onNavClick }: Pick<DashboardNavProps, "token" | "onNavClick">) {
+export function DashboardMobileHeader({
+  token,
+  userHandle,
+  userAvatarUrl,
+  onNavClick,
+}: Pick<DashboardNavProps, "token" | "userHandle" | "userAvatarUrl" | "onNavClick">) {
   return (
     <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
       <Link to="/dashboard" className="flex items-center gap-2">
         <img src="/secretlink.png" alt="" className="w-6 h-6" />
       </Link>
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onNavClick("profile")}
+          aria-label="Your profile"
+          className="rounded-full"
+        >
+          <Avatar handle={userHandle} avatarUrl={userAvatarUrl} sizeClass="w-8 h-8" textClass="text-xs" />
+        </button>
         <NotificationBell token={token} onNavigate={onNavClick} />
         <ThemeToggle />
         <form method="post" action="/logout">
@@ -106,7 +132,7 @@ export function DashboardMobileHeader({ token, onNavClick }: Pick<DashboardNavPr
   );
 }
 
-export function DashboardBottomNav({ activeTab, onNavClick }: Pick<DashboardNavProps, "activeTab" | "onNavClick">) {
+export function DashboardBottomNav({ activeTab, userHandle, userAvatarUrl, onNavClick }: Pick<DashboardNavProps, "activeTab" | "userHandle" | "userAvatarUrl" | "onNavClick">) {
   return (
     <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border/50 z-30">
       <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
@@ -118,7 +144,7 @@ export function DashboardBottomNav({ activeTab, onNavClick }: Pick<DashboardNavP
               activeTab === item.id ? "text-accent" : "text-text-muted"
             }`}
           >
-            {navIcon(item.id)}
+            {navIcon(item.id, userHandle, userAvatarUrl)}
             <span className="text-[10px] font-medium">{item.label}</span>
           </button>
         ))}
