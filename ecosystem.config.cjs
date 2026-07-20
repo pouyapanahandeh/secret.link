@@ -84,6 +84,7 @@ const apiEnv = {
   // Blob storage. Set STORAGE_DRIVER=s3 + BLOB_BUCKET to use S3 (recommended in prod).
   STORAGE_DRIVER: get("STORAGE_DRIVER") ?? "local",
   BLOB_BUCKET: get("BLOB_BUCKET") ?? "",
+  PUBLIC_ORIGIN: get("PUBLIC_ORIGIN") ?? "https://secretlink.life",
 };
 
 // AWS credentials are intentionally omitted: the EC2 instance uses an IAM
@@ -142,6 +143,7 @@ module.exports = {
         PORT: "3002",
         SESSION_SECRET: sessionSecret,
         API_URL: get("API_URL") ?? "http://localhost:4000",
+        PUBLIC_ORIGIN: get("PUBLIC_ORIGIN") ?? "https://secretlink.life",
         ...sentryEnv,
       },
     },
