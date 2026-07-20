@@ -12,7 +12,9 @@
     "./profile-types": "./src/profile-types.ts",
     "./feature-flags": "./src/feature-flags.ts",
     "./profile-share": "./src/profile-share.ts",
-    "./map": "./src/map/index.ts"
+    "./map": "./src/map/index.ts",
+    "./user/schemas": "./src/user/schemas.ts",
+    "./map/schemas": "./src/map/schemas.ts"
   },
   "scripts": {
     "build": "tsc --build",

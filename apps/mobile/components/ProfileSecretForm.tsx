@@ -69,7 +69,7 @@ export function ProfileSecretForm({
     setSending(true);
     setError("");
     try {
-      const { rawKey } = await generateSecretKey();
+      const { rawKey } = generateSecretKey();
       const data = new TextEncoder().encode(text);
       const { ciphertext, nonce } = encryptSecretPayload(data, rawKey);
       const wrapped = wrapKeyForRecipient(rawKey, recipientPublicKey);

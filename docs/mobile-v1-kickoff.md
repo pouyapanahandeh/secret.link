@@ -26,7 +26,7 @@ These routes are considered stable for mobile v1. Prefer additive changes only.
 - `GET /v1/secrets/inbox/:handle`, `/sent/:userId` (auth)
 - `POST /v1/secrets/blob`, `GET /v1/secrets/blob/:path`
 
-Client encrypts with AES-256-GCM (see `apps/mobile/lib/secret-crypto.ts` and web `app/lib/crypto.ts`).
+Client encrypts with `@secretlink/crypto` (AES-256-GCM + X25519 wrap). Web adapter: `apps/web-public/app/lib/crypto.ts`; mobile: `apps/mobile/lib/secret-crypto.ts`.
 
 ### Map drops (encrypted)
 - `GET /v1/secrets/map` — metadata only (no message)
@@ -35,7 +35,7 @@ Client encrypts with AES-256-GCM (see `apps/mobile/lib/secret-crypto.ts` and web
 - `GET /v1/secrets/map/by-handle/:handle`
 - `POST /v1/secrets/map/:id/report`
 
-Use `encryptMapMessage` / `decryptMapReveal` in `apps/mobile/lib/secret-crypto.ts`.
+Use `encryptMapMessage` / `decryptMapReveal` from `@secretlink/crypto` (re-exported in `apps/mobile/lib/secret-crypto.ts`).
 
 ### Health
 - `GET /v1/health` — `{ status, checks: { db } }`

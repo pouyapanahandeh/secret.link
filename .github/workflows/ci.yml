@@ -45,3 +45,27 @@ jobs:
 
       - name: Build (deployable apps — mobile requires EAS cloud and is excluded)
         run: pnpm exec turbo run build --filter=@secretlink/api-gateway --filter=@secretlink/web-public --filter=@secretlink/web-admin
+
+  playwright:
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install chromium --with-deps
+        working-directory: apps/web-public
+      - name: E2E smoke
+        run: pnpm --filter @secretlink/web-public test:e2e
+        env:
+          CI: "true"
+          JWT_SECRET: ci-test-secret-not-used-in-prod
+          MASTER_KEY: dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktMzI=
+          SESSION_SECRET: ci-playwright-session-secret

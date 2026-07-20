@@ -1,21 +1,28 @@
 /**
- * Browser-native encryption using Web Crypto API (AES-256-GCM).
- * No WASM, no dependencies — works everywhere.
+ * Browser crypto adapter — delegates map/secret payload crypto to @secretlink/crypto.
+ * Web Crypto CryptoKey helpers remain for blob encrypt/decrypt in the browser.
  */
+import {
+  decryptMapReveal as decryptMapRevealCore,
+  encryptMapMessage as encryptMapMessageCore,
+  generateSecretKey,
+  encryptSecretPayload,
+  decryptSecretPayload,
+  bytesToBase64Url,
+  base64UrlToBytes,
+} from "@secretlink/crypto";
 
 export async function generateKeyBase64(): Promise<{ key: CryptoKey; keyBase64: string; rawKey: Uint8Array }> {
-  const rawKey = crypto.getRandomValues(new Uint8Array(32));
-  const keyBase64 = uint8ToBase64Url(rawKey);
-  const key = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);
+  const { keyBase64, rawKey } = generateSecretKey();
+  const key = await crypto.subtle.importKey("raw", rawKey as BufferSource, "AES-GCM", false, ["encrypt"]);
   return { key, keyBase64, rawKey };
 }
 
 export async function keyFromBase64(keyBase64: string): Promise<CryptoKey> {
-  const rawKey = base64UrlToUint8(keyBase64);
+  const rawKey = base64UrlToBytes(keyBase64);
   return crypto.subtle.importKey("raw", rawKey as BufferSource, "AES-GCM", false, ["decrypt"]);
 }
 
-/** Import a raw 32-byte AES key (e.g. obtained by unwrapping) for decryption. */
 export async function keyFromRawBytes(rawKey: Uint8Array): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", rawKey as BufferSource, "AES-GCM", false, ["decrypt"]);
 }
@@ -24,12 +31,9 @@ export async function encryptBlob(
   data: Uint8Array,
   key: CryptoKey,
 ): Promise<{ ciphertext: Uint8Array; nonce: string }> {
-  const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for AES-GCM
-  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data as BufferSource);
-  return {
-    ciphertext: new Uint8Array(encrypted),
-    nonce: uint8ToBase64Url(iv),
-  };
+  const rawKey = new Uint8Array(await crypto.subtle.exportKey("raw", key));
+  const { ciphertext, nonce } = encryptSecretPayload(data, rawKey);
+  return { ciphertext, nonce };
 }
 
 export async function decryptBlob(
@@ -37,31 +41,18 @@ export async function decryptBlob(
   nonce: string,
   key: CryptoKey,
 ): Promise<Uint8Array> {
-  const iv = base64UrlToUint8(nonce);
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, ciphertext as BufferSource);
-  return new Uint8Array(decrypted);
+  const rawKey = new Uint8Array(await crypto.subtle.exportKey("raw", key));
+  return decryptSecretPayload(ciphertext, nonce, rawKey);
 }
 
-/** Encrypt a map-drop message for server storage (AES-256-GCM). */
 export async function encryptMapMessage(text: string): Promise<{
   ciphertext: string;
   nonce: string;
   key: string;
 }> {
-  const { key, keyBase64, rawKey: _raw } = await generateKeyBase64();
-  const data = new TextEncoder().encode(text);
-  const { ciphertext, nonce } = await encryptBlob(data, key);
-  return {
-    ciphertext: uint8ToBase64Url(ciphertext),
-    nonce,
-    key: keyBase64,
-  };
+  return encryptMapMessageCore(text);
 }
 
-/**
- * Resolve a /map/:id/reveal response into plaintext.
- * Encrypted reveals include ciphertext + nonce + key; legacy may include message.
- */
 export async function decryptMapReveal(data: {
   message?: string;
   legacy?: boolean;
@@ -69,34 +60,7 @@ export async function decryptMapReveal(data: {
   nonce?: string;
   key?: string;
 }): Promise<string> {
-  if (data.message != null && (data.legacy || !data.ciphertext)) {
-    return data.message;
-  }
-  if (!data.ciphertext || !data.nonce || !data.key) {
-    throw new Error("Missing encrypted map payload");
-  }
-  const key = await keyFromBase64(data.key);
-  const plaintext = await decryptBlob(base64UrlToUint8(data.ciphertext), data.nonce, key);
-  return new TextDecoder().decode(plaintext);
+  return decryptMapRevealCore(data);
 }
 
-// --- Base64url helpers (no padding) ---
-
-function uint8ToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function base64UrlToUint8(str: string): Uint8Array {
-  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
+export { bytesToBase64Url as uint8ToBase64Url, base64UrlToBytes };

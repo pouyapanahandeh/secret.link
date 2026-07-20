@@ -3,7 +3,15 @@ import type { Context } from "koa";
 import { nanoid } from "nanoid";
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import {
+  CreateUserInput,
+  PatchProfileInput,
+  PasskeyLoginOptionsInput,
+  SearchUsersQuery,
+  FollowTargetParams,
+} from "@secretlink/core/user/schemas";
 import { signToken, requireAuth, revokeToken, type AuthPayload } from "../middleware/auth.js";
+import { validateBody, validateQuery, validateParams } from "../middleware/validate.js";
 import db from "../db.js";
 import { createNotification } from "../notifications.js";
 import {
@@ -13,6 +21,8 @@ import {
   getProfileStats,
 } from "../lib/profile-stats.js";
 import { RESERVED_HANDLES } from "../lib/blog.js";
+import { userRepo, dbUserToPublic } from "../repositories/user-repo.js";
+import { profileRepo } from "../repositories/profile-repo.js";
 
 export const usersRouter = new Router({ prefix: "/users" });
 
@@ -35,72 +45,21 @@ const SES_REGION = process.env["SES_REGION"] ?? "eu-north-1";
 const SES_FROM = process.env["SES_FROM"] ?? "noreply@secretlink.life";
 const ses = new SESClient({ region: SES_REGION });
 
-// ─── DB helpers ─────────────────────────────────────────────────────────────
+// ─── DB helpers (auth-specific; user/profile/follow live in repositories) ───
 const stmts = {
-  insertUser: db.prepare(`INSERT INTO users (id, handle, email, is_pro, created_at) VALUES (?, ?, ?, 0, ?)`),
-  getUserByHandle: db.prepare(`SELECT * FROM users WHERE handle = ?`),
-  getUserById: db.prepare(`SELECT * FROM users WHERE id = ?`),
-  updateProfile: db.prepare(`UPDATE users SET bio = ?, avatar_url = ?, socials = ? WHERE id = ?`),
   updateMagicLink: db.prepare(`UPDATE users SET magic_link_token = ?, magic_link_expires_at = ? WHERE id = ?`),
   clearMagicLink: db.prepare(`UPDATE users SET magic_link_token = NULL, magic_link_expires_at = NULL WHERE id = ?`),
   getUserByMagicToken: db.prepare(`SELECT * FROM users WHERE magic_link_token = ? AND magic_link_expires_at > ?`),
-  getUserByEmail: db.prepare(`SELECT * FROM users WHERE email = ?`),
-  searchUsers: db.prepare(`SELECT id, handle, bio, avatar_url, is_pro FROM users WHERE handle LIKE ? LIMIT 20`),
   insertCredential: db.prepare(`INSERT INTO credentials (id, user_id, public_key, counter, transports) VALUES (?, ?, ?, ?, ?)`),
   getCredentials: db.prepare(`SELECT * FROM credentials WHERE user_id = ?`),
   updateCredentialCounter: db.prepare(`UPDATE credentials SET counter = ? WHERE id = ?`),
-  insertFollow: db.prepare(`INSERT OR IGNORE INTO follows (follower_id, following_id, created_at) VALUES (?, ?, ?)`),
-  deleteFollow: db.prepare(`DELETE FROM follows WHERE follower_id = ? AND following_id = ?`),
-  isFollowing: db.prepare(`SELECT 1 FROM follows WHERE follower_id = ? AND following_id = ?`),
-  countFollowers: db.prepare(`SELECT COUNT(*) as count FROM follows WHERE following_id = ?`),
-  countFollowing: db.prepare(`SELECT COUNT(*) as count FROM follows WHERE follower_id = ?`),
-  followingIdsOf: db.prepare(`SELECT following_id FROM follows WHERE follower_id = ?`),
-  // Users who follow :userId (most recent first)
-  listFollowers: db.prepare(
-    `SELECT u.id, u.handle, u.bio, u.avatar_url, u.is_pro
-     FROM follows f JOIN users u ON u.id = f.follower_id
-     WHERE f.following_id = ? ORDER BY f.created_at DESC`,
-  ),
-  // Users :userId follows (most recent first)
-  listFollowing: db.prepare(
-    `SELECT u.id, u.handle, u.bio, u.avatar_url, u.is_pro
-     FROM follows f JOIN users u ON u.id = f.following_id
-     WHERE f.follower_id = ? ORDER BY f.created_at DESC`,
-  ),
-  getDmKey: db.prepare(`SELECT public_key FROM dm_keys WHERE user_id = ?`),
 };
 
-function dbUserToPublic(row: any) {
-  return {
-    id: row.id,
-    handle: row.handle,
-    email: row.email,
-    isPro: !!row.is_pro,
-    role: row.role ?? "user",
-    createdAt: row.created_at,
-    bio: row.bio ?? null,
-    avatarUrl: row.avatar_url ?? null,
-    socials: row.socials ? JSON.parse(row.socials) : [],
-  };
-}
-
 // ─── Signup ─────────────────────────────────────────────────────────────────
-usersRouter.post("/", async (ctx: Context) => {
-  const body = ctx.request.body as Record<string, unknown>;
-  const handle = String(body.handle ?? "").trim().toLowerCase();
-  const email = body.email ? String(body.email).trim() : undefined;
-
-  if (!handle || handle.length < 3 || handle.length > 32) {
-    ctx.status = 400;
-    ctx.body = { error: "invalid_handle" };
-    return;
-  }
-
-  if (!/^[a-z0-9_-]+$/.test(handle)) {
-    ctx.status = 400;
-    ctx.body = { error: "invalid_handle_format" };
-    return;
-  }
+usersRouter.post("/", validateBody(CreateUserInput), async (ctx: Context) => {
+  const body = ctx.state.body as { handle: string; email?: string };
+  const handle = body.handle;
+  const email = body.email;
 
   if (RESERVED_HANDLES.has(handle)) {
     ctx.status = 400;
@@ -108,7 +67,7 @@ usersRouter.post("/", async (ctx: Context) => {
     return;
   }
 
-  if (stmts.getUserByHandle.get(handle)) {
+  if (userRepo.getUserByHandle.get(handle)) {
     ctx.status = 409;
     ctx.body = { error: "handle_taken" };
     return;
@@ -116,7 +75,7 @@ usersRouter.post("/", async (ctx: Context) => {
 
   const id = nanoid();
   const createdAt = new Date().toISOString();
-  stmts.insertUser.run(id, handle, email ?? null, createdAt);
+  userRepo.insertUser.run(id, handle, email ?? null, createdAt);
 
   const token = signToken({ userId: id, handle });
 
@@ -137,27 +96,21 @@ usersRouter.post("/", async (ctx: Context) => {
 // ─── Search users (must be before /:handle) ─────────────────────────────────
 /** Public handles for sitemap generation (no PII beyond handle). */
 usersRouter.get("/sitemap-handles", async (ctx: Context) => {
-  const rows = db
-    .prepare(`SELECT handle FROM users ORDER BY created_at DESC LIMIT 5000`)
-    .all() as Array<{ handle: string }>;
+  const rows = userRepo.listSitemapHandles.all() as Array<{ handle: string }>;
   ctx.set("Cache-Control", "public, max-age=3600");
   ctx.body = { handles: rows.map((r) => r.handle) };
 });
 
-usersRouter.get("/search", async (ctx: Context) => {
-  const q = String(ctx.query["q"] ?? "").trim().toLowerCase();
-  if (!q || q.length < 2) {
-    ctx.body = [];
-    return;
-  }
+usersRouter.get("/search", validateQuery(SearchUsersQuery), async (ctx: Context) => {
+  const { q } = ctx.state.query as { q: string };
 
-  const rows = stmts.searchUsers.all(`%${q}%`) as any[];
+  const rows = userRepo.searchUsers.all(`%${q}%`) as any[];
 
   // Resolve follow state for the requesting user in a single query (no N+1).
   const requester = ctx.state.user as AuthPayload | undefined;
   let followingSet = new Set<string>();
   if (requester) {
-    const ids = stmts.followingIdsOf.all(requester.userId) as Array<{ following_id: string }>;
+    const ids = profileRepo.followingIdsOf.all(requester.userId) as Array<{ following_id: string }>;
     followingSet = new Set(ids.map(r => r.following_id));
   }
 
@@ -175,7 +128,7 @@ usersRouter.get("/search", async (ctx: Context) => {
 // ─── Get current user (short, for auth checks) ─────────────────────────────
 usersRouter.get("/me", requireAuth(), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const row = stmts.getUserById.get(userId) as any;
+  const row = userRepo.getUserById.get(userId) as any;
   if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
   ctx.body = dbUserToPublic(row);
 });
@@ -191,7 +144,7 @@ usersRouter.get("/me/stats", requireAuth(), async (ctx: Context) => {
 usersRouter.get("/link/:handle/:platform", async (ctx: Context) => {
   const handle = String(ctx.params["handle"] ?? "").toLowerCase();
   const platform = String(ctx.params["platform"] ?? "").toLowerCase();
-  const row = stmts.getUserByHandle.get(handle) as any;
+  const row = userRepo.getUserByHandle.get(handle) as any;
   if (!row) {
     ctx.status = 404;
     ctx.body = { error: "user_not_found" };
@@ -230,7 +183,7 @@ usersRouter.get("/link/:handle/:platform", async (ctx: Context) => {
 // ─── QR scan beacon (public, non-owner only) ───────────────────────────────
 usersRouter.post("/track/qr/:handle", async (ctx: Context) => {
   const handle = String(ctx.params["handle"] ?? "").toLowerCase();
-  const row = stmts.getUserByHandle.get(handle) as any;
+  const row = userRepo.getUserByHandle.get(handle) as any;
   if (!row) {
     ctx.status = 404;
     ctx.body = { error: "user_not_found" };
@@ -251,7 +204,7 @@ usersRouter.post("/track/qr/:handle", async (ctx: Context) => {
 usersRouter.get("/:handle", async (ctx: Context) => {
   const handle = ctx.params["handle"];
   if (handle === "me" || handle === "follow" || handle === "link" || handle === "track") return;
-  const row = stmts.getUserByHandle.get(handle!) as any;
+  const row = userRepo.getUserByHandle.get(handle!) as any;
 
   if (!row) {
     ctx.status = 404;
@@ -259,9 +212,9 @@ usersRouter.get("/:handle", async (ctx: Context) => {
     return;
   }
 
-  const followersCount = (stmts.countFollowers.get(row.id) as any)?.count ?? 0;
-  const followingCount = (stmts.countFollowing.get(row.id) as any)?.count ?? 0;
-  const dmKey = stmts.getDmKey.get(row.id) as any;
+  const followersCount = (profileRepo.countFollowers.get(row.id) as any)?.count ?? 0;
+  const followingCount = (profileRepo.countFollowing.get(row.id) as any)?.count ?? 0;
+  const dmKey = userRepo.getDmKey.get(row.id) as any;
 
   // Follower/following counts are private — only the profile owner sees them.
   const requester = ctx.state.user as AuthPayload | undefined;
@@ -290,7 +243,7 @@ usersRouter.get("/:handle", async (ctx: Context) => {
 // ─── Get current user (authenticated) ───────────────────────────────────────
 usersRouter.get("/me/profile", requireAuth(), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const row = stmts.getUserById.get(userId) as any;
+  const row = userRepo.getUserById.get(userId) as any;
 
   if (!row) {
     ctx.status = 404;
@@ -299,8 +252,8 @@ usersRouter.get("/me/profile", requireAuth(), async (ctx: Context) => {
   }
 
   const creds = stmts.getCredentials.all(userId) as any[];
-  const followersCount = (stmts.countFollowers.get(userId) as any)?.count ?? 0;
-  const followingCount = (stmts.countFollowing.get(userId) as any)?.count ?? 0;
+  const followersCount = (profileRepo.countFollowers.get(userId) as any)?.count ?? 0;
+  const followingCount = (profileRepo.countFollowing.get(userId) as any)?.count ?? 0;
 
   ctx.status = 200;
   ctx.body = {
@@ -316,7 +269,7 @@ usersRouter.get("/me/profile", requireAuth(), async (ctx: Context) => {
 // can render a correct Follow/Following state without an N+1 round-trip.
 function withFollowState(rows: any[], requesterId: string) {
   const followingSet = new Set(
-    (stmts.followingIdsOf.all(requesterId) as Array<{ following_id: string }>).map((r) => r.following_id),
+    (profileRepo.followingIdsOf.all(requesterId) as Array<{ following_id: string }>).map((r) => r.following_id),
   );
   return rows.map((r) => ({
     id: r.id,
@@ -331,47 +284,44 @@ function withFollowState(rows: any[], requesterId: string) {
 
 usersRouter.get("/me/followers", requireAuth(), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const rows = stmts.listFollowers.all(userId) as any[];
+  const rows = profileRepo.listFollowers.all(userId) as any[];
   ctx.body = withFollowState(rows, userId);
 });
 
 usersRouter.get("/me/following", requireAuth(), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const rows = stmts.listFollowing.all(userId) as any[];
+  const rows = profileRepo.listFollowing.all(userId) as any[];
   ctx.body = withFollowState(rows, userId);
 });
 
 // ─── Update profile ─────────────────────────────────────────────────────────
-usersRouter.patch("/me/profile", requireAuth(), async (ctx: Context) => {
+usersRouter.patch("/me/profile", requireAuth(), validateBody(PatchProfileInput), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const row = stmts.getUserById.get(userId) as any;
+  const row = userRepo.getUserById.get(userId) as any;
   if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
 
-  const body = ctx.request.body as Record<string, unknown>;
+  const body = ctx.state.body as Record<string, unknown>;
   let bio = row.bio;
   let avatarUrl = row.avatar_url;
   let socials = row.socials;
 
-  if (typeof body.bio === "string") bio = body.bio.slice(0, 300);
+  if (typeof body.bio === "string") bio = body.bio;
   if (body.avatarUrl === null) avatarUrl = null;
-  else if (typeof body.avatarUrl === "string") avatarUrl = body.avatarUrl.slice(0, 500) || null;
+  else if (typeof body.avatarUrl === "string") avatarUrl = body.avatarUrl || null;
   if (Array.isArray(body.socials)) {
-    socials = JSON.stringify((body.socials as any[]).slice(0, 10).map((s) => ({
-      platform: String(s.platform ?? "").slice(0, 30),
-      url: String(s.url ?? "").slice(0, 200),
-    })));
+    socials = JSON.stringify(body.socials);
   }
 
-  stmts.updateProfile.run(bio, avatarUrl, socials, userId);
+  profileRepo.updateProfile.run(bio, avatarUrl, socials, userId);
 
   ctx.status = 200;
   ctx.body = { id: row.id, handle: row.handle, bio, avatarUrl, socials: JSON.parse(socials || "[]") };
 });
 
 // ─── Follow system ──────────────────────────────────────────────────────────
-usersRouter.post("/follow/:targetId", requireAuth(), async (ctx: Context) => {
+usersRouter.post("/follow/:targetId", requireAuth(), validateParams(FollowTargetParams), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const targetId = ctx.params["targetId"]!;
+  const { targetId } = ctx.state.params as { targetId: string };
 
   if (targetId === userId) {
     ctx.status = 400;
@@ -379,14 +329,14 @@ usersRouter.post("/follow/:targetId", requireAuth(), async (ctx: Context) => {
     return;
   }
 
-  if (!stmts.getUserById.get(targetId)) {
+  if (!userRepo.getUserById.get(targetId)) {
     ctx.status = 404;
     ctx.body = { error: "user_not_found" };
     return;
   }
 
-  stmts.insertFollow.run(userId, targetId, new Date().toISOString());
-  const followersCount = (stmts.countFollowers.get(targetId) as any)?.count ?? 0;
+  profileRepo.insertFollow.run(userId, targetId, new Date().toISOString());
+  const followersCount = (profileRepo.countFollowers.get(targetId) as any)?.count ?? 0;
 
   // Notify the followed user
   const { handle } = ctx.state.user as AuthPayload;
@@ -401,27 +351,27 @@ usersRouter.post("/follow/:targetId", requireAuth(), async (ctx: Context) => {
   ctx.body = { following: true, followersCount };
 });
 
-usersRouter.delete("/follow/:targetId", requireAuth(), async (ctx: Context) => {
+usersRouter.delete("/follow/:targetId", requireAuth(), validateParams(FollowTargetParams), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const targetId = ctx.params["targetId"]!;
-  stmts.deleteFollow.run(userId, targetId);
-  const followersCount = (stmts.countFollowers.get(targetId) as any)?.count ?? 0;
+  const { targetId } = ctx.state.params as { targetId: string };
+  profileRepo.deleteFollow.run(userId, targetId);
+  const followersCount = (profileRepo.countFollowers.get(targetId) as any)?.count ?? 0;
   ctx.body = { following: false, followersCount };
 });
 
-usersRouter.get("/follow/:targetId", requireAuth(), async (ctx: Context) => {
+usersRouter.get("/follow/:targetId", requireAuth(), validateParams(FollowTargetParams), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const targetId = ctx.params["targetId"]!;
-  const isFollowing = !!stmts.isFollowing.get(userId, targetId);
-  const followersCount = (stmts.countFollowers.get(targetId) as any)?.count ?? 0;
-  const followingCount = (stmts.countFollowing.get(targetId) as any)?.count ?? 0;
+  const { targetId } = ctx.state.params as { targetId: string };
+  const isFollowing = !!profileRepo.isFollowing.get(userId, targetId);
+  const followersCount = (profileRepo.countFollowers.get(targetId) as any)?.count ?? 0;
+  const followingCount = (profileRepo.countFollowing.get(targetId) as any)?.count ?? 0;
   ctx.body = { isFollowing, followersCount, followingCount };
 });
 
 // ─── WebAuthn: Start registration ───────────────────────────────────────────
 usersRouter.post("/me/passkey/register-options", requireAuth(), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const row = stmts.getUserById.get(userId) as any;
+  const row = userRepo.getUserById.get(userId) as any;
   if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
 
   const creds = stmts.getCredentials.all(userId) as any[];
@@ -449,7 +399,7 @@ usersRouter.post("/me/passkey/register-options", requireAuth(), async (ctx: Cont
 // ─── WebAuthn: Complete registration ────────────────────────────────────────
 usersRouter.post("/me/passkey/register-verify", requireAuth(), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
-  const row = stmts.getUserById.get(userId) as any;
+  const row = userRepo.getUserById.get(userId) as any;
   if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
 
   const challengeRow = challengeStmts.get.get(userId, Date.now()) as any;
@@ -485,10 +435,9 @@ usersRouter.post("/me/passkey/register-verify", requireAuth(), async (ctx: Conte
 });
 
 // ─── WebAuthn: Start authentication ─────────────────────────────────────────
-usersRouter.post("/auth/passkey/login-options", async (ctx: Context) => {
-  const body = ctx.request.body as Record<string, unknown>;
-  const handle = String(body.handle ?? "").trim().toLowerCase();
-  const row = stmts.getUserByHandle.get(handle) as any;
+usersRouter.post("/auth/passkey/login-options", validateBody(PasskeyLoginOptionsInput), async (ctx: Context) => {
+  const { handle } = ctx.state.body as { handle: string };
+  const row = userRepo.getUserByHandle.get(handle) as any;
 
   if (!row) { ctx.status = 400; ctx.body = { error: "no_passkey" }; return; }
 
@@ -512,7 +461,7 @@ usersRouter.post("/auth/passkey/login-options", async (ctx: Context) => {
 usersRouter.post("/auth/passkey/login-verify", async (ctx: Context) => {
   const body = ctx.request.body as Record<string, unknown>;
   const handle = String(body.handle ?? "").trim().toLowerCase();
-  const row = stmts.getUserByHandle.get(handle) as any;
+  const row = userRepo.getUserByHandle.get(handle) as any;
 
   if (!row) { ctx.status = 400; ctx.body = { error: "user_not_found" }; return; }
 
@@ -562,7 +511,7 @@ usersRouter.post("/auth/magic-link", async (ctx: Context) => {
   const body = ctx.request.body as Record<string, unknown>;
   const email = String(body.email ?? "").trim().toLowerCase();
 
-  const foundUser = stmts.getUserByEmail.get(email) as any;
+  const foundUser = userRepo.getUserByEmail.get(email) as any;
 
   if (!foundUser) {
     ctx.body = { sent: true };
