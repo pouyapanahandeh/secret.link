@@ -3,7 +3,8 @@ import type { Context } from "koa";
 import { nanoid } from "nanoid";
 import db from "../db.js";
 import { requireAuth, clearSuspensionCache } from "../middleware/auth.js";
-import { requireAdmin } from "../middleware/admin.js";
+import { requireAdmin, requireSuperAdmin } from "../middleware/admin.js";
+import { runSystemStatusChecks } from "../lib/status-checks.js";
 
 export const adminRouter = new Router({ prefix: "/admin" });
 
@@ -33,6 +34,13 @@ adminRouter.get("/stats", async (ctx: Context) => {
     newContactMessages: (db.prepare("SELECT count(*) as c FROM contact_messages WHERE status = 'new'").get() as any).c,
   };
   ctx.body = stats;
+});
+
+// ─── System status (super admin only) ───────────────────────────────────────
+
+adminRouter.get("/status", requireSuperAdmin(), async (ctx: Context) => {
+  ctx.set("Cache-Control", "no-store");
+  ctx.body = await runSystemStatusChecks();
 });
 
 // ─── Contact Messages ───────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 export const navItems = [
+  { to: "/status", label: "Status", icon: "🟢", roles: ["admin"] as const },
   { to: "/dashboard", label: "Dashboard", icon: "📊", roles: ["admin", "moderator"] as const },
   { to: "/reports", label: "Reports", icon: "🚩", roles: ["admin", "moderator"] as const },
   { to: "/appeals", label: "Appeals", icon: "⚖️", roles: ["admin", "moderator"] as const },
@@ -17,6 +18,7 @@ export function navItemsForRole(role: string) {
 
 export function getNavLabel(pathname: string): string {
   if (pathname.startsWith("/blog")) return "Blog";
+  if (pathname.startsWith("/status")) return "Status";
   const item = navItems.find(
     (entry) => pathname === entry.to || pathname.startsWith(`${entry.to}/`),
   );

@@ -3,7 +3,8 @@ import { redirect } from "@remix-run/node";
 import { requireBlogReaderSession, requireBlogEditorSession } from "~/lib/session.server";
 import { adminApi, uploadBlogCover } from "~/lib/api.server";
 import { Form, Link, useLoaderData, useNavigation, useActionData } from "@remix-run/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { BlogCoverUpload } from "~/components/BlogCoverUpload";
 import { PageHeader } from "~/components/PageHeader";
 
 function slugifyTitle(title: string) {
@@ -37,12 +38,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const id = params.id!;
   const intent = formData.get("intent") as string;
 
-  let coverImageUrl = (formData.get("coverImageUrl") as string) || null;
-  const coverFile = formData.get("cover") as File | null;
-  if (coverFile && coverFile.size > 0) {
-    const uploaded = await uploadBlogCover(token, coverFile);
-    coverImageUrl = uploaded.url;
+  if (intent === "upload-cover") {
+    const coverFile = formData.get("cover") as File | null;
+    if (!coverFile || coverFile.size === 0) {
+      return { error: "no_file", message: "No file selected." };
+    }
+    try {
+      const uploaded = await uploadBlogCover(token, coverFile);
+      return { coverImageUrl: uploaded.url };
+    } catch {
+      return { error: "upload_failed", message: "Upload failed. Use a JPEG, PNG, WebP, or GIF under 5MB." };
+    }
   }
+
+  const coverImageUrl = ((formData.get("coverImageUrl") as string) || "").trim() || null;
 
   const payload = {
     title: String(formData.get("title") ?? "").trim(),
@@ -102,7 +111,13 @@ export default function BlogEditor() {
   const [excerpt, setExcerpt] = useState(initial.excerpt ?? "");
   const [keywords, setKeywords] = useState(initial.keywords ?? "");
   const [body, setBody] = useState(initial.body ?? "");
-  const coverUrl = actionData?.coverImageUrl ?? initial.coverImageUrl ?? null;
+  const [coverUrl, setCoverUrl] = useState<string | null>(initial.coverImageUrl ?? null);
+
+  useEffect(() => {
+    if (actionData && "coverImageUrl" in actionData && actionData.coverImageUrl) {
+      setCoverUrl(actionData.coverImageUrl);
+    }
+  }, [actionData]);
 
   if (!canEdit && !isNew) {
     return (
@@ -180,12 +195,13 @@ export default function BlogEditor() {
               <input name="keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} className="input w-full" />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-muted)]">Cover image</label>
-              {coverUrl && (
-                <img src={coverUrl} alt="" className="mb-3 h-40 w-full rounded-lg object-cover" />
-              )}
+              <label className="mb-1 block text-sm text-[var(--text-muted)]">Cover photo</label>
               <input type="hidden" name="coverImageUrl" value={coverUrl ?? ""} />
-              <input name="cover" type="file" accept="image/*" className="block w-full text-sm" />
+              <BlogCoverUpload
+                coverUrl={coverUrl}
+                onCoverUrlChange={setCoverUrl}
+                disabled={isSubmitting}
+              />
             </div>
             <div>
               <label className="mb-1 block text-sm text-[var(--text-muted)]">Body (Markdown)</label>

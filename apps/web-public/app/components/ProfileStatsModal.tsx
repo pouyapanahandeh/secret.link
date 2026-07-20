@@ -34,12 +34,15 @@ const RANGE_OPTIONS: Array<{ days: DayRange; label: string }> = [
   { days: 30, label: "30 days" },
 ];
 
-const METRIC_OPTIONS: Array<{ id: MetricFilter; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "profileViews", label: "Visits" },
-  { id: "qrScans", label: "QR" },
-  { id: "socialClicks", label: "Social" },
-  { id: "secrets", label: "Secrets" },
+const BREAKDOWN_ITEMS: Array<{
+  key: MetricFilter;
+  label: string;
+  totalKey?: keyof ProfileStatsTotals;
+}> = [
+  { key: "profileViews", label: "Visits", totalKey: "profileViews" },
+  { key: "qrScans", label: "QR scans", totalKey: "qrScans" },
+  { key: "socialClicks", label: "Social", totalKey: "socialClicks" },
+  { key: "secrets", label: "Secrets", totalKey: undefined },
 ];
 
 const METRIC_LABELS: Record<MetricFilter, string> = {
@@ -49,14 +52,6 @@ const METRIC_LABELS: Record<MetricFilter, string> = {
   socialClicks: "Social clicks",
   secrets: "Secrets activity",
 };
-
-const BREAKDOWN_ITEMS: Array<{ key: keyof ProfileStatsTotals; label: string }> = [
-  { key: "profileViews", label: "Visits" },
-  { key: "qrScans", label: "QR scans" },
-  { key: "socialClicks", label: "Social" },
-  { key: "secretsReceived", label: "Received" },
-  { key: "secretsSent", label: "Sent" },
-];
 
 function valueForDay(day: ProfileStatsDay, metric: MetricFilter): number {
   switch (metric) {
@@ -82,6 +77,57 @@ function valueForDay(day: ProfileStatsDay, metric: MetricFilter): number {
 function formatShortDate(day: string): string {
   const d = new Date(`${day}T00:00:00Z`);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function getBreakdownValue(
+  stats: ProfileStatsResponse,
+  item: (typeof BREAKDOWN_ITEMS)[number],
+): number {
+  if (item.key === "secrets") {
+    return stats.totals.secretsReceived + stats.totals.secretsSent;
+  }
+  if (item.totalKey) {
+    return stats.totals[item.totalKey];
+  }
+  return 0;
+}
+
+function getAllTotal(stats: ProfileStatsResponse): number {
+  const t = stats.totals;
+  return t.profileViews + t.qrScans + t.socialClicks + t.secretsReceived + t.secretsSent;
+}
+
+function Pulse({ className }: { className: string }) {
+  return <div className={`animate-pulse rounded-xl bg-surface-raised ${className}`} />;
+}
+
+function ProfileStatsContentSkeleton() {
+  return (
+    <div className="space-y-6 min-h-[520px]" aria-hidden="true">
+      <section>
+        <Pulse className="h-3 w-40 mb-3" />
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Pulse key={i} className="h-[72px] rounded-2xl" />
+          ))}
+        </div>
+        <Pulse className="h-[52px] w-full mt-3 rounded-2xl" />
+      </section>
+
+      <section className="text-center py-1 space-y-2">
+        <Pulse className="h-12 w-28 mx-auto rounded-2xl" />
+        <Pulse className="h-4 w-40 mx-auto rounded-lg" />
+      </section>
+
+      <section className="rounded-2xl bg-surface-raised/50 border border-border/40 px-4 py-5">
+        <Pulse className="h-[120px] sm:h-[130px] w-full rounded-xl" />
+        <div className="flex justify-between mt-4 pt-3 border-t border-border/30">
+          <Pulse className="h-3 w-14 rounded-lg" />
+          <Pulse className="h-3 w-14 rounded-lg" />
+        </div>
+      </section>
+    </div>
+  );
 }
 
 export function ProfileStatsModal({ token, onClose }: ProfileStatsModalProps) {
@@ -153,7 +199,6 @@ export function ProfileStatsModal({ token, onClose }: ProfileStatsModalProps) {
           <div className="w-10 h-1 rounded-full bg-border/80" />
         </div>
 
-        {/* Header */}
         <div className="px-6 pt-2 sm:pt-5 pb-4 shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -173,78 +218,96 @@ export function ProfileStatsModal({ token, onClose }: ProfileStatsModalProps) {
 
         <div className="px-6 pb-6 overflow-y-auto flex-1 space-y-6">
           {/* Period selector */}
-          <section>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted/70 mb-2.5">
-              Time period
-            </p>
-            <div className="flex p-1 rounded-2xl bg-surface-raised border border-border/60">
-              {RANGE_OPTIONS.map(({ days, label }) => {
-                const active = range === days;
-                return (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => setRange(days)}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                      active
-                        ? "bg-surface text-text shadow-sm"
-                        : "text-text-muted hover:text-text"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          <div className="flex p-1 rounded-2xl bg-surface-raised border border-border/60">
+            {RANGE_OPTIONS.map(({ days, label }) => {
+              const active = range === days;
+              return (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setRange(days)}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                    active
+                      ? "bg-surface text-text shadow-sm"
+                      : "text-text-muted hover:text-text"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
-          {/* Metric selector */}
-          <section>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted/70 mb-2.5">
-              Chart
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {METRIC_OPTIONS.map((opt) => {
-                const active = metric === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setMetric(opt.id)}
-                    className={`px-3.5 py-2 rounded-full text-xs font-medium transition-all ${
-                      active
-                        ? "bg-accent text-black"
-                        : "bg-surface-raised text-text-muted hover:text-text border border-border/60"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          {loading && <ProfileStatsContentSkeleton />}
 
-          {loading && (
-            <div className="py-16 text-center">
-              <div className="inline-block w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
-              <p className="text-sm text-text-muted mt-3">Loading stats…</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="py-12 text-center rounded-2xl bg-surface-raised border border-border/60">
+          {error && !loading && (
+            <div className="py-12 text-center rounded-2xl bg-surface-raised border border-border/60 min-h-[520px] flex items-center justify-center">
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
 
           {stats && !loading && (
-            <>
+            <div className="min-h-[520px] space-y-6">
+              {/* Breakdown — tap to filter chart */}
+              <section>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted/70 mb-3">
+                  Overview · tap to filter chart
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {BREAKDOWN_ITEMS.map((item) => {
+                    const active = metric === item.key;
+                    const value = getBreakdownValue(stats, item);
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setMetric(item.key)}
+                        className={`rounded-2xl border px-4 py-3.5 text-left transition-all ${
+                          active
+                            ? "bg-accent/10 border-accent"
+                            : "bg-surface-raised/80 border-border/40 hover:border-accent/30"
+                        }`}
+                      >
+                        <p className="text-xs text-text-muted mb-1">{item.label}</p>
+                        <p
+                          className={`text-xl font-bold tabular-nums ${
+                            active ? "text-accent" : "text-text"
+                          }`}
+                        >
+                          {value.toLocaleString()}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMetric("all")}
+                  className={`w-full mt-3 rounded-2xl border px-4 py-3.5 flex items-center justify-between transition-all ${
+                    metric === "all"
+                      ? "bg-accent/10 border-accent"
+                      : "bg-surface-raised/80 border-border/40 hover:border-accent/30"
+                  }`}
+                >
+                  <span className="text-xs text-text-muted">All interactions</span>
+                  <span
+                    className={`text-xl font-bold tabular-nums ${
+                      metric === "all" ? "text-accent" : "text-text"
+                    }`}
+                  >
+                    {getAllTotal(stats).toLocaleString()}
+                  </span>
+                </button>
+              </section>
+
               {/* Hero metric */}
-              <section className="text-center py-2">
+              <section className="text-center py-1">
                 <p className="text-4xl sm:text-5xl font-bold text-accent tabular-nums tracking-tight">
                   {periodTotal.toLocaleString()}
                 </p>
-                <p className="text-sm text-text-muted mt-2">{METRIC_LABELS[metric]}</p>
+                <p className="text-sm text-text-muted mt-2">
+                  {METRIC_LABELS[metric]} · {rangeLabel.toLowerCase()}
+                </p>
               </section>
 
               {/* Chart */}
@@ -263,33 +326,13 @@ export function ProfileStatsModal({ token, onClose }: ProfileStatsModalProps) {
                   </span>
                 </div>
               </section>
-
-              {/* Breakdown grid */}
-              <section>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted/70 mb-3">
-                  Breakdown
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  {BREAKDOWN_ITEMS.map(({ key, label }) => (
-                    <div
-                      key={key}
-                      className="rounded-2xl bg-surface-raised/80 border border-border/40 px-4 py-3.5"
-                    >
-                      <p className="text-xs text-text-muted mb-1">{label}</p>
-                      <p className="text-xl font-bold text-text tabular-nums">
-                        {stats.totals[key].toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </>
+            </div>
           )}
         </div>
 
         <div className="px-6 py-4 shrink-0 border-t border-border/30 bg-surface pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <p className="text-[11px] text-text-muted/60 text-center leading-relaxed">
-            Aggregate counts only — visible to you. No visitor identities stored.
+            Aggregate counts only — no visitor identities stored.
           </p>
         </div>
       </div>
