@@ -1,6 +1,7 @@
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useActionData, Link } from "@remix-run/react";
+import { useActionData, Link, Form } from "@remix-run/react";
+import { useState } from "react";
 import { AppNav } from "../components/AppNav";
 import { createSessionRedirect } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
@@ -14,6 +15,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const handle = String(form.get("handle") ?? "").trim().toLowerCase();
   const email = String(form.get("email") ?? "").trim();
+  const ageConfirmed = form.get("ageConfirmed") === "on";
 
   const errors: Record<string, string> = {};
 
@@ -25,6 +27,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     errors.email = "Invalid email address";
+  }
+
+  if (!ageConfirmed) {
+    errors.age = "You must confirm you are 16 or older";
   }
 
   if (Object.keys(errors).length > 0) {
@@ -65,7 +71,11 @@ function extractSlToken(setCookie: string | null): string | null {
 }
 
 export default function Signup() {
-  const actionData = useActionData<typeof action>() as { errors?: Record<string, string>; values?: { handle: string; email: string } } | undefined;
+  const actionData = useActionData<typeof action>() as {
+    errors?: Record<string, string>;
+    values?: { handle: string; email: string };
+  } | undefined;
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
 
   return (
     <main className="min-h-screen">
@@ -81,7 +91,7 @@ export default function Signup() {
             One link. Your whole identity. Drop it in your bio.
           </p>
 
-          <form method="post" className="space-y-4">
+          <Form method="post" className="space-y-4">
             <div>
               <label htmlFor="handle" className="block text-sm font-medium text-text/80 mb-1">
                 Handle
@@ -123,17 +133,36 @@ export default function Signup() {
               )}
             </div>
 
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="ageConfirmed"
+                checked={ageConfirmed}
+                onChange={(e) => setAgeConfirmed(e.target.checked)}
+                className="mt-1 rounded border-border text-accent focus:ring-accent"
+              />
+              <span className="text-sm text-text/80">
+                I confirm I am 16 or older
+              </span>
+            </label>
+            {actionData?.errors?.age && (
+              <p className="text-red-400 text-sm">{actionData.errors.age}</p>
+            )}
+
             <button
               type="submit"
-              className="w-full rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all duration-200"
+              disabled={!ageConfirmed}
+              className="w-full rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
             >
               Claim @handle
             </button>
-          </form>
+          </Form>
 
           <p className="mt-4 text-xs text-text-muted text-center">
-            By signing up, you confirm you are 18+ and accept our{" "}
-            <Link to="/privacy" className="text-accent hover:underline">Privacy Policy</Link>.
+            By signing up, you confirm you are 16+ and accept our{" "}
+            <Link to="/privacy" className="text-accent hover:underline">Privacy Policy</Link>
+            {" "}and{" "}
+            <Link to="/terms" className="text-accent hover:underline">Terms</Link>.
           </p>
           <p className="mt-3 text-xs text-text-muted text-center">
             No password needed. Authenticate with biometrics on your device.
