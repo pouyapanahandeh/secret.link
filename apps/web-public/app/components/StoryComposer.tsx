@@ -99,7 +99,8 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
     setSearchingLocations(true);
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        setLocationResults(await searchLocations(q));
+        const results = await searchLocations(q);
+        setLocationResults(results);
       } catch {
         setLocationResults([]);
       } finally {
@@ -273,6 +274,9 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
                       </button>
                     ))}
                   </div>
+                )}
+                {!searchingLocations && locationFocused && locationName.trim().length >= 3 && locationResults.length === 0 && (
+                  <p className="text-xs text-text-muted mt-1.5 px-1">No places found — try a different search or name this spot yourself.</p>
                 )}
               </div>
 

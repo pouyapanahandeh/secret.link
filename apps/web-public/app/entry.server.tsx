@@ -44,7 +44,7 @@ export default function handleRequest(
       "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
       "font-src 'self' fonts.gstatic.com",
       "img-src 'self' data: blob: *.basemaps.cartocdn.com *.openstreetmap.org",
-      `connect-src 'self' ${apiDomain} *.basemaps.cartocdn.com *.live-video.net:* wss://*.live-video.net:*`,
+      `connect-src 'self' ${apiDomain} *.basemaps.cartocdn.com nominatim.openstreetmap.org *.live-video.net:* wss://*.live-video.net:*`,
       "media-src 'self' blob: *.live-video.net",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
