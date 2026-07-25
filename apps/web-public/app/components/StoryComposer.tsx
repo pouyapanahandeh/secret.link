@@ -38,10 +38,10 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(initialCoords ?? null);
   const [locating, setLocating] = useState(!initialCoords);
+  const [geocodedAddress, setGeocodedAddress] = useState("");
   const [locationName, setLocationName] = useState("");
   const [cityName, setCityName] = useState("");
   const [countryName, setCountryName] = useState("");
-  const [locationQuery, setLocationQuery] = useState("");
   const [locationResults, setLocationResults] = useState<GeocodeResult[]>([]);
   const [searchingLocations, setSearchingLocations] = useState(false);
   const [locationFocused, setLocationFocused] = useState(false);
@@ -56,7 +56,7 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
     if (initialCoords) {
       reverseGeocode(initialCoords.lat, initialCoords.lng).then((g) => {
         if (!g) return;
-        setLocationName(g.locationName);
+        setGeocodedAddress(g.locationName);
         setCityName(g.cityName ?? "");
         setCountryName(g.countryName ?? "");
       }).catch(() => {});
@@ -72,7 +72,7 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
         setLocating(false);
         reverseGeocode(pos.coords.latitude, pos.coords.longitude).then((g) => {
           if (!g) return;
-          setLocationName(g.locationName);
+          setGeocodedAddress(g.locationName);
           setCityName(g.cityName ?? "");
           setCountryName(g.countryName ?? "");
         }).catch(() => {});
@@ -90,7 +90,7 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
 
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    const q = locationQuery.trim();
+    const q = locationName.trim();
     if (q.length < 3) {
       setLocationResults([]);
       setSearchingLocations(false);
@@ -109,7 +109,7 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
-  }, [locationQuery]);
+  }, [locationName]);
 
   function setFileAndPreview(f: File) {
     setFile(f);
@@ -131,13 +131,27 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
     const lng = Number(r.lon);
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       setCoords({ lat, lng });
+      setGeocodedAddress(r.display_name);
       setLocationName(r.display_name);
       setCityName(cityFromResult(r));
       setCountryName(countryFromResult(r));
     }
-    setLocationQuery(r.display_name);
     setLocationResults([]);
     setLocationFocused(false);
+  }
+
+  function resolvedLocationName() {
+    return locationName.trim() || geocodedAddress.trim() || undefined;
+  }
+
+  function formatApiError(data: { error?: string; issues?: Array<{ path?: (string | number)[]; message?: string }> } | null) {
+    if (!data) return "Couldn't post your story. Please try again.";
+    const first = data.issues?.[0];
+    if (first) {
+      const field = first.path?.join(".") ?? "field";
+      return `${data.error ?? "validation_error"}: ${field} — ${first.message ?? "invalid"}`;
+    }
+    return data.error ?? "Couldn't post your story. Please try again.";
   }
 
   async function post() {
@@ -162,25 +176,28 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
       const { encryptMapMessage } = await import("../lib/crypto");
       const encrypted = await encryptMapMessage(message.trim());
 
+      const payload: Record<string, unknown> = {
+        ...encrypted,
+        lat: coords.lat,
+        lng: coords.lng,
+        emoji,
+        ttlMinutes: ttl,
+        revealMode,
+      };
+      if (!anonymous) payload.handle = handle;
+      const loc = resolvedLocationName();
+      if (loc) payload.locationName = loc;
+      if (cityName) payload.cityName = cityName;
+      if (countryName) payload.countryName = countryName;
+      if (mediaPath) payload.mediaPath = mediaPath;
+      if (mediaType) payload.mediaType = mediaType;
+      if (revealMode === "timer") payload.revealTimerSeconds = revealTimer;
+      if (revealMode === "clicks") payload.maxClicks = maxClicks;
+
       const res = await fetch(`${getApiBase()}/v1/secrets/map`, {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          ...encrypted,
-          lat: coords.lat,
-          lng: coords.lng,
-          emoji,
-          ttlMinutes: ttl,
-          handle: anonymous ? undefined : handle,
-          locationName: locationName || undefined,
-          cityName: cityName || undefined,
-          countryName: countryName || undefined,
-          mediaPath,
-          mediaType,
-          revealMode,
-          revealTimerSeconds: revealMode === "timer" ? revealTimer : undefined,
-          maxClicks: revealMode === "clicks" ? maxClicks : undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -188,7 +205,7 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
         onClose();
       } else {
         const data = await res.json().catch(() => null);
-        setError(data?.error ?? "Couldn't post your story. Please try again.");
+        setError(formatApiError(data));
         setStep("compose");
       }
     } catch {
@@ -222,30 +239,32 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
           {step === "compose" && (
             <div className="flex flex-col gap-4">
               <div className="relative">
-                <div className="flex items-center gap-2 text-xs bg-surface rounded-xl border border-border px-3 py-2.5">
-                  <span>📍</span>
-                  {locating ? (
-                    <span className="text-text-muted">Finding your location…</span>
-                  ) : coords ? (
-                    <span className="text-text-muted truncate">{locationName || `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}</span>
-                  ) : (
-                    <span className="text-amber-400">Search a location to pin your story</span>
-                  )}
-                </div>
-                <div className="mt-2 relative">
+                <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-2">
+                  Location
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none">📍</span>
                   <input
                     type="text"
-                    value={locationQuery}
-                    onChange={(e) => setLocationQuery(e.target.value)}
+                    value={locationName}
+                    onChange={(e) => setLocationName(e.target.value)}
                     onFocus={() => setLocationFocused(true)}
                     onBlur={() => setTimeout(() => setLocationFocused(false), 200)}
-                    placeholder="Search location…"
-                    className="w-full rounded-xl bg-surface border border-border px-3 py-2.5 text-xs text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent/40"
+                    placeholder={
+                      locating
+                        ? "Finding your location…"
+                        : geocodedAddress || (coords ? "Name this place" : "Search or name a place")
+                    }
+                    disabled={locating}
+                    className="w-full rounded-xl bg-surface border border-border pl-9 pr-9 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-60"
                   />
                   {searchingLocations && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
                   )}
                 </div>
+                {!coords && !locating && (
+                  <p className="text-xs text-amber-400 mt-1.5">Pick a spot on the map or search an address.</p>
+                )}
                 {locationResults.length > 0 && locationFocused && (
                   <div className="absolute left-0 right-0 mt-1 z-10 rounded-xl border border-border bg-surface-raised shadow-lg max-h-48 overflow-y-auto">
                     {locationResults.map((r, idx) => (
@@ -349,6 +368,7 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
                     <p className="text-sm whitespace-pre-wrap">{message}</p>
                     <p className="text-xs text-text-muted mt-2">
                       {anonymous ? "Anonymous" : `@${handle}`} · {TTL_OPTIONS.find((o) => o.value === ttl)?.label}
+                      {resolvedLocationName() ? ` · ${resolvedLocationName()}` : ""}
                     </p>
                   </div>
                 </div>

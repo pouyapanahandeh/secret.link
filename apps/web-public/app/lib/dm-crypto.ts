@@ -2,13 +2,12 @@
  * DM end-to-end encryption using X25519 key exchange + AES-256-GCM.
  * Keys are stored in IndexedDB for persistence across sessions.
  */
-import {
-  wrapKeyForRecipient as wrapKeyForRecipientCore,
-  unwrapKeyFromSender as unwrapKeyFromSenderCore,
-  type WrappedKey,
-} from "@secretlink/crypto";
 
-export type { WrappedKey };
+export interface WrappedKey {
+  wrappedKey: string;
+  wrapNonce: string;
+  wrapEpk: string;
+}
 
 // ─── IndexedDB Key Storage ──────────────────────────────────────────────────
 
@@ -208,7 +207,37 @@ export async function wrapKeyForRecipient(
   rawKey: Uint8Array,
   recipientPublicKeyB64: string,
 ): Promise<WrappedKey> {
-  return wrapKeyForRecipientCore(rawKey, recipientPublicKeyB64);
+  let pubBytes: Uint8Array;
+  try {
+    pubBytes = Uint8Array.from(atob(recipientPublicKeyB64.trim()), (c) => c.charCodeAt(0));
+  } catch {
+    throw new Error("invalid_recipient_key");
+  }
+  if (pubBytes.length !== 32) {
+    throw new Error("invalid_recipient_key");
+  }
+
+  const ephemeral = await crypto.subtle.generateKey(
+    { name: "X25519" } as any,
+    false,
+    ["deriveBits"],
+  );
+  const sharedKey = await deriveSharedKey(ephemeral.privateKey, recipientPublicKeyB64);
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    sharedKey,
+    rawKey as BufferSource,
+  );
+
+  const epkRaw = await crypto.subtle.exportKey("raw", ephemeral.publicKey);
+
+  return {
+    wrappedKey: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+    wrapNonce: btoa(String.fromCharCode(...iv)),
+    wrapEpk: btoa(String.fromCharCode(...new Uint8Array(epkRaw))),
+  };
 }
 
 /** Unwrap a secret's raw key bytes using the recipient's private key. */
@@ -216,14 +245,6 @@ export async function unwrapKeyFromSender(
   wrapped: WrappedKey,
   recipientPrivateKey: CryptoKey,
 ): Promise<Uint8Array> {
-  try {
-    const rawPrivate = new Uint8Array(await crypto.subtle.exportKey("raw", recipientPrivateKey));
-    if (rawPrivate.length === 32) {
-      return unwrapKeyFromSenderCore(wrapped, rawPrivate);
-    }
-  } catch {
-    // Browser may not allow raw private key export — fall back to Web Crypto unwrap.
-  }
   const sharedKey = await deriveSharedKey(recipientPrivateKey, wrapped.wrapEpk);
   const ciphertext = Uint8Array.from(atob(wrapped.wrappedKey), (c) => c.charCodeAt(0));
   const iv = Uint8Array.from(atob(wrapped.wrapNonce), (c) => c.charCodeAt(0));

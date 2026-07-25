@@ -65,8 +65,14 @@ export function ProfileSecretForm({ recipientPublicKey, fetcher }: ProfileSecret
       submitData.append("viewDuration", String(formData.get("viewDuration") ?? "30"));
 
       fetcher.submit(submitData, { method: "post" });
-    } catch {
-      setEncryptError("Encryption failed. Please try again.");
+    } catch (err) {
+      if (err instanceof Error && err.message === "invalid_recipient_key") {
+        setEncryptError(
+          "This user hasn't set up secure delivery yet. Ask them to open their dashboard once, then try again.",
+        );
+      } else {
+        setEncryptError("Encryption failed. Please try again.");
+      }
     } finally {
       setEncrypting(false);
     }

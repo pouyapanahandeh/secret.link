@@ -170,8 +170,7 @@ function LandingMap() {
           revealMode,
           revealTimerSeconds: revealMode === "timer" ? timerSeconds : 30,
           maxClicks: revealMode === "clicks" ? maxClicks : 0,
-          mediaPath,
-          mediaType,
+          ...(mediaPath ? { mediaPath, mediaType: mediaType ?? undefined } : {}),
         }),
       });
       if (res.ok) {
