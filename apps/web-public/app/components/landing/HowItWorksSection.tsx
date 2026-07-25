@@ -1,15 +1,15 @@
 const STEPS = [
   {
-    title: "Write your secret",
-    description: "Type a message, drop a file, or snap a pic. Choose how long it lives.",
+    title: "Claim your @handle",
+    description: "Pick a name. That’s your anonymous inbox — no email required.",
   },
   {
-    title: "Share the link",
-    description: "We give you a one-time link. Send it however you want — text, DM, email, carrier pigeon.",
+    title: "Share your link",
+    description: "Drop it in your Instagram bio, TikTok, or Stories. One link is enough.",
   },
   {
-    title: "Poof — it's gone 💨",
-    description: "Once they open it, the secret self-destructs. No copies, no cache, no coming back.",
+    title: "Secrets arrive — then burn",
+    description: "Friends send anonymous messages. Once you read them, they’re gone.",
   },
 ] as const;
 

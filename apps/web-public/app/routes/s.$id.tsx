@@ -205,9 +205,17 @@ export default function RevealSecret() {
           <p className="text-text-muted text-sm">
             The timer expired. This secret no longer exists anywhere — not on the server, not in your browser.
           </p>
-          <Link to="/send" className="inline-block mt-8 text-sm text-accent hover:text-accent/80 transition-colors">
-            Send your own secret →
-          </Link>
+          <div className="mt-8 flex flex-col items-center gap-2">
+            <Link
+              to="/signup"
+              className="inline-block rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black hover:scale-[1.03] transition-all"
+            >
+              Get your @handle
+            </Link>
+            <Link to="/send" className="text-sm text-text-muted hover:text-accent transition-colors">
+              Send a secret →
+            </Link>
+          </div>
         </div>
       </main>
     );
@@ -266,9 +274,15 @@ export default function RevealSecret() {
           <p className="mt-6 text-xs text-text-muted text-center">
             👁 Capture-resistant, not capture-proof
           </p>
-          <div className="mt-4 text-center">
-            <Link to="/send" className="text-sm text-accent hover:text-accent/80 transition-colors">
-              Send your own secret →
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <Link
+              to="/signup"
+              className="inline-block rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black hover:scale-[1.03] transition-all"
+            >
+              Get your @handle
+            </Link>
+            <Link to="/send" className="text-sm text-text-muted hover:text-accent transition-colors">
+              Send a secret →
             </Link>
           </div>
         </div>

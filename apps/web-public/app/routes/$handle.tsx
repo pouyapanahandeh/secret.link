@@ -487,10 +487,13 @@ export default function ProfilePage() {
 
           {!isLoggedIn && (
             <div className="text-center mt-8">
-              <p className="text-sm text-text-muted mb-2">Want your own anonymous inbox?</p>
+              <p className="text-sm text-text-muted mb-1">Want your own anonymous inbox?</p>
+              <p className="text-xs text-text-muted/70 mb-3">
+                Claim a handle and drop it in your bio.
+              </p>
               <Link
                 to="/signup"
-                className="inline-flex rounded-full border border-border px-5 py-2 text-sm font-semibold text-text hover:border-accent hover:text-accent transition-all"
+                className="inline-flex rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-black hover:scale-[1.02] transition-all"
               >
                 Get your @handle
               </Link>

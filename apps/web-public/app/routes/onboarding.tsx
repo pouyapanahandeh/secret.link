@@ -4,6 +4,7 @@ import { Form, Link, useFetcher, useLoaderData, useNavigate } from "@remix-run/r
 import { useEffect, useState } from "react";
 import { requireToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
+import { getApiBase } from "../lib/api.client";
 import { ProfileEditForm } from "../components/ProfileEditForm";
 import { ProfileShareModal } from "../components/ProfileShareModal";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -20,7 +21,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   if (!res.ok) throw redirect("/login");
   const user = await res.json();
-  return json({ user });
+  return json({ user, token });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -47,7 +48,7 @@ export async function action({ request }: ActionFunctionArgs) {
 type Step = 1 | 2 | 3;
 
 export default function Onboarding() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, token } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const profileFetcher = useFetcher<{ error?: string | null; ok?: boolean }>();
   const [step, setStep] = useState<Step>(1);
@@ -56,6 +57,20 @@ export default function Onboarding() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatarUrl ?? null);
   const [shareOpen, setShareOpen] = useState(false);
   const saving = profileFetcher.state !== "idle";
+
+  useEffect(() => {
+    if (!token) return;
+    import("../lib/dm-crypto")
+      .then(({ ensureAndPublishKey }) => ensureAndPublishKey(getApiBase(), token))
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (step !== 3 || !token) return;
+    import("../lib/dm-crypto")
+      .then(({ ensureAndPublishKey }) => ensureAndPublishKey(getApiBase(), token))
+      .catch(() => {});
+  }, [step, token]);
 
   useEffect(() => {
     if (profileFetcher.state === "idle" && profileFetcher.data?.ok) {

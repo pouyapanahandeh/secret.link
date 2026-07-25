@@ -466,14 +466,19 @@ export function FinalCtaSection() {
   return (
     <section className="px-4 py-20 text-center">
       <div className="text-5xl mb-4">🤫</div>
-      <h2 className="text-2xl font-bold mb-2">Got something to say?</h2>
-      <p className="text-text-muted mb-6">Go on. We won't tell anyone.</p>
+      <h2 className="text-2xl font-bold mb-2">Ready for your anonymous inbox?</h2>
+      <p className="text-text-muted mb-6">Claim a handle. Share the link. Secrets come to you.</p>
       <Link
-        to="/send"
+        to="/signup"
         className="inline-block rounded-full bg-accent px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/25 hover:shadow-accent/50 hover:scale-[1.03] transition-all duration-200"
       >
-        Send a secret →
+        Get your @handle
       </Link>
+      <p className="mt-4">
+        <Link to="/send" className="text-sm text-text-muted hover:text-accent transition-colors">
+          Or send a one-time secret →
+        </Link>
+      </p>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import type { MetaFunction } from "@remix-run/node";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "@remix-run/react";
 import { CameraCapture } from "../components/CameraCapture";
 import { AppNav } from "../components/AppNav";
@@ -98,9 +98,14 @@ export default function Send() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [canShare, setCanShare] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
+  }, []);
 
   const reset = () => {
     setLink(null);
@@ -191,6 +196,19 @@ export default function Send() {
     }
   };
 
+  const handleShare = async () => {
+    if (!link || !navigator.share) return;
+    try {
+      await navigator.share({
+        title: "You have a secret",
+        text: "Someone sent you a self-destructing secret on Secretlink.",
+        url: link,
+      });
+    } catch {
+      /* user cancelled or share failed */
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -212,30 +230,40 @@ export default function Send() {
               <p className="text-success font-mono text-xs break-all bg-success/10 rounded-lg p-3">{link}</p>
             </div>
 
-            <button
-              onClick={handleCopy}
-              className="rounded-full bg-accent px-8 py-3 text-sm font-bold text-black hover:scale-[1.03] transition-all duration-200"
-            >
-              {copied ? "✓ Copied!" : "Copy link 📋"}
-            </button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={handleCopy}
+                className="rounded-full bg-accent px-8 py-3 text-sm font-bold text-black hover:scale-[1.03] transition-all duration-200"
+              >
+                {copied ? "✓ Copied!" : "Copy link 📋"}
+              </button>
+              {canShare && (
+                <button
+                  onClick={handleShare}
+                  className="rounded-full border-2 border-border px-8 py-3 text-sm font-semibold text-text hover:border-accent hover:text-accent transition-all duration-200"
+                >
+                  Share link
+                </button>
+              )}
+            </div>
 
             <p className="text-xs text-text-muted">
               🔐 End-to-end encrypted. The key is in the link — we never see it.
             </p>
 
             <div className="flex flex-col gap-2 items-center">
+              <Link
+                to="/signup"
+                className="inline-block rounded-full bg-accent/15 border border-accent/40 px-6 py-2.5 text-sm font-bold text-accent hover:bg-accent/25 transition-all"
+              >
+                Get your @handle and share your inbox →
+              </Link>
               <button
                 onClick={reset}
                 className="inline-block text-sm text-text-muted hover:text-accent transition-colors"
               >
                 Send another secret →
               </button>
-              <Link
-                to="/signup"
-                className="inline-block text-sm text-accent font-semibold hover:underline"
-              >
-                Get your @handle and share your inbox →
-              </Link>
             </div>
           </div>
         ) : (

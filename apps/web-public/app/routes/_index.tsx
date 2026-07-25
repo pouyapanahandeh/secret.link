@@ -21,7 +21,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export const meta: MetaFunction = () => {
   const title = "Secretlink.life — Say what you really mean";
   const description =
-    "The private social layer. Send secrets that self-destruct, share anonymously, and connect without a trace.";
+    "Claim your @handle and get an anonymous inbox. Friends send secrets that self-destruct after one read.";
   const url = "https://secretlink.life/";
   const image = "https://secretlink.life/secretlink.png";
   return [

@@ -8,26 +8,25 @@ export function HeroSection() {
       <div className="relative max-w-2xl text-center">
         <img src="/secretlink.png" alt="Secretlink.life mascot" className="w-24 h-24 mx-auto mb-6" />
         <h1 className="text-4xl font-bold tracking-tight leading-[1.15] sm:text-6xl">
-          Your secrets are<br />
-          <span className="text-accent">safe with us</span>
+          Say what you<br />
+          <span className="text-accent">really mean</span>
         </h1>
         <p className="mt-5 text-base leading-relaxed text-text-muted max-w-md mx-auto">
-          Send messages that disappear. Share stuff that self-destructs.
-          No screenshots, no traces, no drama.
+          Get your anonymous inbox. Friends send secrets that self-destruct after one read.
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            to="/send"
+            to="/signup"
             className="rounded-full bg-accent px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/25 hover:shadow-accent/50 hover:scale-[1.03] transition-all duration-200"
           >
-            Send a secret 🤫
+            Get your @handle
           </Link>
           <Link
-            to="/signup"
+            to="/send"
             className="rounded-full border-2 border-border px-8 py-3.5 text-sm font-semibold text-text hover:border-accent hover:text-accent transition-all duration-200"
           >
-            Get your @handle
+            Send a secret
           </Link>
         </div>
         <p className="mt-4 text-xs text-text-muted">Free forever · No email required · 100% encrypted</p>

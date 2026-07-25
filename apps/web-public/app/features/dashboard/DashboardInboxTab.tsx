@@ -1,5 +1,6 @@
 import { Link, useFetcher } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
+import { getProfileUrl } from "@secretlink/core/profile-url";
 import { Avatar } from "../../components/Avatar";
 import { NotificationPrompt } from "../../components/NotificationPrompt";
 import { StoriesRow } from "../../components/StoriesRow";
@@ -101,7 +102,7 @@ export function DashboardInboxTab({
         <span className="text-xs text-text-muted shrink-0">🔗</span>
         <code className="text-xs sm:text-sm text-text truncate flex-1">secretlink.life/@{user.handle}</code>
         <button
-          onClick={() => navigator.clipboard?.writeText(`https://secretlink.life/@${user.handle}`)}
+          onClick={() => navigator.clipboard?.writeText(getProfileUrl(user.handle))}
           className="text-xs text-accent shrink-0"
         >
           Copy
@@ -195,7 +196,9 @@ export function DashboardInboxTab({
         <div className="bg-surface-raised rounded-xl border border-border p-6 text-center">
           <span className="text-3xl block mb-2">📥</span>
           <p className="text-sm text-text-muted">No secrets yet</p>
-          <p className="text-xs text-text-muted/60 mt-1">Share your link to receive secrets</p>
+          <p className="text-xs text-text-muted/60 mt-1">
+            Share your link on Instagram or TikTok to receive secrets
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
