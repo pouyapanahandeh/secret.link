@@ -1,13 +1,16 @@
 const STEPS = [
   {
+    n: "01",
     title: "Claim your @handle",
     description: "Pick a name. That’s your anonymous inbox — no email required.",
   },
   {
+    n: "02",
     title: "Share your link",
     description: "Drop it in your Instagram bio, TikTok, or Stories. One link is enough.",
   },
   {
+    n: "03",
     title: "Secrets arrive — then burn",
     description: "Friends send anonymous messages. Once you read them, they’re gone.",
   },
@@ -15,23 +18,25 @@ const STEPS = [
 
 export function HowItWorksSection() {
   return (
-    <section className="px-4 py-16 border-t border-border/50">
-      <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-center mb-10">How it works</h2>
+    <section className="border-t border-border">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24">
+        <p className="text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-2">The loop</p>
+        <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-12 sm:mb-16">How it works</h2>
 
-        <div className="space-y-8">
-          {STEPS.map((step, index) => (
-            <div key={step.title} className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-accent flex items-center justify-center text-black font-bold text-sm">
-                {index + 1}
-              </div>
+        <ol className="list-none p-0 m-0 divide-y divide-border border-y border-border">
+          {STEPS.map((step) => (
+            <li
+              key={step.title}
+              className="grid sm:grid-cols-[7rem_1fr] gap-4 sm:gap-10 py-8 sm:py-10"
+            >
+              <span className="font-display text-5xl sm:text-6xl leading-none text-accent">{step.n}</span>
               <div>
-                <h3 className="font-semibold mb-1">{step.title}</h3>
-                <p className="text-sm text-text-muted">{step.description}</p>
+                <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight">{step.title}</h3>
+                <p className="mt-2 text-text-muted max-w-xl text-base leading-relaxed">{step.description}</p>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   );

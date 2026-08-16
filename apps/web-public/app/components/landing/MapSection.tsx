@@ -229,7 +229,7 @@ function LandingMap() {
 
   return (
     <div className="space-y-4">
-      <div className="relative rounded-2xl border border-border overflow-hidden" style={{ height: "450px" }}>
+      <div className="relative rounded-sm border border-border overflow-hidden h-[min(55dvh,360px)] sm:h-[450px]">
         <div ref={mapContainerRef} className="w-full h-full" />
         <button
           onClick={() => {
@@ -242,7 +242,7 @@ function LandingMap() {
               setPosted(false);
             }
           }}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-accent/25 hover:scale-[1.03] transition-all"
+          className="absolute bottom-3 left-3 right-16 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-40 min-h-11 rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-accent/25 hover:scale-[1.03] transition-all"
         >
           Drop story 📍
         </button>
@@ -255,7 +255,7 @@ function LandingMap() {
               );
             }
           }}
-          className="absolute bottom-4 right-4 z-[1000] w-10 h-10 rounded-full bg-surface-raised border border-border shadow-lg flex items-center justify-center hover:border-accent/50 transition-colors"
+          className="absolute bottom-3 right-3 z-40 w-11 h-11 rounded-full bg-surface-raised border border-border shadow-lg flex items-center justify-center hover:border-accent/50 transition-colors"
           aria-label="Locate me"
         >
           <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -302,19 +302,19 @@ function LandingMap() {
             )}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] text-text-muted uppercase tracking-wide block mb-1">Reveal mode</label>
               <div className="flex rounded-lg border border-border overflow-hidden">
                 <button
                   onClick={() => setRevealMode("timer")}
-                  className={`flex-1 py-1.5 text-xs font-medium transition-colors ${revealMode === "timer" ? "bg-accent text-black" : "text-text-muted hover:text-text"}`}
+                  className={`flex-1 min-h-11 sm:min-h-0 py-1.5 text-xs font-medium transition-colors ${revealMode === "timer" ? "bg-accent text-black" : "text-text-muted hover:text-text"}`}
                 >
                   ⏱️ Timer
                 </button>
                 <button
                   onClick={() => setRevealMode("clicks")}
-                  className={`flex-1 py-1.5 text-xs font-medium transition-colors ${revealMode === "clicks" ? "bg-accent text-black" : "text-text-muted hover:text-text"}`}
+                  className={`flex-1 min-h-11 sm:min-h-0 py-1.5 text-xs font-medium transition-colors ${revealMode === "clicks" ? "bg-accent text-black" : "text-text-muted hover:text-text"}`}
                 >
                   👆 Clicks
                 </button>
@@ -327,7 +327,7 @@ function LandingMap() {
                   <select
                     value={timerSeconds}
                     onChange={(e) => setTimerSeconds(Number(e.target.value))}
-                    className="w-full bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text"
+                    className="w-full min-h-11 sm:min-h-0 bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text"
                   >
                     <option value={10}>10 seconds</option>
                     <option value={30}>30 seconds</option>
@@ -341,7 +341,7 @@ function LandingMap() {
                   <select
                     value={maxClicks}
                     onChange={(e) => setMaxClicks(Number(e.target.value))}
-                    className="w-full bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text"
+                    className="w-full min-h-11 sm:min-h-0 bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text"
                   >
                     <option value={1}>1 reveal</option>
                     <option value={3}>3 reveals</option>
@@ -354,13 +354,13 @@ function LandingMap() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-3">
-            <div className="flex gap-1">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
+            <div className="flex flex-wrap gap-1">
               {emojis.map((e) => (
                 <button
                   key={e}
                   onClick={() => setEmoji(e)}
-                  className={`w-7 h-7 rounded-lg text-base flex items-center justify-center transition-all ${emoji === e ? "bg-accent/20 scale-110" : "hover:bg-surface"}`}
+                  className={`w-11 h-11 sm:w-7 sm:h-7 rounded-lg text-base flex items-center justify-center transition-all ${emoji === e ? "bg-accent/20 scale-110" : "hover:bg-surface"}`}
                 >
                   {e}
                 </button>
@@ -369,7 +369,7 @@ function LandingMap() {
             <button
               onClick={handleDrop}
               disabled={(!message.trim() && !file) || posting}
-              className="rounded-full bg-accent px-5 py-2 text-xs font-bold text-black hover:scale-[1.03] transition-all disabled:opacity-50"
+              className="min-h-11 rounded-full bg-accent px-5 py-2 text-sm font-bold text-black hover:scale-[1.03] transition-all disabled:opacity-50"
             >
               {posting ? "Sharing..." : "Share story 📍"}
             </button>
@@ -447,12 +447,20 @@ function LandingMap() {
 
 export function MapSection() {
   return (
-    <section className="px-4 py-16 border-t border-border/50">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-6">
-          <div className="text-4xl mb-4">🗺️</div>
-          <h2 className="text-2xl font-bold mb-2">Explore stories on the map</h2>
-          <p className="text-text-muted max-w-md mx-auto">
+    <section className="border-t border-border">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-black">
+                <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+                Live
+              </span>
+              <span className="text-2xl">🗺️</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Explore stories on the map</h2>
+          </div>
+          <p className="text-text-muted max-w-sm sm:text-right">
             People are sharing geo-tagged stories near you right now. Tap anywhere to add yours.
           </p>
         </div>
@@ -464,21 +472,30 @@ export function MapSection() {
 
 export function FinalCtaSection() {
   return (
-    <section className="px-4 py-20 text-center">
-      <div className="text-5xl mb-4">🤫</div>
-      <h2 className="text-2xl font-bold mb-2">Ready for your anonymous inbox?</h2>
-      <p className="text-text-muted mb-6">Claim a handle. Share the link. Secrets come to you.</p>
-      <Link
-        to="/signup"
-        className="inline-block rounded-full bg-accent px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/25 hover:shadow-accent/50 hover:scale-[1.03] transition-all duration-200"
-      >
-        Get your @handle
-      </Link>
-      <p className="mt-4">
-        <Link to="/send" className="text-sm text-text-muted hover:text-accent transition-colors">
-          Or send a one-time secret →
-        </Link>
-      </p>
+    <section className="bg-accent text-black">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24">
+        <p className="text-5xl mb-4">🤫</p>
+        <h2 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[0.95] max-w-3xl">
+          Ready for your anonymous inbox?
+        </h2>
+        <p className="mt-4 text-lg text-black/70 max-w-md">
+          Claim a handle. Share the link. Secrets come to you.
+        </p>
+        <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <Link
+            to="/signup"
+            className="inline-flex items-center justify-center min-h-12 w-full sm:w-auto rounded-full bg-black px-8 text-sm font-extrabold text-accent hover:opacity-90 transition-opacity"
+          >
+            Get your @handle
+          </Link>
+          <Link
+            to="/send"
+            className="inline-flex items-center justify-center min-h-12 w-full sm:w-auto text-sm font-semibold text-black/80 hover:text-black underline underline-offset-4"
+          >
+            Or send a one-time secret →
+          </Link>
+        </div>
+      </div>
     </section>
   );
 }

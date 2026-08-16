@@ -1,4 +1,8 @@
-import type { MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { json } from "@remix-run/node";
+import { Link, useLoaderData } from "@remix-run/react";
+import { SiteChrome } from "../components/SiteChrome";
+import { getToken } from "../lib/session.server";
 
 export const meta: MetaFunction = () => [
   { title: "Privacy Policy — Secretlink.life" },
@@ -8,16 +12,25 @@ export const meta: MetaFunction = () => [
   },
 ];
 
+export async function loader({ request }: LoaderFunctionArgs) {
+  const token = await getToken(request);
+  return json({ isLoggedIn: Boolean(token) });
+}
+
 export default function Privacy() {
+  const { isLoggedIn } = useLoaderData<typeof loader>();
+
   return (
-    <main className="flex min-h-screen flex-col items-center py-16 px-4">
-      <article className="max-w-2xl w-full">
-        <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mb-4" />
-        <h1 className="font-display text-4xl mb-2">Privacy Policy</h1>
-        <p className="text-text-muted text-sm mb-8">Last updated: June 13, 2026</p>
+    <SiteChrome isLoggedIn={isLoggedIn} currentPath="/privacy">
+      <article className="mx-auto max-w-3xl px-4 sm:px-6 pt-28 sm:pt-32 pb-20">
+        <p className="text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-4">Legal</p>
+        <h1 className="font-extrabold tracking-[-0.04em] text-4xl sm:text-6xl leading-[0.95] mb-3">
+          Privacy <span className="font-display font-bold text-accent">Policy</span>
+        </h1>
+        <p className="font-mono text-[11px] tracking-wide uppercase text-text-muted mb-10">Last updated: June 13, 2026</p>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">1. Introduction</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">1. Introduction</h2>
           <p className="text-text leading-relaxed">
             Secretlink.life ("we", "us", "the Platform") is an end-to-end encrypted, ephemeral messaging
             and secret-sharing platform. This Privacy Policy explains what data we collect, how we use it,
@@ -26,9 +39,9 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">2. Age Restriction</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">2. Age Restriction</h2>
           <p className="text-text leading-relaxed mb-3">
-            <strong className="text-blush">You must be at least 18 years old to use Secretlink.life.</strong>
+            <strong className="text-accent">You must be at least 18 years old to use Secretlink.life.</strong>
           </p>
           <p className="text-text leading-relaxed mb-3">
             By accessing or using this Platform, you confirm that you are at least 18 years of age.
@@ -43,7 +56,7 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">3. Data We Collect</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">3. Data We Collect</h2>
           <p className="text-text leading-relaxed mb-3">We collect minimal data by design:</p>
           <ul className="list-disc list-inside space-y-2 text-text">
             <li><strong>Account data:</strong> Email address (for magic link authentication), chosen handle/username</li>
@@ -55,7 +68,7 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">4. What We Do NOT Collect</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">4. What We Do NOT Collect</h2>
           <ul className="list-disc list-inside space-y-2 text-text">
             <li>We do not read or store plaintext message content</li>
             <li>We do not use tracking cookies or third-party analytics</li>
@@ -66,7 +79,7 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">5. End-to-End Encryption</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">5. End-to-End Encryption</h2>
           <p className="text-text leading-relaxed mb-3">
             All direct messages are encrypted using X25519 ECDH key exchange and AES-GCM encryption.
             Encryption and decryption happen entirely on your device. Our servers relay ciphertext only —
@@ -79,7 +92,7 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">6. Data Retention & Self-Destruction</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">6. Data Retention & Self-Destruction</h2>
           <ul className="list-disc list-inside space-y-2 text-text">
             <li>Secrets with one-time links are permanently deleted after being viewed (or after their TTL expires, whichever comes first)</li>
             <li>Map secrets expire and are automatically deleted after their configured timer</li>
@@ -90,9 +103,9 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">7. User-Generated Content & Responsibility</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">7. User-Generated Content & Responsibility</h2>
           <p className="text-text leading-relaxed mb-3">
-            <strong className="text-blush">Secretlink.life is a neutral transmission platform.</strong> Because all content
+            <strong className="text-accent">Secretlink.life is a neutral transmission platform.</strong> Because all content
             is end-to-end encrypted, we cannot monitor, moderate, filter, or screen user-generated content
             before or during transmission.
           </p>
@@ -119,7 +132,7 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">8. Prohibited Content</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">8. Prohibited Content</h2>
           <p className="text-text leading-relaxed mb-3">
             While we cannot proactively monitor encrypted content, the following is strictly prohibited
             and may result in account termination and referral to law enforcement:
@@ -138,7 +151,7 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">9. Limitation of Liability</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">9. Limitation of Liability</h2>
           <p className="text-text leading-relaxed mb-3">
             To the fullest extent permitted by law, Secretlink.life, its operators, developers,
             and affiliates shall not be held liable for:
@@ -156,11 +169,11 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">10. Cookies & Local Storage</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">10. Cookies & Local Storage</h2>
           <p className="text-text leading-relaxed">
-            We use an encrypted session cookie (<code className="text-blush/80">sl_session</code>) to maintain
-            your login on the web. The API may also set a separate HttpOnly JWT cookie (<code className="text-blush/80">sl_token</code>) during signup.
-            Read our <a href="/security" className="text-accent hover:underline">security overview</a> for details.
+            We use an encrypted session cookie (<code className="text-accent/80">sl_session</code>) to maintain
+            your login on the web. The API may also set a separate HttpOnly JWT cookie (<code className="text-accent/80">sl_token</code>) during signup.
+            Read our <Link to="/security" className="text-accent hover:underline">security overview</Link> for details.
             We use IndexedDB (browser local storage) to store your cryptographic
             private keys — these never leave your device. We do not use third-party cookies,
             tracking pixels, or advertising identifiers.
@@ -168,7 +181,7 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">11. Third-Party Services</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">11. Third-Party Services</h2>
           <ul className="list-disc list-inside space-y-2 text-text">
             <li><strong>AWS SES:</strong> Used to send transactional emails (magic link login). Your email address is processed by Amazon Web Services for delivery purposes only.</li>
             <li><strong>Hosting:</strong> Our servers are hosted on AWS EC2 (EU region). Encrypted data at rest resides within the EU.</li>
@@ -176,7 +189,7 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">12. Your Rights</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">12. Your Rights</h2>
           <p className="text-text leading-relaxed mb-3">You have the right to:</p>
           <ul className="list-disc list-inside space-y-2 text-text">
             <li><strong>Access:</strong> Request a copy of the personal data we hold about you (limited to email and handle)</li>
@@ -185,12 +198,12 @@ export default function Privacy() {
             <li><strong>Withdraw consent:</strong> You may stop using the service and delete your account at any time</li>
           </ul>
           <p className="text-text leading-relaxed mt-3">
-            To exercise these rights, reach out via our <a href="/contact" className="text-blush hover:underline">contact form</a>.
+            To exercise these rights, reach out via our <Link to="/contact" className="text-accent hover:underline">contact form</Link>.
           </p>
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">13. Changes to This Policy</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">13. Changes to This Policy</h2>
           <p className="text-text leading-relaxed">
             We may update this Privacy Policy from time to time. Significant changes will be communicated
             via the Platform. Continued use of the service after changes constitutes acceptance of the
@@ -199,18 +212,16 @@ export default function Privacy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">14. Contact</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">14. Contact</h2>
           <p className="text-text leading-relaxed">
-            For privacy-related inquiries, use our <a href="/contact" className="text-blush hover:underline">contact form</a>.
+            For privacy-related inquiries, use our <Link to="/contact" className="text-accent hover:underline">contact form</Link>.
           </p>
         </section>
 
-        <footer className="border-t border-border pt-6 text-center">
-          <a href="/contact" className="text-text-muted text-sm hover:text-text transition-colors">Contact us</a>
-          <span className="text-text-muted/40 mx-2">·</span>
-          <a href="/" className="text-text-muted text-sm hover:text-text transition-colors">← Back to Secretlink.life</a>
+        <footer className="border-t border-border pt-8">
+          <Link to="/contact" className="text-sm text-accent hover:underline">Contact us</Link>
         </footer>
       </article>
-    </main>
+    </SiteChrome>
   );
 }

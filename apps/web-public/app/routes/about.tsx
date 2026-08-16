@@ -1,4 +1,8 @@
-import type { MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { json } from "@remix-run/node";
+import { Link, useLoaderData } from "@remix-run/react";
+import { SiteChrome } from "../components/SiteChrome";
+import { getToken } from "../lib/session.server";
 
 export const meta: MetaFunction = () => [
   { title: "About — Secretlink.life" },
@@ -8,50 +12,67 @@ export const meta: MetaFunction = () => [
   },
 ];
 
-export default function About() {
-  return (
-    <main className="flex min-h-screen flex-col items-center py-16 px-4">
-      <article className="max-w-2xl w-full">
-        <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mb-4" />
-        <h1 className="font-display text-4xl mb-6">About Secretlink.life</h1>
+export async function loader({ request }: LoaderFunctionArgs) {
+  const token = await getToken(request);
+  return json({ isLoggedIn: Boolean(token) });
+}
 
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">What is this?</h2>
-          <p className="text-text leading-relaxed">
+export default function About() {
+  const { isLoggedIn } = useLoaderData<typeof loader>();
+
+  return (
+    <SiteChrome isLoggedIn={isLoggedIn} currentPath="/about">
+      <article className="mx-auto max-w-3xl px-4 sm:px-6 pt-28 sm:pt-32 pb-20">
+        <p className="text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-4">The story</p>
+        <h1 className="font-extrabold tracking-[-0.04em] text-4xl sm:text-6xl leading-[0.95] mb-10">
+          About{" "}
+          <span className="font-display font-bold text-accent">Secretlink.life</span>
+        </h1>
+
+        <section className="border-t border-border py-8">
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">What is this?</h2>
+          <p className="text-text-muted leading-relaxed">
             Secretlink.life is a social network for things you'd never post anywhere else.
             Every message vanishes after one read. Every link burns. No screenshots,
             no screen recording, no re-sharing. Just you, one person, one moment.
           </p>
         </section>
 
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">How it works</h2>
-          <ol className="list-decimal list-inside space-y-2 text-text">
-            <li>Your message is encrypted on your device with XChaCha20-Poly1305</li>
-            <li>The encrypted blob is stored with a self-destruct timer</li>
-            <li>A unique link is generated — that's the only way to access it</li>
-            <li>The recipient holds to reveal — once released, it's gone forever</li>
-            <li>The server never sees your plaintext</li>
+        <section className="border-t border-border py-8">
+          <h2 className="text-xl font-extrabold tracking-tight mb-4">How it works</h2>
+          <ol className="space-y-3 text-text-muted">
+            {[
+              "Your message is encrypted on your device with XChaCha20-Poly1305",
+              "The encrypted blob is stored with a self-destruct timer",
+              "A unique link is generated — that's the only way to access it",
+              "The recipient holds to reveal — once released, it's gone forever",
+              "The server never sees your plaintext",
+            ].map((item, i) => (
+              <li key={item} className="flex gap-4">
+                <span className="font-mono text-accent text-sm tabular-nums w-6 shrink-0">0{i + 1}</span>
+                <span>{item}</span>
+              </li>
+            ))}
           </ol>
         </section>
 
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">Privacy — honest version</h2>
-          <p className="text-text leading-relaxed mb-3">
+        <section className="border-t border-border py-8">
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">Privacy — honest version</h2>
+          <p className="text-text-muted leading-relaxed mb-3">
             No software can make a perfectly secret message on a general-purpose device.
             The user with the screen always wins. What we <em>can</em> do is raise the
             cost of capture from "tap a button" to "borrow a second phone and aim a
             camera" — which deters ~99% of casual leaks.
           </p>
-          <p className="text-text-muted text-sm">
-            👁 Capture-resistant, not capture-proof. We say so plainly because honesty
+          <p className="font-mono text-[11px] tracking-wide uppercase text-accent">
+            Capture-resistant, not capture-proof. We say so plainly because honesty
             is the foundation of trust.
           </p>
         </section>
 
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold text-blush mb-3">Safety</h2>
-          <ul className="list-disc list-inside space-y-2 text-text">
+        <section className="border-t border-border py-8">
+          <h2 className="text-xl font-extrabold tracking-tight mb-4">Safety</h2>
+          <ul className="space-y-2 text-text-muted">
             <li>Secrets self-destruct after viewing — nothing persists</li>
             <li>End-to-end encryption — we can't read your messages</li>
             <li>No accounts required to send anonymously</li>
@@ -59,9 +80,9 @@ export default function About() {
           </ul>
         </section>
 
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold text-mint-signal mb-3">Coming Soon</h2>
-          <ul className="list-disc list-inside space-y-2 text-text">
+        <section className="border-t border-border py-8">
+          <p className="text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-3">Coming soon</p>
+          <ul className="space-y-2 text-text-muted">
             <li>Custom themes for your reveal experience</li>
             <li>Longer secret TTL options</li>
             <li>Larger file uploads</li>
@@ -69,18 +90,11 @@ export default function About() {
           </ul>
         </section>
 
-        <footer className="border-t border-border pt-6 text-center space-y-2">
-          <p className="text-text-muted text-sm">
-            Built with 🔐 by the Secretlink.life team
-          </p>
-          <p className="text-text-muted text-sm">
-            Have a question?{" "}
-            <a href="/contact" className="text-blush hover:underline">Contact us</a>
-            {" · "}
-            <a href="/" className="hover:text-text transition-colors">← Back to Secretlink.life</a>
-          </p>
-        </footer>
+        <p className="border-t border-border pt-8 text-sm text-text-muted">
+          Have a question?{" "}
+          <Link to="/contact" className="text-accent hover:underline">Contact us</Link>
+        </p>
       </article>
-    </main>
+    </SiteChrome>
   );
 }

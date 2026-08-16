@@ -1,6 +1,7 @@
-import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
+import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useActionData, useNavigation, Link } from "@remix-run/react";
+import { useActionData, useLoaderData, useNavigation, Link } from "@remix-run/react";
+import { SiteChrome } from "../components/SiteChrome";
 import { API_URL } from "../lib/api.server";
 import { getToken } from "../lib/session.server";
 
@@ -17,6 +18,11 @@ interface ActionResult {
 
 function result(ok: boolean, errors: Record<string, string>, values: { name: string; email: string; message: string }, status?: number): ReturnType<typeof json<ActionResult>> {
   return json<ActionResult>({ ok, errors, values }, status ? { status } : undefined);
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const token = await getToken(request);
+  return json({ isLoggedIn: Boolean(token) });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -65,36 +71,39 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Contact() {
+  const { isLoggedIn } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionResult>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const submitted = actionData?.ok === true;
 
   return (
-    <main className="flex min-h-screen flex-col items-center py-16 px-4">
-      <div className="max-w-2xl w-full">
-        <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mb-4" />
-        <h1 className="font-display text-4xl mb-2">Contact us</h1>
-        <p className="text-text-muted mb-8">
+    <SiteChrome isLoggedIn={isLoggedIn} currentPath="/contact">
+      <div className="mx-auto max-w-xl px-4 sm:px-6 pt-28 sm:pt-32 pb-20">
+        <p className="text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-4">Inbox</p>
+        <h1 className="font-extrabold tracking-[-0.04em] text-4xl sm:text-6xl leading-[0.95] mb-4">
+          Contact <span className="font-display font-bold text-accent">us</span>
+        </h1>
+        <p className="text-text-muted mb-10 leading-relaxed">
           Questions, privacy requests, or feedback — we read every message.
           Leave an email if you'd like a reply.
         </p>
 
         {submitted ? (
-          <div className="rounded-xl border border-blush/30 bg-blush/10 p-6 text-center">
-            <p className="text-lg mb-1">Message sent 🤫</p>
-            <p className="text-text-muted text-sm mb-4">
+          <div className="border border-border bg-surface-raised p-8">
+            <p className="text-xl font-extrabold tracking-tight mb-2">Message sent</p>
+            <p className="text-text-muted text-sm mb-6">
               Thanks for reaching out. If you left an email, we'll get back to you soon.
             </p>
-            <Link to="/" className="text-blush hover:underline text-sm">
-              ← Back to Secretlink.life
+            <Link to="/" className="text-sm font-semibold text-accent hover:underline">
+              Back to Secretlink.life
             </Link>
           </div>
         ) : (
-          <form method="post" className="space-y-4">
+          <form method="post" className="space-y-5">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-text mb-1">
-                Name <span className="text-text-muted">(optional)</span>
+              <label htmlFor="name" className="block font-mono text-[10px] tracking-[0.18em] uppercase text-text-muted mb-2">
+                Name <span>(optional)</span>
               </label>
               <input
                 id="name"
@@ -103,13 +112,13 @@ export default function Contact() {
                 maxLength={100}
                 defaultValue={actionData?.values?.name ?? ""}
                 placeholder="How should we address you?"
-                className="w-full rounded-lg bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="w-full min-h-12 bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-text mb-1">
-                Email <span className="text-text-muted">(optional, only if you want a reply)</span>
+              <label htmlFor="email" className="block font-mono text-[10px] tracking-[0.18em] uppercase text-text-muted mb-2">
+                Email <span>(optional, only if you want a reply)</span>
               </label>
               <input
                 id="email"
@@ -118,7 +127,7 @@ export default function Contact() {
                 maxLength={254}
                 defaultValue={actionData?.values?.email ?? ""}
                 placeholder="you@example.com"
-                className="w-full rounded-lg bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="w-full min-h-12 bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
               />
               {actionData?.errors?.email && (
                 <p className="text-red-400 text-sm mt-1">{actionData.errors.email}</p>
@@ -126,7 +135,7 @@ export default function Contact() {
             </div>
 
             <div>
-              <label htmlFor="message" className="block text-sm font-medium text-text mb-1">
+              <label htmlFor="message" className="block font-mono text-[10px] tracking-[0.18em] uppercase text-text-muted mb-2">
                 Message
               </label>
               <textarea
@@ -138,7 +147,7 @@ export default function Contact() {
                 rows={6}
                 defaultValue={actionData?.values?.message ?? ""}
                 placeholder="What's on your mind?"
-                className="w-full rounded-lg bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent resize-y"
+                className="w-full bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent resize-y"
               />
               {actionData?.errors?.message && (
                 <p className="text-red-400 text-sm mt-1">{actionData.errors.message}</p>
@@ -148,19 +157,13 @@ export default function Contact() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all duration-200 disabled:opacity-60 disabled:hover:scale-100"
+              className="w-full min-h-12 rounded-full bg-accent px-6 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors disabled:opacity-60"
             >
               {isSubmitting ? "Sending…" : "Send message"}
             </button>
           </form>
         )}
-
-        <p className="mt-8 text-center">
-          <Link to="/" className="text-text-muted text-sm hover:text-text transition-colors">
-            ← Back to Secretlink.life
-          </Link>
-        </p>
       </div>
-    </main>
+    </SiteChrome>
   );
 }

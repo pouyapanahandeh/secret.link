@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { BlogLayout } from "../components/BlogLayout";
 import { formatBlogDate, renderBlogMarkdown } from "../lib/blog-markdown";
+import { getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 
 type BlogPost = {
@@ -24,7 +25,8 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const { post, origin } = data;
   const title = `${post.title} — Secretlink.life Blog`;
   const url = `${origin}/blog/${post.slug}`;
-  const image = post.coverImageUrl || `${origin}/secretlink.png`;
+  const image = post.coverImageUrl || `${origin}/og.png`;
+  const usingSiteOg = !post.coverImageUrl;
 
   const tags = [
     { title },
@@ -37,11 +39,20 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
     { property: "og:description", content: post.excerpt },
     { property: "og:url", content: url },
     { property: "og:image", content: image },
+    ...(usingSiteOg
+      ? [
+          { property: "og:image:width", content: "1200" },
+          { property: "og:image:height", content: "630" },
+          { property: "og:image:type", content: "image/png" },
+          { property: "og:image:alt", content: "Secretlink.life" },
+        ]
+      : []),
     ...(post.publishedAt ? [{ property: "article:published_time", content: post.publishedAt }] : []),
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: post.excerpt },
     { name: "twitter:image", content: image },
+    { name: "twitter:image:alt", content: "Secretlink.life" },
   ];
 
   return tags;
@@ -66,7 +77,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     "@type": "BlogPosting",
     headline: post.title,
     description: post.excerpt,
-    image: post.coverImageUrl || `${origin}/secretlink.png`,
+    image: post.coverImageUrl || `${origin}/og.png`,
     datePublished: post.publishedAt,
     dateModified: post.updatedAt,
     author: { "@type": "Organization", name: "Secretlink.life" },
@@ -79,26 +90,26 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     mainEntityOfPage: { "@type": "WebPage", "@id": `${origin}/blog/${post.slug}` },
   };
 
-  return json({ post, origin, bodyHtml, jsonLd });
+  return json({ post, origin, bodyHtml, jsonLd, isLoggedIn: Boolean(await getToken(request)) });
 }
 
 export default function BlogPostPage() {
-  const { post, bodyHtml, jsonLd } = useLoaderData<typeof loader>();
+  const { post, bodyHtml, jsonLd, isLoggedIn } = useLoaderData<typeof loader>();
 
   return (
-    <BlogLayout>
+    <BlogLayout isLoggedIn={isLoggedIn}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <Link to="/blog" className="inline-flex items-center text-sm text-text-muted hover:text-accent transition-colors mb-8">
+      <Link to="/blog" className="inline-flex items-center font-mono text-[11px] tracking-[0.16em] uppercase text-text-muted hover:text-accent transition-colors mb-8">
         ← Back to blog
       </Link>
 
       <article className="max-w-3xl mx-auto">
         {post.coverImageUrl && (
-          <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-surface-raised">
+          <div className="mb-8 overflow-hidden border border-border bg-surface-raised">
             <img
               src={post.coverImageUrl}
               alt=""
@@ -107,12 +118,14 @@ export default function BlogPostPage() {
           </div>
         )}
 
-        <header className="mb-8">
-          <time className="text-sm text-text-muted">{formatBlogDate(post.publishedAt)}</time>
-          <h1 className="font-display text-4xl sm:text-5xl mt-3 mb-4">{post.title}</h1>
+        <header className="mb-10">
+          <time className="font-mono text-[11px] tracking-[0.16em] uppercase text-text-muted">
+            {formatBlogDate(post.publishedAt)}
+          </time>
+          <h1 className="font-extrabold tracking-[-0.04em] text-4xl sm:text-5xl leading-[0.95] mt-3 mb-4">{post.title}</h1>
           <p className="text-lg text-text-muted leading-relaxed">{post.excerpt}</p>
           {post.keywords && (
-            <p className="mt-4 text-xs uppercase tracking-wide text-accent">{post.keywords}</p>
+            <p className="mt-4 font-mono text-[11px] tracking-[0.16em] uppercase text-accent">{post.keywords}</p>
           )}
         </header>
 
