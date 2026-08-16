@@ -34,14 +34,20 @@ export const meta: MetaFunction = () => {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const res = await fetch(`${API_URL}/v1/public/blog?limit=50`);
-  if (!res.ok) {
-    throw new Response("Failed to load blog posts", { status: 502 });
-  }
-  const data = (await res.json()) as { posts: BlogPostCard[] };
   const origin = process.env["PUBLIC_ORIGIN"] ?? new URL(request.url).origin;
   const token = await getToken(request);
-  return json({ posts: data.posts, origin, isLoggedIn: Boolean(token) });
+  const isLoggedIn = Boolean(token);
+
+  try {
+    const res = await fetch(`${API_URL}/v1/public/blog?limit=50`);
+    if (!res.ok) {
+      return json({ posts: [] as BlogPostCard[], origin, isLoggedIn });
+    }
+    const data = (await res.json()) as { posts?: BlogPostCard[] };
+    return json({ posts: data.posts ?? [], origin, isLoggedIn });
+  } catch {
+    return json({ posts: [] as BlogPostCard[], origin, isLoggedIn });
+  }
 }
 
 type BlogPostCard = {

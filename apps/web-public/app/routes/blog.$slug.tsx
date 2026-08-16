@@ -60,7 +60,15 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const slug = params.slug!;
-  const res = await fetch(`${API_URL}/v1/public/blog/${encodeURIComponent(slug)}`);
+  const origin = process.env["PUBLIC_ORIGIN"] ?? new URL(request.url).origin;
+  const isLoggedIn = Boolean(await getToken(request));
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/v1/public/blog/${encodeURIComponent(slug)}`);
+  } catch {
+    throw new Response("Not found", { status: 404 });
+  }
   if (res.status === 404) {
     throw new Response("Not found", { status: 404 });
   }
@@ -69,7 +77,6 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   }
 
   const post = (await res.json()) as BlogPost;
-  const origin = process.env["PUBLIC_ORIGIN"] ?? new URL(request.url).origin;
   const bodyHtml = renderBlogMarkdown(post.body);
 
   const jsonLd = {
@@ -90,7 +97,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     mainEntityOfPage: { "@type": "WebPage", "@id": `${origin}/blog/${post.slug}` },
   };
 
-  return json({ post, origin, bodyHtml, jsonLd, isLoggedIn: Boolean(await getToken(request)) });
+  return json({ post, origin, bodyHtml, jsonLd, isLoggedIn });
 }
 
 export default function BlogPostPage() {
