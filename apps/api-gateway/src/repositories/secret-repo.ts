@@ -6,7 +6,7 @@ import { wrapKey } from "../lib/crypto.js";
 
 const stmts = {
   insert: db.prepare(
-    `INSERT INTO secrets (id, ciphertext, content_type, blob_path, blob_size_bytes, mime_type, nonce, view_duration_seconds, max_views, view_count, burned, recipient_handle, sender_id, workspace_id, wrapped_key, wrap_nonce, wrap_epk, ttl_seconds, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO secrets (id, ciphertext, content_type, blob_path, blob_size_bytes, mime_type, nonce, view_duration_seconds, max_views, view_count, burned, recipient_handle, sender_id, workspace_id, wrapped_key, wrap_nonce, wrap_epk, wraps_json, ttl_seconds, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ),
   findById: db.prepare(`SELECT * FROM secrets WHERE id = ?`),
   incrementView: db.prepare(`UPDATE secrets SET view_count = view_count + 1 WHERE id = ?`),
@@ -41,8 +41,43 @@ function rowToRecord(row: Record<string, unknown>): SecretRecord {
     wrappedKey: row.wrapped_key ? String(row.wrapped_key) : undefined,
     wrapNonce: row.wrap_nonce ? String(row.wrap_nonce) : undefined,
     wrapEpk: row.wrap_epk ? String(row.wrap_epk) : undefined,
+    wrapsJson: row.wraps_json ? String(row.wraps_json) : undefined,
     burned: !!row.burned,
   };
+}
+
+export function coalesceWrapsFromRow(row: Record<string, unknown> | undefined | null): Array<{
+  wrappedKey: string;
+  wrapNonce: string;
+  wrapEpk: string;
+}> {
+  if (!row) return [];
+  if (row.wraps_json) {
+    try {
+      const parsed = JSON.parse(String(row.wraps_json));
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (w) =>
+            w &&
+            typeof w.wrappedKey === "string" &&
+            typeof w.wrapNonce === "string" &&
+            typeof w.wrapEpk === "string",
+        );
+      }
+    } catch {
+      /* fall through to legacy */
+    }
+  }
+  if (row.wrapped_key && row.wrap_nonce && row.wrap_epk) {
+    return [
+      {
+        wrappedKey: String(row.wrapped_key),
+        wrapNonce: String(row.wrap_nonce),
+        wrapEpk: String(row.wrap_epk),
+      },
+    ];
+  }
+  return [];
 }
 
 export const secretRepo = {
@@ -63,6 +98,7 @@ export const secretRepo = {
       record.wrappedKey ?? null,
       record.wrapNonce ?? null,
       record.wrapEpk ?? null,
+      record.wrapsJson ?? null,
       record.ttlSeconds ?? null,
       record.createdAt instanceof Date ? record.createdAt.toISOString() : record.createdAt,
       record.expiresAt instanceof Date ? record.expiresAt.toISOString() : record.expiresAt,

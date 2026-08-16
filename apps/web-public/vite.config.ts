@@ -23,5 +23,8 @@ export default defineConfig(({ command }) => ({
     fs: {
       allow: ["../.."],
     },
+    watch: {
+      ignored: ["**/e2e/**", "**/test-results/**", "**/playwright-report/**"],
+    },
   },
 }));

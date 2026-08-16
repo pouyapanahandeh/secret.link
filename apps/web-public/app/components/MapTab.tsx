@@ -3,10 +3,14 @@ import type { PlaceGroup } from "@secretlink/core";
 import { useMapSecrets } from "../hooks/useMapSecrets";
 import type { MapSecret } from "../lib/map-types";
 import { PlaceTagBar } from "./PlaceTagBar";
-import { StoryGroupSheet } from "./StoryGroupSheet";
+import { PlaceTagActionSheet } from "./PlaceTagActionSheet";
 import { MapStorySheet } from "./MapStorySheet";
 import { MapControls } from "./MapControls";
-import { createClusterMarkerIcon, createEmojiMarkerIcon, createPinMarkerIcon } from "../lib/map-markers";
+import { MapSearchBox } from "./MapSearchBox";
+import { StoryViewer } from "./StoryViewer";
+import { createEmojiMarkerIcon, createPinMarkerIcon } from "../lib/map-markers";
+
+const PULSE_MS = 1200;
 
 interface MapTabProps {
   initialSecrets: MapSecret[];
@@ -25,6 +29,8 @@ export function MapTab({
   const mapInstanceRef = useRef<any>(null);
   const leafletRef = useRef<any>(null);
   const pinMarkerRef = useRef<any>(null);
+  const pulseLayersRef = useRef<any[]>([]);
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     secrets,
@@ -32,7 +38,6 @@ export function MapTab({
     error,
     refresh,
     groupedPlaces,
-    ungroupedSecrets,
     selectedPlaceKey,
     selectPlace,
     clearPlace,
@@ -42,17 +47,94 @@ export function MapTab({
 
   const [pendingPin, setPendingPin] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedStory, setSelectedStory] = useState<MapSecret | null>(null);
-  const [groupSheet, setGroupSheet] = useState<PlaceGroup | null>(null);
+  const [placeViewer, setPlaceViewer] = useState<{ stories: MapSecret[]; title: string } | null>(null);
+  const [actionGroup, setActionGroup] = useState<PlaceGroup | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
-  const openGroup = useCallback(
+  const clearPulse = useCallback(() => {
+    if (pulseTimerRef.current) {
+      clearTimeout(pulseTimerRef.current);
+      pulseTimerRef.current = null;
+    }
+    const map = mapInstanceRef.current;
+    if (!map) {
+      pulseLayersRef.current = [];
+      return;
+    }
+    for (const layer of pulseLayersRef.current) {
+      try {
+        map.removeLayer(layer);
+      } catch {
+        /* already removed */
+      }
+    }
+    pulseLayersRef.current = [];
+  }, []);
+
+  const storiesForGroup = useCallback(
+    (group: PlaceGroup) =>
+      group.stories
+        .map((meta) => secretsById.get(meta.id))
+        .filter((s): s is MapSecret => !!s),
+    [secretsById],
+  );
+
+  const showGroupOnMap = useCallback(
+    (group: PlaceGroup) => {
+      const map = mapInstanceRef.current;
+      const L = leafletRef.current;
+      if (!map || !L) return;
+
+      clearPulse();
+      selectPlace(group.key);
+      setSelectedStory(null);
+      setPlaceViewer(null);
+      setPendingPin(null);
+      if (pinMarkerRef.current) {
+        map.removeLayer(pinMarkerRef.current);
+        pinMarkerRef.current = null;
+      }
+
+      const storyList = storiesForGroup(group);
+      if (storyList.length === 0) return;
+
+      const points = storyList.map((s) => [s.lat, s.lng] as [number, number]);
+      if (points.length === 1) {
+        map.setView(points[0], 13);
+      } else {
+        const bounds = L.latLngBounds(points);
+        map.fitBounds(bounds, { padding: [80, 80], maxZoom: 14 });
+      }
+
+      for (const s of storyList) {
+        const pulse = L.circleMarker([s.lat, s.lng], {
+          radius: 18,
+          fillColor: "#facc15",
+          fillOpacity: 0.35,
+          color: "#facc15",
+          weight: 2,
+          opacity: 0.9,
+        }).addTo(map);
+        pulseLayersRef.current.push(pulse);
+      }
+
+      pulseTimerRef.current = setTimeout(() => {
+        clearPulse();
+      }, PULSE_MS);
+    },
+    [selectPlace, storiesForGroup, clearPulse],
+  );
+
+  const viewGroupStories = useCallback(
     (group: PlaceGroup) => {
       selectPlace(group.key);
-      setGroupSheet(group);
-      const map = mapInstanceRef.current;
-      if (map) map.setView([group.centroid.lat, group.centroid.lng], 10);
+      const storyList = storiesForGroup(group);
+      if (storyList.length === 0) return;
+      setSelectedStory(null);
+      setPendingPin(null);
+      setPlaceViewer({ stories: storyList, title: group.label });
     },
-    [selectPlace],
+    [selectPlace, storiesForGroup],
   );
 
   const renderMarkers = useCallback(() => {
@@ -64,26 +146,20 @@ export function MapTab({
       if (layer._isSecretMarker) map.removeLayer(layer);
     });
 
-    for (const item of ungroupedSecrets) {
-      const s = secretsById.get(item.id);
-      if (!s) continue;
-      const marker = L.marker([s.lat, s.lng], { icon: createEmojiMarkerIcon(L, s.emoji) }).addTo(map);
+    for (const s of secrets) {
+      const marker = L.marker([s.lat, s.lng], {
+        icon: createEmojiMarkerIcon(L, s.emoji, !!s.hasMedia),
+      }).addTo(map);
       marker._isSecretMarker = true;
       marker.on("click", () => {
         setPendingPin(null);
         setSelectedStory(s);
-        setGroupSheet(null);
+        setPlaceViewer(null);
+        setActionGroup(null);
+        clearPlace();
       });
     }
-
-    for (const group of groupedPlaces) {
-      const marker = L.marker([group.centroid.lat, group.centroid.lng], {
-        icon: createClusterMarkerIcon(L, group),
-      }).addTo(map);
-      marker._isSecretMarker = true;
-      marker.on("click", () => openGroup(group));
-    }
-  }, [ungroupedSecrets, groupedPlaces, secretsById, openGroup]);
+  }, [secrets, clearPlace]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -119,16 +195,11 @@ export function MapTab({
           maxZoom: 19,
         }).addTo(map);
 
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], 13),
-            () => {},
-          );
-        }
-
         map.on("click", (e: any) => {
           setSelectedStory(null);
-          setGroupSheet(null);
+          setPlaceViewer(null);
+          setActionGroup(null);
+          clearPlace();
           const pos = { lat: e.latlng.lat, lng: e.latlng.lng };
           setPendingPin(pos);
           if (pinMarkerRef.current) map.removeLayer(pinMarkerRef.current);
@@ -142,11 +213,12 @@ export function MapTab({
     return () => {
       cancelled = true;
     };
-  }, [isVisible]);
+  }, [isVisible, clearPlace]);
 
   useEffect(() => {
     if (isVisible && mapInstanceRef.current) {
       setTimeout(() => mapInstanceRef.current?.invalidateSize(), 50);
+      setTimeout(() => mapInstanceRef.current?.invalidateSize(), 250);
     }
   }, [isVisible]);
 
@@ -156,19 +228,16 @@ export function MapTab({
   }, [mapReady, isVisible, renderMarkers]);
 
   useEffect(() => {
-    if (!selectedPlaceKey) return;
-    const group = groupedPlaces.find((g) => g.key === selectedPlaceKey);
-    if (group) setGroupSheet(group);
-  }, [selectedPlaceKey, groupedPlaces]);
+    return () => {
+      clearPulse();
+    };
+  }, [clearPulse]);
 
-  function handlePlaceTagSelect(key: string | null) {
-    if (key === null) {
-      clearPlace();
-      setGroupSheet(null);
-      return;
-    }
+  function handlePlaceTagSelect(key: string) {
     const group = groupedPlaces.find((g) => g.key === key);
-    if (group) openGroup(group);
+    if (!group) return;
+    selectPlace(group.key);
+    setActionGroup(group);
   }
 
   function zoomIn() {
@@ -197,30 +266,53 @@ export function MapTab({
     );
   }
 
+  function handleSearchSelect(coords: { lat: number; lng: number }) {
+    const map = mapInstanceRef.current;
+    const L = leafletRef.current;
+    if (!map || !L) return;
+
+    setSelectedStory(null);
+    setPlaceViewer(null);
+    setActionGroup(null);
+    clearPlace();
+
+    map.setView([coords.lat, coords.lng], 15);
+    setPendingPin(coords);
+    if (pinMarkerRef.current) map.removeLayer(pinMarkerRef.current);
+    pinMarkerRef.current = L.marker([coords.lat, coords.lng], { icon: createPinMarkerIcon(L) }).addTo(map);
+  }
+
   const isEmpty = !loading && secrets.length === 0 && !error && mapReady;
 
   return (
     <section className="flex flex-col flex-1 min-h-0 h-full">
-      <div className="shrink-0 mb-3">
+      <div className="hidden sm:block shrink-0 mb-3 px-0">
         <h2 className="text-lg font-bold">Map</h2>
         <p className="text-xs text-text-muted">Stories dropped near you</p>
       </div>
 
       {error && (
-        <div className="shrink-0 mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-2">
+        <div className="shrink-0 mb-3 mx-4 sm:mx-0 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-2">
           <p className="text-xs text-red-300">{error}</p>
           <button type="button" onClick={refresh} className="text-xs text-accent shrink-0">Retry</button>
         </div>
       )}
 
       {loading && secrets.length === 0 && (
-        <p className="text-xs text-text-muted mb-3 shrink-0">Loading stories…</p>
+        <p className="text-xs text-text-muted mb-3 shrink-0 px-4 sm:px-0">Loading stories…</p>
       )}
 
-      <PlaceTagBar groupedPlaces={groupedPlaces} selectedPlaceKey={selectedPlaceKey} onSelect={handlePlaceTagSelect} />
-
-      <div className="relative flex-1 min-h-[45vh] sm:min-h-[55vh] rounded-2xl border border-border overflow-hidden isolate z-0 mb-2 sm:mb-0">
+      <div className="relative flex-1 min-h-0 sm:min-h-[55vh] rounded-none border-0 sm:rounded-2xl sm:border sm:border-border overflow-hidden isolate z-0">
         <div ref={mapContainerRef} className="absolute inset-0 w-full h-full z-0" />
+
+        <div className="absolute top-3 left-3 right-3 sm:left-14 sm:right-14 z-[1000] flex flex-col gap-2 pointer-events-auto">
+          <MapSearchBox onSelect={handleSearchSelect} />
+          <PlaceTagBar
+            groupedPlaces={groupedPlaces}
+            selectedPlaceKey={selectedPlaceKey}
+            onSelect={handlePlaceTagSelect}
+          />
+        </div>
 
         <MapControls onZoomIn={zoomIn} onZoomOut={zoomOut} onLocate={locateMe} />
 
@@ -244,12 +336,34 @@ export function MapTab({
         )}
       </div>
 
-      {groupSheet && (
-        <StoryGroupSheet
-          group={groupSheet}
-          onClose={() => { setGroupSheet(null); clearPlace(); }}
-          onSelectStory={(s) => { setSelectedStory(s); setGroupSheet(null); }}
-          secretsById={secretsById}
+      {actionGroup && (
+        <PlaceTagActionSheet
+          group={actionGroup}
+          onViewStories={() => {
+            const group = actionGroup;
+            setActionGroup(null);
+            viewGroupStories(group);
+          }}
+          onShowOnMap={() => {
+            const group = actionGroup;
+            setActionGroup(null);
+            showGroupOnMap(group);
+          }}
+          onClose={() => {
+            setActionGroup(null);
+            clearPlace();
+          }}
+        />
+      )}
+
+      {placeViewer && (
+        <StoryViewer
+          initialStories={placeViewer.stories}
+          title={placeViewer.title}
+          onClose={() => {
+            setPlaceViewer(null);
+            clearPlace();
+          }}
         />
       )}
 

@@ -27,5 +27,5 @@ export interface PlaceGroup {
   isGrouped: boolean;
 }
 
-/** Group when story count is strictly greater than this value (i.e. 6+). */
-export const PLACE_GROUP_THRESHOLD = 5;
+/** Group when story count is strictly greater than this value (i.e. 4+). */
+export const PLACE_GROUP_THRESHOLD = 3;

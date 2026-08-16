@@ -6,6 +6,8 @@ import {
   decryptMapReveal,
   wrapKeyForRecipient,
   unwrapKeyFromSender,
+  wrapKeyForRecipients,
+  unwrapKeyFromAnyWrap,
   x25519,
   base64UrlToBytes,
   bytesToBase64Url,
@@ -51,6 +53,29 @@ describe("cross-platform AES-GCM vectors", () => {
     const wrapped = wrapKeyForRecipient(FIXED_AES_KEY, recipientPublicKeyB64);
     const unwrapped = unwrapKeyFromSender(wrapped, RECIPIENT_PRIVATE);
     expect(unwrapped).toEqual(FIXED_AES_KEY);
+  });
+
+  it("unwraps from any matching device wrap", () => {
+    const otherPrivate = new Uint8Array(32).fill(9);
+    const otherPublic = x25519.getPublicKey(otherPrivate);
+    const wraps = wrapKeyForRecipients(FIXED_AES_KEY, [
+      bytesToBase64(otherPublic),
+      bytesToBase64(RECIPIENT_PUBLIC),
+    ]);
+    expect(wraps).toHaveLength(2);
+    expect(unwrapKeyFromAnyWrap(wraps, RECIPIENT_PRIVATE)).toEqual(FIXED_AES_KEY);
+    expect(unwrapKeyFromAnyWrap(wraps, otherPrivate)).toEqual(FIXED_AES_KEY);
+    expect(unwrapKeyFromAnyWrap(wraps, new Uint8Array(32).fill(1))).toBeNull();
+  });
+
+  it("skips invalid recipient public keys when wrapping for many devices", () => {
+    const wraps = wrapKeyForRecipients(FIXED_AES_KEY, [
+      "not-valid-base64!!!",
+      bytesToBase64(new Uint8Array(16)), // wrong length
+      bytesToBase64(RECIPIENT_PUBLIC),
+    ]);
+    expect(wraps).toHaveLength(1);
+    expect(unwrapKeyFromAnyWrap(wraps, RECIPIENT_PRIVATE)).toEqual(FIXED_AES_KEY);
   });
 });
 

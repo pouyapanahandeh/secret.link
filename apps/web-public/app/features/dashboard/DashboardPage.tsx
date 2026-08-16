@@ -200,7 +200,7 @@ export function DashboardPage() {
         </div>
       ) : (
         <div className={`flex-1 min-h-0 ${activeTab === "map" ? "flex flex-col overflow-hidden pb-20 sm:pb-6" : "overflow-y-auto pb-20 sm:pb-6"}`}>
-          <div className={`${activeTab === "map" ? "flex flex-col flex-1 min-h-0 max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6 w-full" : "max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6"}`}>
+          <div className={`${activeTab === "map" ? "flex flex-col flex-1 min-h-0 w-full sm:max-w-2xl sm:mx-auto sm:px-6 sm:py-6" : "max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6"}`}>
             {activeTab === "inbox" && (
               <DashboardInboxTab
                 user={user}

@@ -42,6 +42,48 @@ export function unwrapKeyFromSender(wrapped: WrappedKey, recipientPrivateKey: Ui
   return aes.decrypt(ciphertext);
 }
 
+/**
+ * Try each device wrap until one unwraps with the local private key.
+ * Returns null if none match (wrong device / revoked key).
+ */
+export function unwrapKeyFromAnyWrap(
+  wraps: WrappedKey[],
+  recipientPrivateKey: Uint8Array,
+): Uint8Array | null {
+  for (const wrap of wraps) {
+    try {
+      return unwrapKeyFromSender(wrap, recipientPrivateKey);
+    } catch {
+      /* try next device wrap */
+    }
+  }
+  return null;
+}
+
+/** Wrap a raw AES key to every recipient device public key (deduped, max 5). */
+export function wrapKeyForRecipients(
+  rawKey: Uint8Array,
+  recipientPublicKeysB64: string[],
+  maxDevices = 5,
+): WrappedKey[] {
+  const seen = new Set<string>();
+  const wraps: WrappedKey[] = [];
+  for (const pub of recipientPublicKeysB64) {
+    const key = pub.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    try {
+      const pubBytes = base64ToBytes(key);
+      if (pubBytes.length !== 32) continue;
+      wraps.push(wrapKeyForRecipient(rawKey, key));
+    } catch {
+      /* skip malformed device pubkeys so one bad key cannot block send */
+    }
+    if (wraps.length >= maxDevices) break;
+  }
+  return wraps;
+}
+
 /** Deterministic wrap using fixed ephemeral keys (test vectors only). */
 export function wrapKeyForRecipientWithKeys(
   rawKey: Uint8Array,

@@ -122,20 +122,21 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     setMyUserId(data.id);
     setMyHandle(data.handle);
 
-    let kp = await getStoredKeyPair();
+    const { ensureAndPublishKey } = await import("../lib/dm-crypto");
+    const kp = await ensureAndPublishKey(getApiBase(), token);
     if (!kp) {
-      kp = await migrateFromLocalStorage();
+      let fallback = await getStoredKeyPair();
+      if (!fallback) fallback = await migrateFromLocalStorage();
+      if (!fallback) fallback = await generateAndStoreKeyPair();
+      myKeyPairRef.current = fallback;
+      await fetch(`${getApiBase()}/v1/dms/keys`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ publicKey: fallback.publicKeyB64, deviceId: fallback.deviceId }),
+      });
+    } else {
+      myKeyPairRef.current = kp;
     }
-    if (!kp) {
-      kp = await generateAndStoreKeyPair();
-    }
-    // Always ensure server has our current public key
-    await fetch(`${getApiBase()}/v1/dms/keys`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
-    });
-    myKeyPairRef.current = kp;
   }
 
   async function loadConversations() {
@@ -429,7 +430,7 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     await fetch(`${getApiBase()}/v1/dms/keys`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
+      body: JSON.stringify({ publicKey: kp.publicKeyB64, deviceId: kp.deviceId }),
     });
     alert("Keys rotated. Existing conversations still use the old shared secret until re-opened.");
   }

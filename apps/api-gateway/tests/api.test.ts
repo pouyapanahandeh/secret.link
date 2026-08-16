@@ -147,6 +147,48 @@ describe("Users API", () => {
     const pub = await publicRes.json();
     expect(pub.handle).toBe("profilepatch");
     expect(pub.bio).toBe("Hello world");
+    // acceptsSecrets defaults to true (secret box shown) for existing users.
+    expect(pub.acceptsSecrets).toBe(true);
+  });
+
+  it("toggles acceptsSecrets (secret box visibility)", async () => {
+    const createRes = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: "secretbox" }),
+    });
+    expect(createRes.status).toBe(201);
+    const setCookie = createRes.headers.get("set-cookie") ?? "";
+    const token = decodeURIComponent(/sl_token=([^;]+)/.exec(setCookie)![1]!);
+
+    // Default is true on the owner endpoint.
+    const meRes = await fetch(`${baseUrl}/v1/users/me/profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect((await meRes.json()).acceptsSecrets).toBe(true);
+
+    // Disable the secret box.
+    const patchRes = await fetch(`${baseUrl}/v1/users/me/profile`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ acceptsSecrets: false }),
+    });
+    expect(patchRes.status).toBe(200);
+    expect((await patchRes.json()).acceptsSecrets).toBe(false);
+
+    // Public profile now reflects the disabled secret box.
+    const publicRes = await fetch(`${baseUrl}/v1/users/secretbox`);
+    expect((await publicRes.json()).acceptsSecrets).toBe(false);
+
+    // Re-enabling restores it, and does not clobber other fields.
+    const reEnableRes = await fetch(`${baseUrl}/v1/users/me/profile`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ acceptsSecrets: true, bio: "still here" }),
+    });
+    const reEnabled = await reEnableRes.json();
+    expect(reEnabled.acceptsSecrets).toBe(true);
+    expect(reEnabled.bio).toBe("still here");
   });
 
   it("lists sitemap handles", async () => {
@@ -562,5 +604,122 @@ describe("Blog API", () => {
       expect(body.slugs[0]?.slug).toBeTruthy();
       expect(body.slugs[0]?.updatedAt).toBeTruthy();
     }
+  });
+});
+
+describe("Multi-device DM keys", () => {
+  async function signup(handle: string): Promise<string> {
+    const res = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle }),
+    });
+    expect(res.status).toBe(201);
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    const tokenMatch = /sl_token=([^;]+)/.exec(setCookie);
+    expect(tokenMatch?.[1]).toBeTruthy();
+    return decodeURIComponent(tokenMatch![1]!);
+  }
+
+  it("upserts distinct device keys without overwriting", async () => {
+    const token = await signup(`mdkeys_${Date.now().toString(36)}`);
+    const auth = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+    const a = await fetch(`${baseUrl}/v1/dms/keys`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ publicKey: "pubAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=", deviceId: "laptop" }),
+    });
+    expect(a.status).toBe(200);
+
+    const b = await fetch(`${baseUrl}/v1/dms/keys`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ publicKey: "pubBbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=", deviceId: "phone" }),
+    });
+    expect(b.status).toBe(200);
+
+    const list = await fetch(`${baseUrl}/v1/dms/keys`, { headers: { Authorization: `Bearer ${token}` } });
+    expect(list.status).toBe(200);
+    const body = await list.json();
+    expect(body.publicKeys).toHaveLength(2);
+    expect(body.devices.map((d: { deviceId: string }) => d.deviceId).sort()).toEqual(["laptop", "phone"]);
+  });
+
+  it("rejects a 6th device with 409 device_limit", async () => {
+    const token = await signup(`mdlimit_${Date.now().toString(36)}`);
+    const auth = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    for (let i = 0; i < 5; i++) {
+      const res = await fetch(`${baseUrl}/v1/dms/keys`, {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({ publicKey: `key${i}${"x".repeat(40)}`, deviceId: `dev${i}` }),
+      });
+      expect(res.status).toBe(200);
+    }
+    const sixth = await fetch(`${baseUrl}/v1/dms/keys`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ publicKey: `key5${"x".repeat(40)}`, deviceId: "dev5" }),
+    });
+    expect(sixth.status).toBe(409);
+    const body = await sixth.json();
+    expect(body.error).toBe("device_limit");
+  });
+
+  it("revokes a device and exposes dmPublicKeys on profile", async () => {
+    const handle = `mdprof_${Date.now().toString(36)}`;
+    const token = await signup(handle);
+    const auth = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+    await fetch(`${baseUrl}/v1/dms/keys`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ publicKey: "profKeyLaptopxxxxxxxxxxxxxxxxxxxxxxx=", deviceId: "laptop" }),
+    });
+    await fetch(`${baseUrl}/v1/dms/keys`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ publicKey: "profKeyPhonexxxxxxxxxxxxxxxxxxxxxxxx=", deviceId: "phone" }),
+    });
+
+    const del = await fetch(`${baseUrl}/v1/dms/keys/device/phone`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(del.status).toBe(200);
+
+    const profile = await fetch(`${baseUrl}/v1/users/${handle}`);
+    expect(profile.status).toBe(200);
+    const pub = await profile.json();
+    expect(pub.dmPublicKeys).toEqual(["profKeyLaptopxxxxxxxxxxxxxxxxxxxxxxx="]);
+    expect(pub.dmPublicKey).toBe("profKeyLaptopxxxxxxxxxxxxxxxxxxxxxxx=");
+  });
+
+  it("stores wraps[] on create and returns them on reveal", async () => {
+    const createRes = await fetch(`${baseUrl}/v1/secrets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ciphertext: "multi-wrap-cipher",
+        ttlSeconds: 3600,
+        recipientHandle: "anyone",
+        nonce: "nonce1",
+        wraps: [
+          { wrappedKey: "w1", wrapNonce: "n1", wrapEpk: "e1" },
+          { wrappedKey: "w2", wrapNonce: "n2", wrapEpk: "e2" },
+        ],
+      }),
+    });
+    expect(createRes.status).toBe(201);
+    const created = await createRes.json();
+
+    const revealRes = await fetch(`${baseUrl}/v1/secrets/${created.id}`);
+    expect(revealRes.status).toBe(200);
+    const revealed = await revealRes.json();
+    expect(revealed.wraps).toHaveLength(2);
+    expect(revealed.wrappedKey).toBe("w1");
+    expect(revealed.wrapNonce).toBe("n1");
+    expect(revealed.wrapEpk).toBe("e1");
   });
 });

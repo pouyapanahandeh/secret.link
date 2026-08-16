@@ -1,0 +1,23 @@
+Secretlink is a privacy-first app for sharing secrets that disappear.
+
+Send end-to-end encrypted messages to @handles. Drop ephemeral stories on the map. Everything expires — no permanent inbox, no endless scroll of your past.
+
+WHAT YOU CAN DO
+• Create an @handle and a public profile others can find
+• Send encrypted secrets that self-destruct after views or time
+• Drop location stories on the map for people nearby to reveal
+• Follow people you care about and share your profile link
+• Control your data — delete your account anytime
+
+BUILT FOR PRIVACY
+• End-to-end encryption for secret content
+• Ephemeral by default — secrets expire
+• No ads, no trackers in the product experience
+• Clear privacy policy: https://secretlink.life/privacy
+
+WHO IT'S FOR
+Adults 18+ who want a lighter, more private way to say something real — then let it go.
+
+Support: https://secretlink.life/contact
+Terms: https://secretlink.life/terms
+Website: https://secretlink.life

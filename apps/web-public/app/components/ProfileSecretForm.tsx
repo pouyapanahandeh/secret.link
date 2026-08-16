@@ -3,10 +3,15 @@ import type { FetcherWithComponents } from "@remix-run/react";
 
 interface ProfileSecretFormProps {
   recipientPublicKey?: string | null;
+  recipientPublicKeys?: string[] | null;
   fetcher: FetcherWithComponents<{ error?: string | null; sent?: boolean }>;
 }
 
-export function ProfileSecretForm({ recipientPublicKey, fetcher }: ProfileSecretFormProps) {
+export function ProfileSecretForm({
+  recipientPublicKey,
+  recipientPublicKeys,
+  fetcher,
+}: ProfileSecretFormProps) {
   const [charCount, setCharCount] = useState(0);
   const [encrypting, setEncrypting] = useState(false);
   const [encryptError, setEncryptError] = useState<string | null>(null);
@@ -33,7 +38,14 @@ export function ProfileSecretForm({ recipientPublicKey, fetcher }: ProfileSecret
         return;
       }
 
-      if (!recipientPublicKey) {
+      const keys =
+        recipientPublicKeys && recipientPublicKeys.length > 0
+          ? recipientPublicKeys
+          : recipientPublicKey
+            ? [recipientPublicKey]
+            : [];
+
+      if (keys.length === 0) {
         setEncryptError(
           "This user hasn't set up secure delivery yet. Ask them to open their dashboard once, then try again.",
         );
@@ -45,8 +57,9 @@ export function ProfileSecretForm({ recipientPublicKey, fetcher }: ProfileSecret
       const data = new TextEncoder().encode(message);
       const { ciphertext, nonce } = await encryptBlob(data, key);
 
-      const { wrapKeyForRecipient } = await import("../lib/dm-crypto");
-      const wrapped = await wrapKeyForRecipient(rawKey, recipientPublicKey);
+      const { wrapKeyForRecipients } = await import("../lib/dm-crypto");
+      const wraps = await wrapKeyForRecipients(rawKey, keys);
+      const first = wraps[0]!;
 
       let binary = "";
       for (let i = 0; i < ciphertext.length; i++) {
@@ -58,9 +71,10 @@ export function ProfileSecretForm({ recipientPublicKey, fetcher }: ProfileSecret
       submitData.append("ciphertext", ciphertextB64);
       submitData.append("nonce", nonce);
       submitData.append("keyBase64", keyBase64);
-      submitData.append("wrappedKey", wrapped.wrappedKey);
-      submitData.append("wrapNonce", wrapped.wrapNonce);
-      submitData.append("wrapEpk", wrapped.wrapEpk);
+      submitData.append("wrappedKey", first.wrappedKey);
+      submitData.append("wrapNonce", first.wrapNonce);
+      submitData.append("wrapEpk", first.wrapEpk);
+      submitData.append("wraps", JSON.stringify(wraps));
       submitData.append("linkExpiry", String(formData.get("linkExpiry") ?? "86400"));
       submitData.append("viewDuration", String(formData.get("viewDuration") ?? "30"));
 

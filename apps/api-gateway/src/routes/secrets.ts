@@ -6,7 +6,7 @@ import type { Context } from "koa";
 import { requireAuth, type AuthPayload } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
 import { mapPostRateLimiter, blobUploadRateLimiter } from "../middleware/rate-limiter.js";
-import { createSecretDeps, secretRepo } from "../repositories/secret-repo.js";
+import { coalesceWrapsFromRow, createSecretDeps, secretRepo } from "../repositories/secret-repo.js";
 import {
   mapRepo,
   base64UrlToBytes,
@@ -216,12 +216,14 @@ secretsRouter.get("/:id", async (ctx: Context) => {
   result.match(
     (val) => {
       const row = secretRepo.findRowById(id);
+      const wraps = coalesceWrapsFromRow(row);
       ctx.status = 200;
       ctx.body = {
         ...val,
-        wrappedKey: row?.wrapped_key ?? null,
-        wrapNonce: row?.wrap_nonce ?? null,
-        wrapEpk: row?.wrap_epk ?? null,
+        wrappedKey: row?.wrapped_key ?? wraps[0]?.wrappedKey ?? null,
+        wrapNonce: row?.wrap_nonce ?? wraps[0]?.wrapNonce ?? null,
+        wrapEpk: row?.wrap_epk ?? wraps[0]?.wrapEpk ?? null,
+        wraps,
       };
 
       if (row?.sender_id) {

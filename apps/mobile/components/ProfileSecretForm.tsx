@@ -13,7 +13,7 @@ import {
   encryptSecretPayload,
   encodeCiphertextBase64,
   generateSecretKey,
-  wrapKeyForRecipient,
+  wrapKeyForRecipients,
 } from "@/lib/secret-crypto";
 
 const EXPIRY_OPTIONS = [
@@ -33,12 +33,14 @@ const VIEW_DURATION_OPTIONS = [
 interface ProfileSecretFormProps {
   recipientHandle: string;
   recipientPublicKey?: string | null;
+  recipientPublicKeys?: string[] | null;
   onSent?: () => void;
 }
 
 export function ProfileSecretForm({
   recipientHandle,
   recipientPublicKey,
+  recipientPublicKeys,
   onSent,
 }: ProfileSecretFormProps) {
   const { colors } = useTheme();
@@ -59,7 +61,13 @@ export function ProfileSecretForm({
       setError("Secret too long (max 10,000 characters)");
       return;
     }
-    if (!recipientPublicKey) {
+    const keys =
+      recipientPublicKeys && recipientPublicKeys.length > 0
+        ? recipientPublicKeys
+        : recipientPublicKey
+          ? [recipientPublicKey]
+          : [];
+    if (keys.length === 0) {
       setError(
         "This user hasn't set up secure delivery yet. Ask them to open their dashboard once, then try again.",
       );
@@ -72,7 +80,8 @@ export function ProfileSecretForm({
       const { rawKey } = generateSecretKey();
       const data = new TextEncoder().encode(text);
       const { ciphertext, nonce } = encryptSecretPayload(data, rawKey);
-      const wrapped = wrapKeyForRecipient(rawKey, recipientPublicKey);
+      const wraps = wrapKeyForRecipients(rawKey, keys);
+      const first = wraps[0]!;
 
       await secretsApi.create(
         {
@@ -84,9 +93,10 @@ export function ProfileSecretForm({
           mimeType: "text/plain",
           viewDurationSeconds: VIEW_DURATION_OPTIONS[durationIdx]!.value,
           recipientHandle,
-          wrappedKey: wrapped.wrappedKey,
-          wrapNonce: wrapped.wrapNonce,
-          wrapEpk: wrapped.wrapEpk,
+          wrappedKey: first.wrappedKey,
+          wrapNonce: first.wrapNonce,
+          wrapEpk: first.wrapEpk,
+          wraps,
         },
         { auth: true },
       );

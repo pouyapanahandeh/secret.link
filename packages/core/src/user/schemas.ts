@@ -21,6 +21,7 @@ export const PatchProfileInput = z.object({
   bio: z.string().max(300).optional(),
   avatarUrl: z.string().max(500).nullable().optional(),
   socials: z.array(ProfileSocialLinkInput).max(10).optional(),
+  acceptsSecrets: z.boolean().optional(),
 });
 
 export type PatchProfileInput = z.infer<typeof PatchProfileInput>;

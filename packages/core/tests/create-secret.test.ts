@@ -96,4 +96,42 @@ describe("createSecret", () => {
       expect(result.error.kind).toBe("storage_error");
     }
   });
+
+  it("accepts wraps[] and persists wrapsJson plus legacy first wrap", async () => {
+    let saved: any;
+    const deps = {
+      ...makeDeps(),
+      repo: { save: async (record: any) => { saved = record; } },
+    };
+    const result = await createSecret(deps)({
+      ciphertext: "encrypted-data",
+      ttlSeconds: 3600,
+      recipientHandle: "alice",
+      wraps: [
+        { wrappedKey: "w1", wrapNonce: "n1", wrapEpk: "e1" },
+        { wrappedKey: "w2", wrapNonce: "n2", wrapEpk: "e2" },
+      ],
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(saved.wrappedKey).toBe("w1");
+    expect(saved.wrapNonce).toBe("n1");
+    expect(saved.wrapEpk).toBe("e1");
+    expect(JSON.parse(saved.wrapsJson)).toHaveLength(2);
+  });
+
+  it("rejects more than 5 wraps", async () => {
+    const deps = makeDeps();
+    const wraps = Array.from({ length: 6 }, (_, i) => ({
+      wrappedKey: `w${i}`,
+      wrapNonce: `n${i}`,
+      wrapEpk: `e${i}`,
+    }));
+    const result = await createSecret(deps)({
+      ciphertext: "data",
+      ttlSeconds: 3600,
+      wraps,
+    });
+    expect(result.isErr()).toBe(true);
+  });
 });

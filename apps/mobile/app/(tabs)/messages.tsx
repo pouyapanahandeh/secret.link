@@ -36,8 +36,8 @@ export default function MessagesTab() {
   useEffect(() => {
     (async () => {
       try {
-        const { publicKey } = await getOrCreateKeyPair();
-        await dmsApi.uploadKey(publicKey);
+        const { publicKey, deviceId } = await getOrCreateKeyPair();
+        await dmsApi.uploadKey(publicKey, deviceId);
       } catch {}
     })();
   }, []);

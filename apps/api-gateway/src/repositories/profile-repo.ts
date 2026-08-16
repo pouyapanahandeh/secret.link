@@ -7,7 +7,7 @@ type Stmt = {
 };
 
 export const profileRepo = {
-  updateProfile: db.prepare(`UPDATE users SET bio = ?, avatar_url = ?, socials = ? WHERE id = ?`) as unknown as Stmt,
+  updateProfile: db.prepare(`UPDATE users SET bio = ?, avatar_url = ?, socials = ?, accepts_secrets = ? WHERE id = ?`) as unknown as Stmt,
   insertFollow: db.prepare(
     `INSERT OR IGNORE INTO follows (follower_id, following_id, created_at) VALUES (?, ?, ?)`,
   ) as unknown as Stmt,

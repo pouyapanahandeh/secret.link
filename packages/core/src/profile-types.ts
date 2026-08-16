@@ -13,6 +13,10 @@ export interface PublicProfile {
   socials?: ProfileSocialLink[];
   isPro?: boolean;
   dmPublicKey?: string | null;
+  /** All registered device public keys for multi-device inbox delivery. */
+  dmPublicKeys?: string[];
+  /** Whether the profile shows the "secret box" so others can send secrets. Defaults to true. */
+  acceptsSecrets?: boolean;
   /** Owner-only — null for visitors. */
   followersCount?: number | null;
   /** Owner-only — null for visitors. */

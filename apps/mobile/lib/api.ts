@@ -127,6 +127,7 @@ export const usersApi = {
       email?: string;
       bio?: string;
       socials?: { platform: string; url: string }[];
+      acceptsSecrets?: boolean;
       followersCount: number;
       followingCount: number;
     }>("/users/me/profile", { auth: true }),
@@ -139,7 +140,9 @@ export const usersApi = {
       avatarUrl?: string | null;
       socials?: { platform: string; url: string }[];
       isPro?: boolean;
+      acceptsSecrets?: boolean;
       dmPublicKey?: string | null;
+      dmPublicKeys?: string[];
       followersCount?: number | null;
       followingCount?: number | null;
     }>(`/users/${handle}`, { auth: true }),
@@ -147,6 +150,7 @@ export const usersApi = {
   updateProfile: (data: {
     bio?: string;
     socials?: { platform: string; url: string }[];
+    acceptsSecrets?: boolean;
   }) =>
     api("/users/me/profile", { method: "PATCH", body: data, auth: true }),
 
@@ -232,6 +236,7 @@ export const secretsApi = {
       wrappedKey?: string;
       wrapNonce?: string;
       wrapEpk?: string;
+      wraps?: Array<{ wrappedKey: string; wrapNonce: string; wrapEpk: string }>;
       blobPath?: string;
       blobSizeBytes?: number;
     },
@@ -378,11 +383,11 @@ export const dmsApi = {
   deleteMessage: (conversationId: string, messageId: string) =>
     api(`/dms/conversations/${conversationId}/messages/${messageId}`, { method: "DELETE", auth: true }),
 
-  uploadKey: (publicKey: string) =>
-    api("/dms/keys", { method: "POST", body: { publicKey }, auth: true }),
+  uploadKey: (publicKey: string, deviceId: string) =>
+    api("/dms/keys", { method: "POST", body: { publicKey, deviceId }, auth: true }),
 
   getKey: (userId: string) =>
-    api<{ publicKey: string }>(`/dms/keys/${userId}`, { auth: true }),
+    api<{ publicKey: string; publicKeys?: string[] }>(`/dms/keys/${userId}`, { auth: true }),
 
   getUnread: () => api<{ count: number }>("/dms/unread", { auth: true }),
 };

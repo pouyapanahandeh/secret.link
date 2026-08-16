@@ -29,5 +29,6 @@ export function dbUserToPublic(row: Record<string, unknown>) {
     bio: row.bio ?? null,
     avatarUrl: row.avatar_url ?? null,
     socials: row.socials ? JSON.parse(String(row.socials)) : [],
+    acceptsSecrets: row.accepts_secrets == null ? true : !!row.accepts_secrets,
   };
 }

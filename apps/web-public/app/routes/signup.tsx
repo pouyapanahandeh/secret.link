@@ -137,9 +137,11 @@ export default function Signup() {
               <input
                 type="checkbox"
                 name="ageConfirmed"
+                value="on"
                 checked={ageConfirmed}
                 onChange={(e) => setAgeConfirmed(e.target.checked)}
                 className="mt-1 rounded border-border text-accent focus:ring-accent"
+                required
               />
               <span className="text-sm text-text/80">
                 I confirm I am 16 or older

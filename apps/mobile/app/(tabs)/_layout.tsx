@@ -5,6 +5,7 @@ import Svg, { Path } from "react-native-svg";
 import { useTheme } from "@/lib/theme";
 import { dmsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { getOrCreateKeyPair } from "@/lib/crypto";
 
 // ─── Tab Icons (matching web dashboard nav) ─────────────────────────────────
 
@@ -46,6 +47,19 @@ export default function TabLayout() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Publish this device's inbox key so profile secrets can be multi-wrapped.
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const { publicKey, deviceId } = await getOrCreateKeyPair();
+        await dmsApi.uploadKey(publicKey, deviceId);
+      } catch {
+        /* non-fatal */
+      }
+    })();
+  }, [user]);
 
   // Poll unread count every 15s
   useEffect(() => {

@@ -42,6 +42,19 @@ export default function RevealSecret() {
       const fragment = window.location.hash;
       const keyParam = fragment.match(/k=([A-Za-z0-9_-]+)/)?.[1];
 
+      // Profile secrets have no key in the URL. Reveal burns after one read, so
+      // refuse to call the API until this browser has local unlock keys.
+      if (!keyParam) {
+        const { loadExistingKeyPair } = await import("../lib/dm-crypto");
+        const kp = await loadExistingKeyPair();
+        if (!kp) {
+          setError(
+            "This secret was sent to your account, but secure keys aren't set up in this browser. Open your dashboard once, then try again.",
+          );
+          return;
+        }
+      }
+
       // Fetch secret metadata from API
       const res = await fetch(`${apiBase}/v1/secrets/${secretId}`);
       if (!res.ok) {
@@ -78,21 +91,19 @@ export default function RevealSecret() {
       if (!keyParam || !nonce) {
         // Profile-addressed secret: the AES key was wrapped to our X25519 key
         // and delivered via the API (no key in the URL). Try to unwrap it.
-        if (nonce && data.wrappedKey && data.wrapNonce && data.wrapEpk) {
-          const { getStoredKeyPair, unwrapKeyFromSender } = await import("../lib/dm-crypto");
-          const kp = await getStoredKeyPair();
+        const { loadExistingKeyPair, coalesceWraps, unwrapInboxKey } = await import(
+          "../lib/dm-crypto"
+        );
+        const wraps = coalesceWraps(data);
+        if (nonce && wraps.length > 0) {
+          const kp = await loadExistingKeyPair();
           if (!kp) {
             setError("This secret was sent to your account, but secure keys aren't set up in this browser. Open your dashboard on the device where you first signed in.");
             return;
           }
-          let rawKey: Uint8Array;
-          try {
-            rawKey = await unwrapKeyFromSender(
-              { wrappedKey: data.wrappedKey, wrapNonce: data.wrapNonce, wrapEpk: data.wrapEpk },
-              kp.privateKey,
-            );
-          } catch {
-            setError("Couldn't unlock this secret with your keys. It may have been sent to a different device.");
+          const rawKey = await unwrapInboxKey(wraps);
+          if (!rawKey) {
+            setError("Couldn't unlock this secret with your keys. Open your dashboard once on each device you use, then ask the sender for a new secret.");
             return;
           }
           const { decryptBlob: decryptBlobW, keyFromRawBytes } = await import("../lib/crypto");

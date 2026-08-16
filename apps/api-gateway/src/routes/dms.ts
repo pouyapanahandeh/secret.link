@@ -5,6 +5,13 @@ import { requireAuth, type AuthPayload } from "../middleware/auth.js";
 import { dmRateLimiter } from "../middleware/rate-limiter.js";
 import db from "../db.js";
 import { createNotification } from "../notifications.js";
+import {
+  listDeviceKeys,
+  newestPublicKey,
+  publicKeysForUser,
+  revokeDeviceKey,
+  upsertDeviceKey,
+} from "../lib/dm-device-keys.js";
 
 export const dmsRouter = new Router({ prefix: "/dms" });
 
@@ -39,8 +46,6 @@ export function notifyConversation(conversationId: string, event: string, data: 
 
 // ─── Prepared statements ────────────────────────────────────────────────────
 const stmts = {
-  upsertKey: db.prepare(`INSERT INTO dm_keys (user_id, public_key) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET public_key = excluded.public_key`),
-  getKey: db.prepare(`SELECT public_key FROM dm_keys WHERE user_id = ?`),
   findConversation: db.prepare(`SELECT * FROM conversations WHERE (participant1_id = ? AND participant2_id = ?) OR (participant1_id = ? AND participant2_id = ?)`),
   insertConversation: db.prepare(`INSERT INTO conversations (id, participant1_id, participant1_handle, participant2_id, participant2_handle, created_at, last_message_at) VALUES (?, ?, ?, ?, ?, ?, ?)`),
   getConversation: db.prepare(`SELECT * FROM conversations WHERE id = ?`),
@@ -52,34 +57,80 @@ const stmts = {
   deleteExpired: db.prepare(`DELETE FROM dm_messages WHERE expires_at <= ?`),
 };
 
-// ─── Register public key (for E2E encryption) ──────────────────────────────
+// ─── Register device public key (for E2E encryption) ────────────────────────
 dmsRouter.post("/keys", requireAuth(), async (ctx: Context) => {
   const auth = ctx.state.user as AuthPayload;
   const body = ctx.request.body as Record<string, unknown>;
   const publicKey = String(body.publicKey ?? "").trim();
+  const deviceId = String(body.deviceId ?? "legacy").trim() || "legacy";
 
   if (!publicKey) {
     ctx.status = 400;
     ctx.body = { error: "Public key required" };
     return;
   }
+  if (deviceId.length > 128) {
+    ctx.status = 400;
+    ctx.body = { error: "invalid_device_id" };
+    return;
+  }
 
-  stmts.upsertKey.run(auth.userId, publicKey);
+  const result = upsertDeviceKey(auth.userId, deviceId, publicKey);
+  if (!result.ok) {
+    ctx.status = 409;
+    ctx.body = { error: "device_limit", message: "Maximum of 5 devices. Revoke one first." };
+    return;
+  }
   ctx.body = { ok: true };
 });
 
-// ─── Get a user's public key ────────────────────────────────────────────────
+// ─── List own device keys (must be before /keys/:userId) ────────────────────
+dmsRouter.get("/keys", requireAuth(), async (ctx: Context) => {
+  const auth = ctx.state.user as AuthPayload;
+  const rows = listDeviceKeys(auth.userId);
+  const publicKeys = publicKeysForUser(auth.userId);
+  ctx.body = {
+    devices: rows.map((r) => ({
+      deviceId: r.device_id,
+      publicKey: r.public_key,
+      updatedAt: r.updated_at,
+    })),
+    publicKeys,
+    publicKey: publicKeys[0] ?? null,
+  };
+});
+
+// ─── Revoke own device (path avoids clashing with /keys/:userId) ────────────
+dmsRouter.delete("/keys/device/:deviceId", requireAuth(), async (ctx: Context) => {
+  const auth = ctx.state.user as AuthPayload;
+  const deviceId = String(ctx.params["deviceId"] ?? "").trim();
+  if (!deviceId) {
+    ctx.status = 400;
+    ctx.body = { error: "invalid_device_id" };
+    return;
+  }
+  const removed = revokeDeviceKey(auth.userId, deviceId);
+  if (!removed) {
+    ctx.status = 404;
+    ctx.body = { error: "device_not_found" };
+    return;
+  }
+  ctx.body = { ok: true };
+});
+
+// ─── Get a user's public key(s) for DMs / send ──────────────────────────────
 dmsRouter.get("/keys/:userId", requireAuth(), async (ctx: Context) => {
   const userId = ctx.params["userId"]!;
-  const row = stmts.getKey.get(userId) as any;
+  const publicKeys = publicKeysForUser(userId);
+  const publicKey = newestPublicKey(userId);
 
-  if (!row) {
+  if (!publicKey) {
     ctx.status = 404;
     ctx.body = { error: "User has no encryption key" };
     return;
   }
 
-  ctx.body = { publicKey: row.public_key };
+  ctx.body = { publicKey, publicKeys };
 });
 
 // ─── Start or get conversation ──────────────────────────────────────────────

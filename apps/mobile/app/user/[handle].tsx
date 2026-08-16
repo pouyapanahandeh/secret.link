@@ -180,10 +180,11 @@ export default function UserProfileScreen() {
           }
         />
 
-        {!isOwnProfile && (
+        {!isOwnProfile && profile.acceptsSecrets !== false && (
           <ProfileSecretForm
             recipientHandle={profile.handle}
             recipientPublicKey={profile.dmPublicKey}
+            recipientPublicKeys={profile.dmPublicKeys}
           />
         )}
       </ScrollView>

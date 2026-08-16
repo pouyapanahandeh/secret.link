@@ -23,6 +23,7 @@ import {
 import { RESERVED_HANDLES } from "../lib/blog.js";
 import { userRepo, dbUserToPublic } from "../repositories/user-repo.js";
 import { profileRepo } from "../repositories/profile-repo.js";
+import { newestPublicKey, publicKeysForUser } from "../lib/dm-device-keys.js";
 
 export const usersRouter = new Router({ prefix: "/users" });
 
@@ -214,7 +215,8 @@ usersRouter.get("/:handle", async (ctx: Context) => {
 
   const followersCount = (profileRepo.countFollowers.get(row.id) as any)?.count ?? 0;
   const followingCount = (profileRepo.countFollowing.get(row.id) as any)?.count ?? 0;
-  const dmKey = userRepo.getDmKey.get(row.id) as any;
+  const dmPublicKeys = publicKeysForUser(row.id);
+  const dmPublicKey = newestPublicKey(row.id);
 
   // Follower/following counts are private — only the profile owner sees them.
   const requester = ctx.state.user as AuthPayload | undefined;
@@ -234,9 +236,11 @@ usersRouter.get("/:handle", async (ctx: Context) => {
     bio: row.bio ?? null,
     avatarUrl: row.avatar_url ?? null,
     socials: row.socials ? JSON.parse(row.socials) : [],
+    acceptsSecrets: row.accepts_secrets == null ? true : !!row.accepts_secrets,
     followersCount: isOwner ? followersCount : null,
     followingCount: isOwner ? followingCount : null,
-    dmPublicKey: dmKey?.public_key ?? null,
+    dmPublicKey,
+    dmPublicKeys,
   };
 });
 
@@ -304,6 +308,7 @@ usersRouter.patch("/me/profile", requireAuth(), validateBody(PatchProfileInput),
   let bio = row.bio;
   let avatarUrl = row.avatar_url;
   let socials = row.socials;
+  let acceptsSecrets = row.accepts_secrets == null ? 1 : row.accepts_secrets ? 1 : 0;
 
   if (typeof body.bio === "string") bio = body.bio;
   if (body.avatarUrl === null) avatarUrl = null;
@@ -311,11 +316,19 @@ usersRouter.patch("/me/profile", requireAuth(), validateBody(PatchProfileInput),
   if (Array.isArray(body.socials)) {
     socials = JSON.stringify(body.socials);
   }
+  if (typeof body.acceptsSecrets === "boolean") acceptsSecrets = body.acceptsSecrets ? 1 : 0;
 
-  profileRepo.updateProfile.run(bio, avatarUrl, socials, userId);
+  profileRepo.updateProfile.run(bio, avatarUrl, socials, acceptsSecrets, userId);
 
   ctx.status = 200;
-  ctx.body = { id: row.id, handle: row.handle, bio, avatarUrl, socials: JSON.parse(socials || "[]") };
+  ctx.body = {
+    id: row.id,
+    handle: row.handle,
+    bio,
+    avatarUrl,
+    socials: JSON.parse(socials || "[]"),
+    acceptsSecrets: !!acceptsSecrets,
+  };
 });
 
 // ─── Follow system ──────────────────────────────────────────────────────────

@@ -1,25 +1,44 @@
 import { z } from "zod";
 import { ok, err } from "neverthrow";
 import type { Result } from "neverthrow";
-import type { SecretRecord, CreateSecretError } from "./types.js";
+import type { SecretRecord, CreateSecretError, SecretWrapFields } from "./types.js";
 
-export const CreateSecretInput = z.object({
-  ciphertext: z.string().min(1),
-  contentType: z.enum(["text", "image", "video", "file"]).default("text"),
-  blobPath: z.string().optional(),
-  blobSizeBytes: z.number().int().positive().optional(),
-  mimeType: z.string().optional(),
-  nonce: z.string().nullish().transform(v => v ?? undefined),
-  viewDurationSeconds: z.number().int().min(5).max(300).optional(),
-  ttlSeconds: z.number().int().min(5).max(60 * 60 * 24 * 30),
-  maxViews: z.number().int().min(1).max(100).default(1),
-  workspaceId: z.string().uuid().optional(),
-  senderId: z.string().min(1).optional(),
-  recipientHandle: z.string().min(1).optional(),
-  wrappedKey: z.string().min(1).optional(),
-  wrapNonce: z.string().min(1).optional(),
-  wrapEpk: z.string().min(1).optional(),
+const wrapSchema = z.object({
+  wrappedKey: z.string().min(1),
+  wrapNonce: z.string().min(1),
+  wrapEpk: z.string().min(1),
 });
+
+export const CreateSecretInput = z
+  .object({
+    ciphertext: z.string().min(1),
+    contentType: z.enum(["text", "image", "video", "file"]).default("text"),
+    blobPath: z.string().optional(),
+    blobSizeBytes: z.number().int().positive().optional(),
+    mimeType: z.string().optional(),
+    nonce: z.string().nullish().transform((v) => v ?? undefined),
+    viewDurationSeconds: z.number().int().min(5).max(300).optional(),
+    ttlSeconds: z.number().int().min(5).max(60 * 60 * 24 * 30),
+    maxViews: z.number().int().min(1).max(100).default(1),
+    workspaceId: z.string().uuid().optional(),
+    senderId: z.string().min(1).optional(),
+    recipientHandle: z.string().min(1).optional(),
+    wrappedKey: z.string().min(1).optional(),
+    wrapNonce: z.string().min(1).optional(),
+    wrapEpk: z.string().min(1).optional(),
+    wraps: z.array(wrapSchema).min(1).max(5).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasLegacy = !!(data.wrappedKey && data.wrapNonce && data.wrapEpk);
+    const hasWraps = !!(data.wraps && data.wraps.length > 0);
+    if (!hasLegacy && !hasWraps && data.recipientHandle) {
+      // Profile secrets should include wraps, but allow create without for
+      // non-profile / legacy link secrets (key in URL fragment).
+    }
+    if (data.wraps && data.wraps.length > 5) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "too_many_wraps" });
+    }
+  });
 
 export type CreateSecretInput = z.infer<typeof CreateSecretInput>;
 
@@ -29,6 +48,33 @@ export type CreateSecretDeps = {
   readonly clock: { now: () => Date };
   readonly id: () => string;
 };
+
+/** Normalize wraps[] or legacy triple into a wrap list + legacy first wrap. */
+export function normalizeSecretWraps(input: {
+  wraps?: SecretWrapFields[];
+  wrappedKey?: string;
+  wrapNonce?: string;
+  wrapEpk?: string;
+}): { wraps: SecretWrapFields[]; first?: SecretWrapFields; wrapsJson?: string } {
+  let wraps: SecretWrapFields[] = [];
+  if (input.wraps && input.wraps.length > 0) {
+    wraps = input.wraps.slice(0, 5);
+  } else if (input.wrappedKey && input.wrapNonce && input.wrapEpk) {
+    wraps = [
+      {
+        wrappedKey: input.wrappedKey,
+        wrapNonce: input.wrapNonce,
+        wrapEpk: input.wrapEpk,
+      },
+    ];
+  }
+  const first = wraps[0];
+  return {
+    wraps,
+    first,
+    wrapsJson: wraps.length > 0 ? JSON.stringify(wraps) : undefined,
+  };
+}
 
 export const createSecret =
   (deps: CreateSecretDeps) =>
@@ -47,6 +93,8 @@ export const createSecret =
       ? new Date("2099-12-31T23:59:59.000Z")
       : new Date(now.getTime() + parsed.data.ttlSeconds * 1000);
 
+    const { first, wrapsJson } = normalizeSecretWraps(parsed.data);
+
     const record: SecretRecord = {
       id,
       ciphertext: parsed.data.ciphertext,
@@ -64,9 +112,10 @@ export const createSecret =
       workspaceId: parsed.data.workspaceId,
       senderId: parsed.data.senderId,
       recipientHandle: parsed.data.recipientHandle,
-      wrappedKey: parsed.data.wrappedKey,
-      wrapNonce: parsed.data.wrapNonce,
-      wrapEpk: parsed.data.wrapEpk,
+      wrappedKey: first?.wrappedKey,
+      wrapNonce: first?.wrapNonce,
+      wrapEpk: first?.wrapEpk,
+      wrapsJson,
       burned: false,
     };
 

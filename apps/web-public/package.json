@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint app/",
     "test:e2e": "playwright test",
+    "test:agent": "playwright test e2e/platform-agent.spec.ts",
     "clean": "rm -rf build"
   },
   "dependencies": {

@@ -19,11 +19,19 @@ export type SecretRecord = {
   readonly senderId?: string;
   readonly recipientHandle?: string;
   // E2E key delivery (profile-addressed secrets): the AES key wrapped to the
-  // recipient's X25519 public key. The server stores these as opaque blobs.
+  // recipient's X25519 public key(s). The server stores these as opaque blobs.
   readonly wrappedKey?: string;
   readonly wrapNonce?: string;
   readonly wrapEpk?: string;
+  /** JSON-serialized WrappedKey[] for multi-device delivery (also mirrored in legacy columns). */
+  readonly wrapsJson?: string;
   readonly burned: boolean;
+};
+
+export type SecretWrapFields = {
+  readonly wrappedKey: string;
+  readonly wrapNonce: string;
+  readonly wrapEpk: string;
 };
 
 export type CreateSecretError =

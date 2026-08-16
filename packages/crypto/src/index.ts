@@ -18,6 +18,8 @@ export type { EncryptedBlob } from "./binary.js";
 export {
   wrapKeyForRecipient,
   unwrapKeyFromSender,
+  unwrapKeyFromAnyWrap,
+  wrapKeyForRecipients,
   wrapKeyForRecipientWithKeys,
   x25519,
   type WrappedKey,

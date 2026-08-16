@@ -4,8 +4,13 @@ import { markStoryViewed } from "../lib/story-views";
 import type { MapSecret } from "../lib/map-types";
 
 interface StoryViewerProps {
-  handle: string;
+  /** Load stories for this handle (skipped when initialStories is provided). */
+  handle?: string;
   avatarUrl?: string | null;
+  /** Preloaded stories (e.g. place group). When set, by-handle fetch is skipped. */
+  initialStories?: MapSecret[];
+  /** Header title override (e.g. place name). Defaults to @handle. */
+  title?: string;
   onClose: () => void;
   /** Called when a story becomes visible (so its ring can be dimmed). */
   onViewed?: (storyId: string) => void;
@@ -20,14 +25,23 @@ interface RevealedStory extends MapSecret {
 }
 
 /**
- * Full-screen, Instagram-style viewer for a user's active map "stories".
+ * Full-screen, Instagram-style viewer for map stories.
  * Auto-advances through each story with a progress bar; tap left/right to go
  * back/forward, press-and-hold anywhere to pause. Media is shown behind a
  * skeleton and the progress timer only starts once it has loaded.
  */
-export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewerProps) {
-  const cleanHandle = handle.replace(/^@/, "");
-  const [stories, setStories] = useState<MapSecret[] | null>(null);
+export function StoryViewer({
+  handle,
+  avatarUrl,
+  initialStories,
+  title,
+  onClose,
+  onViewed,
+}: StoryViewerProps) {
+  const cleanHandle = (handle ?? "").replace(/^@/, "");
+  const [stories, setStories] = useState<MapSecret[] | null>(
+    initialStories ? initialStories : null,
+  );
   const [revealedCache, setRevealedCache] = useState<Record<string, RevealedStory>>({});
   const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -40,8 +54,16 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
   const holdTimerRef = useRef<number | null>(null);
   const holdingRef = useRef(false);
 
-  // Load this user's active stories (metadata only).
+  // Load this user's active stories (metadata only) unless preloaded.
   useEffect(() => {
+    if (initialStories) {
+      setStories(initialStories);
+      return;
+    }
+    if (!cleanHandle) {
+      setStories([]);
+      return;
+    }
     let cancelled = false;
     fetch(`${getApiBase()}/v1/secrets/map/by-handle/${encodeURIComponent(cleanHandle)}`)
       .then((r) => (r.ok ? r.json() : []))
@@ -54,7 +76,7 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
     return () => {
       cancelled = true;
     };
-  }, [cleanHandle]);
+  }, [cleanHandle, initialStories]);
 
   // Reveal the current story's content when it becomes visible.
   useEffect(() => {
@@ -217,6 +239,10 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
     }
   }
 
+  const headerLabel = title ?? (cleanHandle ? `@${cleanHandle}` : "Stories");
+  const headerInitial = (title ?? cleanHandle)[0]?.toUpperCase() ?? "?";
+  const storyHandle = currentMeta?.handle?.replace(/^@/, "") ?? cleanHandle;
+
   if (stories === null) {
     return (
       <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center">
@@ -228,7 +254,9 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
   if (stories.length === 0) {
     return (
       <div className="fixed inset-0 z-[60] bg-black flex flex-col items-center justify-center gap-4">
-        <p className="text-white/70 text-sm">@{cleanHandle} has no active stories.</p>
+        <p className="text-white/70 text-sm">
+          {cleanHandle ? `@${cleanHandle} has no active stories.` : "No stories here."}
+        </p>
         <button onClick={onClose} className="text-white text-sm underline">
           Close
         </button>
@@ -261,14 +289,16 @@ export function StoryViewer({ handle, avatarUrl, onClose, onViewed }: StoryViewe
             {avatarUrl ? (
               <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-xs font-bold text-white">{cleanHandle[0]?.toUpperCase()}</span>
+              <span className="text-xs font-bold text-white">{headerInitial}</span>
             )}
           </div>
           <div className="min-w-0">
-            <span className="text-white text-sm font-semibold">@{cleanHandle}</span>
-            {(story.locationName || story.cityName) && (
+            <span className="text-white text-sm font-semibold">{headerLabel}</span>
+            {title && storyHandle ? (
+              <p className="text-white/70 text-[11px] truncate max-w-[65vw]">@{storyHandle}</p>
+            ) : (story.locationName || story.cityName) ? (
               <p className="text-white/70 text-[11px] truncate max-w-[65vw]">📍 {story.locationName || story.cityName}</p>
-            )}
+            ) : null}
           </div>
         </div>
         <button onClick={onClose} aria-label="Close" className="text-white/80 hover:text-white text-2xl leading-none px-2">

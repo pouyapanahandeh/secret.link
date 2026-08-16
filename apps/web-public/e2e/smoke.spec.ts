@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { uniqueHandle, signupNewAccount } from "./helpers/account";
 
 test.describe("public smoke", () => {
   test("landing, robots, and API health", async ({ page, request }) => {
@@ -16,12 +17,9 @@ test.describe("public smoke", () => {
     expect(robotsText).toContain("Sitemap");
   });
 
-  test("signup redirects to onboarding", async ({ page }) => {
-    const handle = `pw${Date.now().toString(36).slice(-8)}`;
-    await page.goto("/signup");
-    await page.fill("#handle", handle);
-    await page.getByRole("button", { name: /Claim @handle/i }).click();
-    await page.waitForURL(/\/onboarding/);
-    await expect(page.getByText(/@handle/i)).toBeVisible();
+  test("signup with 16+ redirects to onboarding", async ({ page }) => {
+    const handle = uniqueHandle("pw");
+    await signupNewAccount(page, handle);
+    await expect(page.getByText(new RegExp(`@${handle}`, "i"))).toBeVisible();
   });
 });

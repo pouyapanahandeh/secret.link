@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import {
   View,
@@ -18,10 +18,30 @@ import Constants from "expo-constants";
 
 export default function SettingsScreen() {
   const { colors, isDark, toggle } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const router = useRouter();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [acceptsSecrets, setAcceptsSecrets] = useState(user?.acceptsSecrets !== false);
+  const [savingSecrets, setSavingSecrets] = useState(false);
+
+  useEffect(() => {
+    setAcceptsSecrets(user?.acceptsSecrets !== false);
+  }, [user?.acceptsSecrets]);
+
+  async function handleToggleSecrets(value: boolean) {
+    setAcceptsSecrets(value);
+    setSavingSecrets(true);
+    try {
+      await usersApi.updateProfile({ acceptsSecrets: value });
+      await refreshUser();
+    } catch {
+      setAcceptsSecrets(!value);
+      Alert.alert("Error", "Failed to update setting. Try again later.");
+    } finally {
+      setSavingSecrets(false);
+    }
+  }
 
   const appVersion = Constants.expoConfig?.version ?? "1.0.0";
 
@@ -209,6 +229,21 @@ export default function SettingsScreen() {
           label="Notification Settings"
           value="→"
           onPress={() => Linking.openSettings()}
+        />
+
+        {/* Privacy */}
+        <SectionHeader title="Privacy" />
+        <SettingsRow
+          label="Receive secrets"
+          right={
+            <Switch
+              value={acceptsSecrets}
+              onValueChange={handleToggleSecrets}
+              disabled={savingSecrets}
+              trackColor={{ false: colors.border, true: colors.accent }}
+              thumbColor="#fff"
+            />
+          }
         />
 
         {/* Account */}

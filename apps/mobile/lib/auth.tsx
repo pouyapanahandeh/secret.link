@@ -22,6 +22,7 @@ interface User {
   email?: string;
   bio?: string;
   socials?: { platform: string; url: string }[];
+  acceptsSecrets?: boolean;
   followersCount: number;
   followingCount: number;
 }

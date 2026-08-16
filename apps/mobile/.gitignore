@@ -7,3 +7,17 @@ expo-env.d.ts
 # Native directories (managed by Expo)
 android/
 ios/
+
+# Local Play Console / signing material — never commit
+*.keystore
+*.jks
+google-service-account*.json
+play-service-account*.json
+pc-api-*.json
+credentials/*.json
+.env
+.env.*
+
+# Built store artifacts
+store/releases/
+store/play-listing-assets.zip

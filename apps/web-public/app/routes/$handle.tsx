@@ -6,7 +6,6 @@ import {
   useFetcher,
   Link,
   useSearchParams,
-  useRevalidator,
   type ClientLoaderFunctionArgs,
 } from "@remix-run/react";
 import { useState, useEffect } from "react";
@@ -16,6 +15,7 @@ import { ProfileSecretForm } from "../components/ProfileSecretForm";
 import { ProfileEditForm } from "../components/ProfileEditForm";
 import { ProfileShareModal } from "../components/ProfileShareModal";
 import { ProfileStatsModal } from "../components/ProfileStatsModal";
+import { ProfileSettingsModal } from "../components/ProfileSettingsModal";
 import { getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 import { getApiBase } from "../lib/api.client";
@@ -132,6 +132,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return json({ error: null, intent: "save-profile" });
   }
 
+  if (intent === "save-settings") {
+    const token = await getToken(request);
+    if (!token) {
+      return json({ error: "Unauthorized", intent: "save-settings" }, { status: 401 });
+    }
+    const acceptsSecrets = form.get("acceptsSecrets") === "true";
+    const res = await fetch(`${API_URL}/v1/users/me/profile`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ acceptsSecrets }),
+    });
+    if (!res.ok) {
+      return json({ error: "Failed to save settings", intent: "save-settings" });
+    }
+    return json({ error: null, intent: "save-settings" });
+  }
+
   const ciphertext = String(form.get("ciphertext") ?? "").trim();
   const nonce = String(form.get("nonce") ?? "").trim();
   const handle = (params["handle"] ?? "").replace(/^@/, "");
@@ -141,12 +158,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const wrappedKey = String(form.get("wrappedKey") ?? "").trim();
   const wrapNonce = String(form.get("wrapNonce") ?? "").trim();
   const wrapEpk = String(form.get("wrapEpk") ?? "").trim();
+  let wraps: Array<{ wrappedKey: string; wrapNonce: string; wrapEpk: string }> | undefined;
+  try {
+    const rawWraps = String(form.get("wraps") ?? "").trim();
+    if (rawWraps) {
+      const parsed = JSON.parse(rawWraps);
+      if (Array.isArray(parsed) && parsed.length > 0) wraps = parsed;
+    }
+  } catch {
+    wraps = undefined;
+  }
 
   if (!ciphertext || !nonce || !keyBase64) {
     return json({ error: "Encryption failed. Please try again.", sent: false });
   }
 
-  if (!wrappedKey || !wrapNonce || !wrapEpk) {
+  if ((!wrappedKey || !wrapNonce || !wrapEpk) && (!wraps || wraps.length === 0)) {
     return json({
       error: "This user hasn't set up secure delivery yet. Ask them to open their dashboard once, then try again.",
       sent: false,
@@ -169,9 +196,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       mimeType: "text/plain",
       viewDurationSeconds: viewDuration,
       recipientHandle: handle,
-      wrappedKey,
-      wrapNonce,
-      wrapEpk,
+      wrappedKey: wrappedKey || wraps?.[0]?.wrappedKey,
+      wrapNonce: wrapNonce || wraps?.[0]?.wrapNonce,
+      wrapEpk: wrapEpk || wraps?.[0]?.wrapEpk,
+      wraps,
     }),
   });
 
@@ -198,13 +226,13 @@ export default function ProfilePage() {
   const actionData = useActionData<typeof action>();
   const secretFetcher = useFetcher<typeof action>();
   const profileFetcher = useFetcher<{ error?: string | null; intent?: string }>();
-  const revalidator = useRevalidator();
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersCount, setFollowersCount] = useState(profile?.followersCount ?? 0);
   const [followModal, setFollowModal] = useState<FollowListTab | null>(null);
   const [sheetUser, setSheetUser] = useState<UserLite | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [socials, setSocials] = useState<{ platform: string; url: string }[]>(profile?.socials ?? []);
@@ -255,6 +283,10 @@ export default function ProfilePage() {
     setAvatarUrl(profile?.avatarUrl ?? null);
   }, [profile?.bio, profile?.socials, profile?.avatarUrl]);
 
+  // Remix automatically revalidates loaders after a fetcher POST, so we only
+  // need to reconcile local UI state here — never trigger another revalidation
+  // (doing so caused a revalidation storm that briefly flipped the page to a
+  // logged-out/visitor view until a manual reload settled it).
   useEffect(() => {
     if (
       profileFetcher.state === "idle" &&
@@ -263,9 +295,19 @@ export default function ProfilePage() {
       profileFetcher.data.intent === "save-profile"
     ) {
       setEditingProfile(false);
-      revalidator.revalidate();
     }
-  }, [profileFetcher.state, profileFetcher.data, revalidator]);
+  }, [profileFetcher.state, profileFetcher.data]);
+
+  useEffect(() => {
+    if (
+      profileFetcher.state === "idle" &&
+      profileFetcher.data &&
+      !profileFetcher.data.error &&
+      profileFetcher.data.intent === "save-settings"
+    ) {
+      setSettingsOpen(false);
+    }
+  }, [profileFetcher.state, profileFetcher.data]);
 
   function startEditProfile() {
     setBio(profile?.bio ?? "");
@@ -288,6 +330,16 @@ export default function ProfilePage() {
         bio,
         socials: JSON.stringify(socials.filter((s) => s.url.trim())),
         avatarUrl: avatarUrl ?? "",
+      },
+      { method: "post" },
+    );
+  }
+
+  function saveSettings(nextAcceptsSecrets: boolean) {
+    profileFetcher.submit(
+      {
+        intent: "save-settings",
+        acceptsSecrets: String(nextAcceptsSecrets),
       },
       { method: "post" },
     );
@@ -464,6 +516,7 @@ export default function ProfilePage() {
             onShare={isOwnProfile ? () => setShareOpen(true) : undefined}
             onStats={isOwnProfile ? () => setStatsOpen(true) : undefined}
             onEdit={isOwnProfile && !editingProfile ? startEditProfile : undefined}
+            onSettings={isOwnProfile ? () => setSettingsOpen(true) : undefined}
           />
 
           {isOwnProfile && editingProfile && (
@@ -481,8 +534,12 @@ export default function ProfilePage() {
             />
           )}
 
-          {!isOwnProfile && (
-            <ProfileSecretForm recipientPublicKey={profile?.dmPublicKey} fetcher={secretFetcher} />
+          {!isOwnProfile && profile?.acceptsSecrets !== false && (
+            <ProfileSecretForm
+              recipientPublicKey={profile?.dmPublicKey}
+              recipientPublicKeys={profile?.dmPublicKeys}
+              fetcher={secretFetcher}
+            />
           )}
 
           {!isLoggedIn && (
@@ -531,6 +588,15 @@ export default function ProfilePage() {
       )}
       {isOwnProfile && token && statsOpen && (
         <ProfileStatsModal token={token} onClose={() => setStatsOpen(false)} />
+      )}
+      {isOwnProfile && settingsOpen && (
+        <ProfileSettingsModal
+          handle={handle}
+          acceptsSecrets={profile?.acceptsSecrets !== false}
+          saving={profileSaving}
+          onSave={saveSettings}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </main>
   );

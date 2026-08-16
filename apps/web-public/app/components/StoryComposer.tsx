@@ -295,16 +295,50 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
                 ))}
               </div>
 
-              <div className="flex gap-2">
-                <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFileAndPreview(f); }} />
-                <button type="button" onClick={() => fileRef.current?.click()} className="text-xs rounded-full border border-border px-3 py-1.5 text-text-muted hover:border-accent/50">Add photo/video</button>
-                <button type="button" onClick={() => setShowCamera(true)} className="text-xs rounded-full border border-border px-3 py-1.5 text-text-muted hover:border-accent/50">Camera</button>
-              </div>
+              <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFileAndPreview(f); }} />
 
-              {preview && file && (
-                <div className="relative rounded-xl overflow-hidden border border-border">
-                  {file.type.startsWith("image/") ? <img src={preview} alt="" className="w-full max-h-40 object-cover" /> : <video src={preview} className="w-full max-h-40 object-cover" controls />}
-                  <button onClick={clearFile} className="absolute top-2 right-2 w-7 h-7 bg-black/60 text-white rounded-full">×</button>
+              {preview && file ? (
+                <div className="rounded-2xl border border-border bg-surface p-3">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xl">
+                      {file.type.startsWith("image/") ? "🖼️" : file.type.startsWith("video/") ? "🎬" : "📄"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{file.name}</p>
+                      <p className="text-xs text-text-muted">Ready to attach</p>
+                    </div>
+                    <button type="button" onClick={clearFile} className="text-text-muted hover:text-text" aria-label="Remove media">
+                      ✕
+                    </button>
+                  </div>
+                  <div className="relative rounded-xl overflow-hidden border border-border">
+                    {file.type.startsWith("image/") ? (
+                      <img src={preview} alt="" className="w-full max-h-40 object-cover" />
+                    ) : (
+                      <video src={preview} className="w-full max-h-40 object-cover" controls />
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="rounded-2xl border-2 border-dashed border-border hover:border-accent/50 p-4 text-center transition-colors"
+                  >
+                    <span className="text-2xl block mb-1.5">📎</span>
+                    <span className="text-xs font-medium block">Choose a file</span>
+                    <span className="text-[10px] text-text-muted block mt-0.5">Photo or video</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCamera(true)}
+                    className="rounded-2xl border-2 border-dashed border-border hover:border-accent/50 p-4 text-center transition-colors"
+                  >
+                    <span className="text-2xl block mb-1.5">📷</span>
+                    <span className="text-xs font-medium block">Open Camera</span>
+                    <span className="text-[10px] text-text-muted block mt-0.5">Capture or record</span>
+                  </button>
                 </div>
               )}
 

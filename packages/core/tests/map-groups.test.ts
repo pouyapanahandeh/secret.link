@@ -51,29 +51,29 @@ describe("placeKeyForSecret", () => {
 });
 
 describe("groupStoriesByPlace", () => {
-  it("keeps 5 stories in same city ungrouped", () => {
-    const secrets = Array.from({ length: 5 }, (_, i) =>
+  it("keeps 3 stories in same city ungrouped", () => {
+    const secrets = Array.from({ length: 3 }, (_, i) =>
       makeSecret({ id: String(i), lat: 52 + i * 0.01, lng: 13, cityName: "Berlin" }),
     );
     const { groupedPlaces, ungroupedSecrets } = groupStoriesByPlace(secrets);
     expect(groupedPlaces).toHaveLength(0);
-    expect(ungroupedSecrets).toHaveLength(5);
+    expect(ungroupedSecrets).toHaveLength(3);
   });
 
-  it("groups 6 stories in same city", () => {
-    const secrets = Array.from({ length: 6 }, (_, i) =>
+  it("groups 4 stories in same city", () => {
+    const secrets = Array.from({ length: 4 }, (_, i) =>
       makeSecret({ id: String(i), lat: 52 + i * 0.01, lng: 13, cityName: "Berlin" }),
     );
     const { groupedPlaces, ungroupedSecrets } = groupStoriesByPlace(secrets);
     expect(groupedPlaces).toHaveLength(1);
     expect(groupedPlaces[0]!.label).toBe("Berlin");
-    expect(groupedPlaces[0]!.count).toBe(6);
+    expect(groupedPlaces[0]!.count).toBe(4);
     expect(groupedPlaces[0]!.isGrouped).toBe(true);
     expect(ungroupedSecrets).toHaveLength(0);
   });
 
   it("groups by country when no city", () => {
-    const secrets = Array.from({ length: 6 }, (_, i) =>
+    const secrets = Array.from({ length: 4 }, (_, i) =>
       makeSecret({
         id: String(i),
         lat: 48 + i * 0.1,

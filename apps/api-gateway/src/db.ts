@@ -281,6 +281,11 @@ migrate("users.role.v1", () => {
   addColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
 });
 
+// Whether the user's public profile shows the "secret box" (accepts secrets).
+migrate("users.accepts_secrets.v1", () => {
+  addColumn("users", "accepts_secrets", "INTEGER NOT NULL DEFAULT 1");
+});
+
 // secret_reports table — MUST be created before the column migration below so
 // a fresh database bootstraps cleanly.
 db.exec(`
@@ -558,6 +563,38 @@ migrate("perf-indexes.v1", () => {
     CREATE INDEX IF NOT EXISTS idx_map_secrets_expires
       ON map_secrets(expires_at);
   `);
+});
+
+// Multi-device X25519 public keys for inbox secret delivery.
+migrate("dm_device_keys.v1", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dm_device_keys (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      device_id TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, device_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_dm_device_keys_user_updated
+      ON dm_device_keys(user_id, updated_at DESC);
+  `);
+  const now = new Date().toISOString();
+  const existing = db.prepare(`SELECT user_id, public_key FROM dm_keys`).all() as Array<{
+    user_id: string;
+    public_key: string;
+  }>;
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO dm_device_keys (user_id, device_id, public_key, created_at, updated_at)
+     VALUES (?, 'legacy', ?, ?, ?)`,
+  );
+  for (const row of existing) {
+    insert.run(row.user_id, row.public_key, now, now);
+  }
+});
+
+migrate("secrets.wraps_json.v1", () => {
+  addColumn("secrets", "wraps_json", "TEXT");
 });
 
 export { db };

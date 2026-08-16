@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "life.secretlink.app",
+      "sha256_cert_fingerprints": [
+        "43:73:2F:16:04:79:95:85:8D:04:D7:8D:72:55:85:B9:1C:B1:27:CC:57:C0:44:5F:38:79:CB:48:3B:ED:FE:0E"
+      ]
+    }
+  }
+]

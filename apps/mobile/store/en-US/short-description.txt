@@ -1,0 +1,1 @@
+Encrypted secrets & map drops that disappear. Private by design.

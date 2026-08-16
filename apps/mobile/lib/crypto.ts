@@ -13,20 +13,35 @@ import { encodeBase64, decodeBase64 } from "tweetnacl-util";
 
 const KEY_PRIVATE = "sl_dm_private_key";
 const KEY_PUBLIC = "sl_dm_public_key";
+const KEY_DEVICE_ID = "sl_dm_device_id";
+
+async function getOrCreateDeviceId(): Promise<string> {
+  const existing = await SecureStore.getItemAsync(KEY_DEVICE_ID);
+  if (existing) return existing;
+  const deviceId =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `mob_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  await SecureStore.setItemAsync(KEY_DEVICE_ID, deviceId);
+  return deviceId;
+}
 
 // ─── Key Management ─────────────────────────────────────────────────────────
 
 export async function getOrCreateKeyPair(): Promise<{
   publicKey: string;
   privateKey: Uint8Array;
+  deviceId: string;
 }> {
   const existingPriv = await SecureStore.getItemAsync(KEY_PRIVATE);
   const existingPub = await SecureStore.getItemAsync(KEY_PUBLIC);
+  const deviceId = await getOrCreateDeviceId();
 
   if (existingPriv && existingPub) {
     return {
       publicKey: existingPub,
       privateKey: decodeBase64(existingPriv),
+      deviceId,
     };
   }
 
@@ -38,7 +53,7 @@ export async function getOrCreateKeyPair(): Promise<{
   await SecureStore.setItemAsync(KEY_PRIVATE, privB64);
   await SecureStore.setItemAsync(KEY_PUBLIC, pubB64);
 
-  return { publicKey: pubB64, privateKey: keyPair.secretKey };
+  return { publicKey: pubB64, privateKey: keyPair.secretKey, deviceId };
 }
 
 export async function getPublicKey(): Promise<string | null> {
