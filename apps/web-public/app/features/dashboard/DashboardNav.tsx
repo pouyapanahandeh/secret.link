@@ -55,11 +55,11 @@ const NAV_ITEMS: { id: DashboardTab | "messages"; label: string }[] = [
 
 export function DashboardSidebar({ activeTab, inboxCount, token, userHandle, userAvatarUrl, onNavClick }: DashboardNavProps) {
   return (
-    <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border/50 bg-surface shrink-0">
-      <div className="px-5 py-5 border-b border-border/50">
+    <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border bg-surface shrink-0">
+      <div className="px-5 py-5 border-b border-border">
         <Link to="/dashboard" className="flex items-center gap-2">
-          <img src="/secretlink.png" alt="" className="w-7 h-7" />
-          <span className="text-lg font-bold tracking-tight">
+          <img src="/secretlink.png" alt="" className="w-8 h-8" />
+          <span className="text-sm font-extrabold tracking-tight">
             secretlink<span className="text-accent">.</span>life
           </span>
         </Link>
@@ -70,27 +70,29 @@ export function DashboardSidebar({ activeTab, inboxCount, token, userHandle, use
           <button
             key={item.id}
             onClick={() => onNavClick(item.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-semibold transition-colors ${
               activeTab === item.id
-                ? "bg-accent/10 text-accent"
+                ? "bg-accent text-black"
                 : "text-text-muted hover:text-text hover:bg-surface-raised"
             }`}
           >
             {navIcon(item.id, userHandle, userAvatarUrl)}
             <span>{item.label}</span>
             {item.id === "inbox" && inboxCount > 0 && (
-              <span className="ml-auto text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">{inboxCount}</span>
+              <span className={`ml-auto text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                activeTab === item.id ? "bg-black text-accent" : "bg-accent text-black"
+              }`}>{inboxCount}</span>
             )}
           </button>
         ))}
       </nav>
 
-      <div className="px-3 py-4 border-t border-border/50 space-y-2">
+      <div className="px-3 py-4 border-t border-border space-y-2">
         <div className="flex items-center justify-between px-3">
           <NotificationBell token={token} onNavigate={onNavClick} />
           <ThemeToggle />
           <form method="post" action="/logout">
-            <button type="submit" className="text-xs text-text-muted hover:text-text">
+            <button type="submit" className="font-mono text-[10px] tracking-[0.14em] uppercase text-text-muted hover:text-accent">
               Log out
             </button>
           </form>
@@ -107,9 +109,12 @@ export function DashboardMobileHeader({
   onNavClick,
 }: Pick<DashboardNavProps, "token" | "userHandle" | "userAvatarUrl" | "onNavClick">) {
   return (
-    <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
+    <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
       <Link to="/dashboard" className="flex items-center gap-2">
-        <img src="/secretlink.png" alt="" className="w-6 h-6" />
+        <img src="/secretlink.png" alt="" className="w-7 h-7" />
+        <span className="text-sm font-extrabold tracking-tight">
+          secretlink<span className="text-accent">.</span>life
+        </span>
       </Link>
       <div className="flex items-center gap-2">
         <button
@@ -123,7 +128,7 @@ export function DashboardMobileHeader({
         <NotificationBell token={token} onNavigate={onNavClick} />
         <ThemeToggle />
         <form method="post" action="/logout">
-          <button type="submit" className="text-xs text-text-muted hover:text-text">
+          <button type="submit" className="font-mono text-[10px] tracking-[0.14em] uppercase text-text-muted hover:text-accent">
             Log out
           </button>
         </form>
@@ -134,18 +139,18 @@ export function DashboardMobileHeader({
 
 export function DashboardBottomNav({ activeTab, userHandle, userAvatarUrl, onNavClick }: Pick<DashboardNavProps, "activeTab" | "userHandle" | "userAvatarUrl" | "onNavClick">) {
   return (
-    <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border/50 z-30">
+    <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border z-30 pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.id}
             onClick={() => onNavClick(item.id)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all ${
+            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-full transition-colors ${
               activeTab === item.id ? "text-accent" : "text-text-muted"
             }`}
           >
             {navIcon(item.id, userHandle, userAvatarUrl)}
-            <span className="text-[10px] font-medium">{item.label}</span>
+            <span className="text-[10px] font-extrabold tracking-wide uppercase">{item.label}</span>
           </button>
         ))}
       </div>

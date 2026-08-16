@@ -28,11 +28,11 @@ function DashboardShell({
 
   return (
     <main className="h-screen flex flex-col sm:flex-row bg-surface">
-      <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border/50 bg-surface shrink-0">
-        <div className="px-5 py-5 border-b border-border/50">
+      <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border bg-surface shrink-0">
+        <div className="px-5 py-5 border-b border-border">
           <div className="flex items-center gap-2">
-            <Pulse className="w-7 h-7 rounded-lg" />
-            <Pulse className="h-5 w-36" />
+            <Pulse className="w-8 h-8 rounded-lg" />
+            <Pulse className="h-4 w-32" />
           </div>
         </div>
 
@@ -40,8 +40,8 @@ function DashboardShell({
           {navItems.map((item) => (
             <div
               key={item.id}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl ${
-                activeTab === item.id ? "bg-accent/5" : ""
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-full ${
+                activeTab === item.id ? "bg-accent/20" : ""
               }`}
             >
               <NavIconSkeleton />
@@ -50,7 +50,7 @@ function DashboardShell({
           ))}
         </nav>
 
-        <div className="px-3 py-4 border-t border-border/50">
+        <div className="px-3 py-4 border-t border-border">
           <div className="flex items-center justify-between px-3">
             <Pulse className="w-8 h-8 rounded-full" />
             <Pulse className="w-8 h-8 rounded-full" />
@@ -59,8 +59,8 @@ function DashboardShell({
         </div>
       </aside>
 
-      <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
-        <Pulse className="w-6 h-6 rounded-lg" />
+      <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
+        <Pulse className="w-7 h-7 rounded-lg" />
         <div className="flex items-center gap-2">
           <Pulse className="w-8 h-8 rounded-full" />
           <Pulse className="w-8 h-8 rounded-full" />
@@ -70,7 +70,7 @@ function DashboardShell({
 
       {children}
 
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border/50 z-30">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border z-30">
         <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
           {Array.from({ length: navCount }).map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-1 px-3 py-1.5">
@@ -138,7 +138,7 @@ export function MapContentSkeleton() {
         ))}
       </div>
 
-      <div className="relative rounded-2xl border border-border overflow-hidden mb-6" style={{ height: "400px" }}>
+      <div className="relative border border-border overflow-hidden mb-6" style={{ height: "400px" }}>
         <Pulse className="absolute inset-0 rounded-none" />
         <div className="absolute bottom-4 right-4">
           <Pulse className="w-10 h-10 rounded-full" />
@@ -173,7 +173,7 @@ export function DashboardProfileTabSkeleton() {
         <Pulse className="h-12 w-full" />
       </div>
 
-      <div className="rounded-2xl border border-border p-4 sm:p-6 space-y-5">
+      <div className="border border-border p-4 sm:p-6 space-y-5">
         <div className="space-y-2">
           <Pulse className="h-3 w-8" />
           <Pulse className="h-4 w-full" />
@@ -218,7 +218,7 @@ export function ProfileViewContentSkeleton() {
         <Pulse className="h-9 w-32 rounded-full" />
       </div>
 
-      <div className="rounded-2xl border border-border p-4 space-y-3">
+      <div className="border border-border p-4 space-y-3">
         <Pulse className="h-4 w-32" />
         <Pulse className="h-24 w-full" />
         <Pulse className="h-11 w-full rounded-full" />

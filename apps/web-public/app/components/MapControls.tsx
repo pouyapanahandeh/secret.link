@@ -11,7 +11,7 @@ export function MapControls({ onZoomIn, onZoomOut, onLocate }: MapControlsProps)
   return (
     <>
       {/* Zoom — desktop only; mobile uses pinch/scroll */}
-      <div className="absolute top-3 left-3 z-[1000] hidden sm:flex flex-col rounded-xl overflow-hidden shadow-lg border border-border pointer-events-auto">
+      <div className="absolute top-3 left-3 z-[1000] hidden sm:flex flex-col overflow-hidden shadow-lg border border-border pointer-events-auto">
         <button type="button" onClick={onZoomIn} className={`${btnClass} border-b border-border rounded-none`} aria-label="Zoom in">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />

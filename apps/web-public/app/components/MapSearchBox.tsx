@@ -75,13 +75,13 @@ export function MapSearchBox({ onSelect }: MapSearchBoxProps) {
         onBlur={() => setTimeout(() => setFocused(false), 200)}
         placeholder="Search a place…"
         aria-label="Search a place"
-        className="w-full rounded-full bg-surface-raised/95 backdrop-blur-sm border border-border shadow-lg pl-9 pr-9 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent/40"
+        className="w-full rounded-full bg-surface-raised/95 backdrop-blur-xl border border-border shadow-lg pl-9 pr-9 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
       />
       {searching && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
       )}
       {showDropdown && results.length > 0 && (
-        <div className="absolute left-0 right-0 mt-1.5 z-30 rounded-xl border border-border bg-surface-raised shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute left-0 right-0 mt-1.5 z-30 border border-border bg-surface-raised shadow-lg max-h-48 overflow-y-auto">
           {results.map((r, idx) => (
             <button
               key={`${r.lat}-${r.lon}-${idx}`}
@@ -96,7 +96,7 @@ export function MapSearchBox({ onSelect }: MapSearchBoxProps) {
         </div>
       )}
       {showEmpty && (
-        <p className="absolute left-0 right-0 mt-1.5 z-30 rounded-xl border border-border bg-surface-raised shadow-lg px-3 py-2.5 text-xs text-text-muted">
+        <p className="absolute left-0 right-0 mt-1.5 z-30 border border-border bg-surface-raised shadow-lg px-3 py-2.5 text-xs text-text-muted">
           No places found
         </p>
       )}

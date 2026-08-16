@@ -59,17 +59,17 @@ export function DashboardProfileTab({
         />
       )}
 
-      <p className="text-xs text-text-muted mt-4">
+      <p className="font-mono text-[10px] tracking-wide uppercase text-text-muted mt-4">
         {user.email ?? "No email set"}
         {passkey.hasPasskey ? " · Passkey active" : ""}
-        {profileSaved ? " · Saved ✓" : ""}
+        {profileSaved ? " · Saved" : ""}
       </p>
 
       {!passkey.hasPasskey && (
         <button
           onClick={passkey.onAddPasskey}
           disabled={passkey.status === "loading"}
-          className="w-full mt-4 text-sm bg-surface-raised border border-border text-text px-4 py-3 rounded-xl hover:border-accent/50 transition-colors disabled:opacity-50"
+          className="w-full mt-4 text-sm bg-surface-raised border border-border text-text px-4 py-3 font-semibold hover:border-accent/50 transition-colors disabled:opacity-50"
         >
           {passkey.status === "loading" ? "Setting up..." : "Add passkey"}
         </button>

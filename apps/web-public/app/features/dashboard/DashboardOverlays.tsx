@@ -74,7 +74,7 @@ export function DashboardOverlays({
                   { label: "Post secret", emoji: "🔐", onClick: () => { setFabOpen(false); onNavigateSend(); } },
                 ].map((a) => (
                   <button key={a.label} onClick={a.onClick} className="flex items-center gap-2">
-                    <span className="text-xs font-medium bg-surface-raised border border-border rounded-full px-3 py-1.5 shadow-lg">
+                    <span className="text-xs font-extrabold bg-surface-raised border border-border rounded-full px-3 py-1.5 shadow-lg">
                       {a.label}
                     </span>
                     <span className="w-11 h-11 rounded-full bg-surface-raised border border-border flex items-center justify-center text-lg shadow-lg">
@@ -135,9 +135,9 @@ export function DashboardOverlays({
 
       {UI_FEATURES.live && showBroadcast && (
         <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl border border-border max-w-md w-full p-5 relative">
+          <div className="bg-surface border border-border max-w-md w-full p-5 relative">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">Go Live</h2>
+              <h2 className="text-base font-extrabold tracking-tight">Go Live</h2>
               <button
                 onClick={() => setShowBroadcast(false)}
                 className="w-8 h-8 rounded-full bg-surface-raised border border-border flex items-center justify-center text-text-muted hover:text-text transition-colors"

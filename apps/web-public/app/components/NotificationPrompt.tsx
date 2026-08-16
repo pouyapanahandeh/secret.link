@@ -52,7 +52,7 @@ export function NotificationPrompt({ token }: { token: string }) {
   if (state === "denied") {
     if (dismissed) return null;
     return (
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-border bg-surface-raised px-4 py-3">
+      <div className="mb-6 flex items-start gap-3 border border-border bg-surface-raised px-4 py-3">
         <span className="text-lg shrink-0">🔕</span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-text">Notifications are blocked</p>
@@ -74,18 +74,18 @@ export function NotificationPrompt({ token }: { token: string }) {
 
   // state === "default"
   return (
-    <div className="mb-6 flex items-center gap-3 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3">
+    <div className="mb-6 flex items-center gap-3 border border-accent bg-accent px-4 py-3 text-black">
       <span className="text-lg shrink-0">🔔</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-text">Turn on notifications</p>
-        <p className="text-xs text-text-muted mt-0.5">
+        <p className="text-sm font-extrabold">Turn on notifications</p>
+        <p className="text-xs text-black/70 mt-0.5">
           Get notified the moment someone sends you a {UI_FEATURES.messages ? "message or secret" : "secret"}.
         </p>
       </div>
       <button
         onClick={enable}
         disabled={busy}
-        className="shrink-0 text-xs font-medium bg-accent text-black px-3 py-1.5 rounded-full disabled:opacity-60"
+        className="shrink-0 text-xs font-extrabold bg-black text-accent px-3 py-1.5 rounded-full disabled:opacity-60"
       >
         {busy ? "Enabling…" : "Enable"}
       </button>

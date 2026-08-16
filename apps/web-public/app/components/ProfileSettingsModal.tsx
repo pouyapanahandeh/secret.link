@@ -93,8 +93,8 @@ export function ProfileSettingsModal({
         <div className="px-6 pt-2 pb-4 shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-text tracking-tight">Settings</h2>
-              <p className="text-sm text-text-muted mt-0.5">@{handle}</p>
+              <h2 className="text-lg font-extrabold text-text tracking-tight">Settings</h2>
+              <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-accent mt-0.5">@{handle}</p>
             </div>
             <button
               type="button"
@@ -109,7 +109,7 @@ export function ProfileSettingsModal({
 
         <div className="px-6 pb-8 overflow-y-auto flex-1 space-y-5">
           <section>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted/70 mb-2">
+            <p className="font-mono text-[11px] tracking-[0.2em] uppercase text-accent mb-2">
               Privacy
             </p>
             <button
@@ -150,7 +150,7 @@ export function ProfileSettingsModal({
             type="button"
             onClick={() => onSave(accepts)}
             disabled={saving || !dirty}
-            className="w-full rounded-2xl bg-accent px-4 py-3.5 text-sm font-bold text-black hover:scale-[1.01] transition-all disabled:opacity-50 disabled:hover:scale-100"
+            className="w-full rounded-full bg-accent px-4 py-3.5 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors disabled:opacity-50"
           >
             {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
           </button>

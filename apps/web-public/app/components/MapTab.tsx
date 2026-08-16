@@ -287,14 +287,15 @@ export function MapTab({
   return (
     <section className="flex flex-col flex-1 min-h-0 h-full">
       <div className="hidden sm:block shrink-0 mb-3 px-0">
-        <h2 className="text-lg font-bold">Map</h2>
-        <p className="text-xs text-text-muted">Stories dropped near you</p>
+        <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-accent mb-1">Explore</p>
+        <h2 className="text-2xl font-extrabold tracking-tight">Map</h2>
+        <p className="text-xs text-text-muted mt-0.5">Stories dropped near you</p>
       </div>
 
       {error && (
-        <div className="shrink-0 mb-3 mx-4 sm:mx-0 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-2">
+        <div className="shrink-0 mb-3 mx-4 sm:mx-0 border border-red-500/30 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-2">
           <p className="text-xs text-red-300">{error}</p>
-          <button type="button" onClick={refresh} className="text-xs text-accent shrink-0">Retry</button>
+          <button type="button" onClick={refresh} className="font-mono text-[10px] tracking-[0.14em] uppercase text-accent shrink-0">Retry</button>
         </div>
       )}
 
@@ -302,7 +303,7 @@ export function MapTab({
         <p className="text-xs text-text-muted mb-3 shrink-0 px-4 sm:px-0">Loading stories…</p>
       )}
 
-      <div className="relative flex-1 min-h-0 sm:min-h-[55vh] rounded-none border-0 sm:rounded-2xl sm:border sm:border-border overflow-hidden isolate z-0">
+      <div className="relative flex-1 min-h-0 sm:min-h-[55vh] rounded-none border-0 sm:border sm:border-border overflow-hidden isolate z-0">
         <div ref={mapContainerRef} className="absolute inset-0 w-full h-full z-0" />
 
         <div className="absolute top-3 left-3 right-3 sm:left-14 sm:right-14 z-[1000] flex flex-col gap-2 pointer-events-auto">
@@ -318,9 +319,9 @@ export function MapTab({
 
         {isEmpty && (
           <div className="absolute inset-0 z-[500] flex items-center justify-center pointer-events-none">
-            <div className="bg-surface/90 backdrop-blur-sm rounded-xl border border-border px-6 py-4 text-center max-w-xs">
-              <p className="text-sm text-text-muted">No stories nearby yet</p>
-              <p className="text-xs text-text-muted/70 mt-1">Be the first to add one</p>
+            <div className="bg-surface/90 backdrop-blur-xl border border-border px-6 py-4 text-center max-w-xs">
+              <p className="text-sm font-extrabold">No stories nearby yet</p>
+              <p className="text-xs text-text-muted mt-1">Be the first to add one</p>
             </div>
           </div>
         )}
@@ -329,7 +330,7 @@ export function MapTab({
           <button
             type="button"
             onClick={() => onRequestComposer(pendingPin)}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-black shadow-lg hover:scale-[1.03] transition-all pointer-events-auto"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-black shadow-lg hover:bg-accent-soft transition-colors pointer-events-auto"
           >
             Add story here
           </button>

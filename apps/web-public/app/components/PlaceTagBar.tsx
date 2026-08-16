@@ -17,9 +17,9 @@ export function PlaceTagBar({ groupedPlaces, selectedPlaceKey, onSelect }: Place
           type="button"
           aria-pressed={selectedPlaceKey === g.key}
           onClick={() => onSelect(g.key)}
-          className={`shrink-0 rounded-full px-3 py-1.5 text-xs border shadow-md transition-colors backdrop-blur-sm ${
+          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border shadow-md transition-colors backdrop-blur-sm ${
             selectedPlaceKey === g.key
-              ? "bg-accent/20 border-accent text-accent"
+              ? "bg-accent border-accent text-black"
               : "bg-surface-raised/95 border-border text-text-muted hover:border-accent/40"
           }`}
         >

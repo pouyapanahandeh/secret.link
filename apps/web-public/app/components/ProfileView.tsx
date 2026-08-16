@@ -60,10 +60,10 @@ export function ProfileView({
         <div className="flex-1 min-w-0 pt-0.5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold">@{handle}</h1>
+              <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">@{handle}</h1>
               {profile?.isPro && (
-                <span className="inline-flex items-center gap-1 text-xs bg-accent/10 text-accent px-2.5 py-0.5 rounded-full">
-                  ⭐ Pro
+                <span className="inline-flex items-center gap-1 font-mono text-[10px] tracking-[0.16em] uppercase bg-accent text-black px-2.5 py-0.5 rounded-full font-semibold">
+                  Pro
                 </span>
               )}
             </div>
@@ -73,7 +73,7 @@ export function ProfileView({
                   <button
                     type="button"
                     onClick={onEdit}
-                    className="text-sm font-semibold text-accent hover:text-accent/80 transition-colors"
+                    className="font-mono text-[10px] tracking-[0.16em] uppercase font-semibold text-accent hover:text-accent/80 transition-colors"
                   >
                     Edit
                   </button>
@@ -115,16 +115,16 @@ export function ProfileView({
                 onClick={onFollowersClick}
                 className="text-left hover:opacity-80 transition-opacity"
               >
-                <span className="text-sm font-bold text-text">{followersCount}</span>
-                <span className="text-xs text-text-muted ml-1">followers</span>
+                <span className="text-sm font-extrabold text-text">{followersCount}</span>
+                <span className="font-mono text-[10px] tracking-wide uppercase text-text-muted ml-1">followers</span>
               </button>
               <button
                 type="button"
                 onClick={onFollowingClick}
                 className="text-left hover:opacity-80 transition-opacity"
               >
-                <span className="text-sm font-bold text-text">{followingCount}</span>
-                <span className="text-xs text-text-muted ml-1">following</span>
+                <span className="text-sm font-extrabold text-text">{followingCount}</span>
+                <span className="font-mono text-[10px] tracking-wide uppercase text-text-muted ml-1">following</span>
               </button>
             </div>
           )}
@@ -162,14 +162,14 @@ export function ProfileView({
       </div>
 
       {isOwner && (onShare || onStats) && (
-        <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="mt-5 grid grid-cols-2 gap-px bg-border border border-border">
           {onShare && (
             <button
               type="button"
               onClick={onShare}
-              className="group flex flex-col items-center rounded-2xl border border-border/60 bg-surface-raised px-3 py-5 text-center transition-all hover:border-accent/40 hover:bg-surface-raised/80 active:scale-[0.98]"
+              className="group flex flex-col items-center bg-accent px-3 py-5 text-center text-black transition-colors hover:bg-accent-soft"
             >
-              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors group-hover:bg-accent/25">
+              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-black text-accent">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path
                     d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"
@@ -187,17 +187,17 @@ export function ProfileView({
                   />
                 </svg>
               </span>
-              <span className="text-sm font-bold text-text">Share profile</span>
-              <span className="mt-0.5 text-[11px] text-text-muted">Copy link or QR</span>
+              <span className="text-sm font-extrabold">Share profile</span>
+              <span className="mt-0.5 font-mono text-[10px] tracking-wide uppercase text-black/60">Copy link or QR</span>
             </button>
           )}
           {onStats && (
             <button
               type="button"
               onClick={onStats}
-              className="group flex flex-col items-center rounded-2xl border border-border/60 bg-surface-raised px-3 py-5 text-center transition-all hover:border-accent/40 hover:bg-surface-raised/80 active:scale-[0.98]"
+              className="group flex flex-col items-center bg-surface-raised px-3 py-5 text-center transition-colors hover:bg-surface"
             >
-              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-text transition-colors group-hover:border-accent/30">
+              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-text">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path
                     d="M5 19V9M12 19V5M19 19v-7"
@@ -207,8 +207,8 @@ export function ProfileView({
                   />
                 </svg>
               </span>
-              <span className="text-sm font-bold text-text">Statistics</span>
-              <span className="mt-0.5 text-[11px] text-text-muted">Views & activity</span>
+              <span className="text-sm font-extrabold text-text">Statistics</span>
+              <span className="mt-0.5 font-mono text-[10px] tracking-wide uppercase text-text-muted">Views & activity</span>
             </button>
           )}
         </div>
@@ -219,10 +219,10 @@ export function ProfileView({
           <button
               type="button"
               onClick={onFollow}
-              className={`text-xs px-5 py-2 rounded-full font-semibold transition-all ${
+              className={`text-xs px-5 py-2 rounded-full font-extrabold transition-colors ${
                 isFollowing
                   ? "bg-surface-raised border border-border text-text-muted hover:border-red-400/50 hover:text-red-400"
-                  : "bg-accent text-black hover:scale-[1.02]"
+                  : "bg-accent text-black hover:bg-accent-soft"
               }`}
             >
               {isFollowing ? "Following ✓" : "Follow"}

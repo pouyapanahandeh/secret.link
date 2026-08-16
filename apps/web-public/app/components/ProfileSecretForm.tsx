@@ -93,10 +93,9 @@ export function ProfileSecretForm({
   }
 
   return (
-    <div className="bg-surface-raised rounded-2xl border border-border p-6">
+    <div className="bg-surface-raised border border-border p-6">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-lg">👻</span>
-        <h2 className="font-semibold text-sm">Send an anonymous secret</h2>
+        <p className="font-mono text-[11px] tracking-[0.2em] uppercase text-accent">Send a secret</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -108,7 +107,7 @@ export function ProfileSecretForm({
             maxLength={10000}
             placeholder="Type your secret message..."
             onChange={(e) => setCharCount(e.target.value.length)}
-            className="w-full rounded-xl bg-surface border border-border px-4 py-3 text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50 resize-none transition-all"
+            className="w-full bg-surface border border-border px-4 py-3 text-text placeholder:text-text-muted/40 focus:outline-none focus:border-accent resize-none"
           />
           {charCount > 0 && (
             <span className="absolute bottom-3 right-3 text-xs text-text-muted">
@@ -119,11 +118,11 @@ export function ProfileSecretForm({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-text-muted mb-1">Link expires in</label>
+            <label className="block font-mono text-[10px] tracking-[0.16em] uppercase text-text-muted mb-1">Link expires in</label>
             <select
               name="linkExpiry"
               defaultValue="86400"
-              className="w-full rounded-xl bg-surface border border-border px-3 py-2 text-sm text-text"
+              className="w-full bg-surface border border-border px-3 py-2 text-sm text-text"
             >
               <option value="300">5 minutes</option>
               <option value="3600">1 hour</option>
@@ -132,11 +131,11 @@ export function ProfileSecretForm({
             </select>
           </div>
           <div>
-            <label className="block text-xs text-text-muted mb-1">View time</label>
+            <label className="block font-mono text-[10px] tracking-[0.16em] uppercase text-text-muted mb-1">View time</label>
             <select
               name="viewDuration"
               defaultValue="30"
-              className="w-full rounded-xl bg-surface border border-border px-3 py-2 text-sm text-text"
+              className="w-full bg-surface border border-border px-3 py-2 text-sm text-text"
             >
               <option value="10">10 seconds</option>
               <option value="30">30 seconds</option>
@@ -151,7 +150,7 @@ export function ProfileSecretForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all duration-200 disabled:opacity-50"
+          className="w-full rounded-full bg-accent px-6 py-3 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors disabled:opacity-50"
         >
           {isSubmitting ? "Encrypting..." : "Send anonymously 🤫"}
         </button>

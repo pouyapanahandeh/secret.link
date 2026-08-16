@@ -1,16 +1,21 @@
-import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
+import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useActionData, Link } from "@remix-run/react";
+import { useActionData, useLoaderData, Link } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { UI_FEATURES } from "../lib/feature-flags";
-import { AppNav } from "../components/AppNav";
-import { createSessionRedirect } from "../lib/session.server";
+import { SiteChrome } from "../components/SiteChrome";
+import { createSessionRedirect, getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 
 export const meta: MetaFunction = () => [
   { title: "Log In — Secretlink.life" },
   { name: "description", content: "Log in to your Secretlink.life account." },
 ];
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const token = await getToken(request);
+  return json({ isLoggedIn: Boolean(token) });
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
@@ -53,7 +58,12 @@ export async function action({ request }: ActionFunctionArgs) {
   return json({ handle, method: "passkey" });
 }
 
+const inputClass =
+  "w-full min-h-12 bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent";
+const labelClass = "block font-mono text-[10px] tracking-[0.18em] uppercase text-text-muted mb-2";
+
 export default function Login() {
+  const { isLoggedIn } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [passkeyError, setPasskeyError] = useState("");
@@ -121,127 +131,122 @@ export default function Login() {
 
   if (actionData && "sent" in actionData && actionData.sent) {
     return (
-      <main className="min-h-screen">
-        <AppNav />
-        <div className="flex flex-col items-center justify-center min-h-screen px-4">
-          <div className="max-w-md w-full text-center">
-            <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mx-auto mb-4" />
-            <h1 className="font-display text-3xl mb-4">Check your email ✉️</h1>
-            <p className="text-text-muted mb-6">
-              We sent a login link to <strong className="text-text">{actionData.email}</strong>.
-              Click it to sign in.
-            </p>
-            <Link to="/login" className="text-sm text-accent hover:text-accent-soft transition-colors">
-              ← Try again
-            </Link>
-          </div>
+      <SiteChrome isLoggedIn={isLoggedIn} currentPath="/login">
+        <div className="mx-auto max-w-xl px-4 sm:px-6 pt-28 sm:pt-32 pb-20">
+          <p className="text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-4">Login</p>
+          <h1 className="font-extrabold tracking-[-0.04em] text-4xl sm:text-6xl leading-[0.95] mb-4">
+            Check your <span className="font-display font-bold text-accent">email</span>
+          </h1>
+          <p className="text-text-muted mb-8 leading-relaxed">
+            We sent a login link to <strong className="text-text">{actionData.email}</strong>.
+            Click it to sign in.
+          </p>
+          <Link to="/login" className="text-sm font-semibold text-accent hover:underline">
+            ← Try again
+          </Link>
         </div>
-      </main>
+      </SiteChrome>
     );
   }
 
   return (
-    <main className="min-h-screen">
-      <AppNav authLinks="signup" />
+    <SiteChrome isLoggedIn={isLoggedIn} currentPath="/login">
+      <div className="mx-auto max-w-xl px-4 sm:px-6 pt-28 sm:pt-32 pb-20">
+        <p className="text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-4">Login</p>
+        <h1 className="font-extrabold tracking-[-0.04em] text-4xl sm:text-6xl leading-[0.95] mb-4">
+          Welcome <span className="font-display font-bold text-accent">back</span>
+        </h1>
+        <p className="text-text-muted mb-10 leading-relaxed">
+          Log in to your Secretlink.life account
+        </p>
 
-      <div className="flex flex-col items-center justify-center min-h-screen px-4 pt-20">
-        <div className="max-w-md w-full">
-          <img src="/secretlink.png" alt="Secretlink.life" className="w-12 h-12 mx-auto mb-4" />
-          <h1 className="font-display text-4xl text-center mb-2">Welcome back</h1>
-          <p className="text-text-muted text-center mb-8">
-            Log in to your Secretlink.life account
-          </p>
-
-          {UI_FEATURES.magicLink && (
+        {UI_FEATURES.magicLink && (
           <>
-          {/* Magic Link Login */}
-          <form method="post" className="space-y-4 mb-8">
-            <input type="hidden" name="method" value="magic-link" />
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-text/80 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                placeholder="you@example.com"
-                className="w-full rounded-lg bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-
-            {actionData && "error" in actionData && actionData.method === "magic-link" && (
-              <p className="text-red-400 text-sm">{actionData.error}</p>
-            )}
-
-            <button
-              type="submit"
-              className="w-full rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all duration-200"
-            >
-              Send magic link ✨
-            </button>
-          </form>
-
-          <div className="relative mb-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-3 bg-surface text-text-muted">or</span>
-            </div>
-          </div>
-          </>
-          )}
-
-          {/* Passkey Login */}
-          <form method="post" className={`space-y-4 ${UI_FEATURES.magicLink ? "" : "mb-8"}`}>
-            <input type="hidden" name="method" value="passkey" />
-            <div>
-              <label htmlFor="handle" className="block text-sm font-medium text-text/80 mb-1">
-                Handle
-              </label>
-              <div className="flex items-center">
-                <span className="text-text-muted mr-2">@</span>
+            <form method="post" className="space-y-5 mb-8">
+              <input type="hidden" name="method" value="magic-link" />
+              <div>
+                <label htmlFor="email" className={labelClass}>
+                  Email
+                </label>
                 <input
-                  id="handle"
-                  name="handle"
-                  type="text"
-                  placeholder="yourname"
-                  className="flex-1 rounded-lg bg-surface-raised border border-border px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent"
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="you@example.com"
+                  className={inputClass}
                 />
               </div>
+
+              {actionData && "error" in actionData && actionData.method === "magic-link" && (
+                <p className="text-red-400 text-sm">{actionData.error}</p>
+              )}
+
+              <button
+                type="submit"
+                className="w-full min-h-12 rounded-full bg-accent px-6 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors"
+              >
+                Send magic link
+              </button>
+            </form>
+
+            <div className="relative mb-8">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="px-3 bg-surface font-mono text-[10px] tracking-[0.22em] uppercase text-text-muted">or</span>
+              </div>
             </div>
+          </>
+        )}
 
-            {actionData && "error" in actionData && actionData.method === "passkey" && (
-              <p className="text-red-400 text-sm">{actionData.error}</p>
-            )}
-            {passkeyError && (
-              <p className="text-red-400 text-sm">{passkeyError}</p>
-            )}
-            {passkeyStatus === "loading" && (
-              <p className="text-accent text-sm">Waiting for passkey...</p>
-            )}
+        <form method="post" className="space-y-5">
+          <input type="hidden" name="method" value="passkey" />
+          <div>
+            <label htmlFor="handle" className={labelClass}>
+              Handle
+            </label>
+            <div className="flex items-center min-h-12 bg-surface-raised border border-border focus-within:border-accent">
+              <span className="font-mono text-sm text-text-muted pl-4 pr-1">@</span>
+              <input
+                id="handle"
+                name="handle"
+                type="text"
+                placeholder="yourname"
+                className="flex-1 min-h-12 bg-transparent px-2 py-3 text-text placeholder:text-text-muted/50 focus:outline-none"
+              />
+            </div>
+          </div>
 
-            <button
-              type="submit"
-              disabled={passkeyStatus === "loading"}
-              className={`w-full rounded-full px-6 py-3 text-sm font-bold transition-all duration-200 disabled:opacity-50 ${
-                UI_FEATURES.magicLink
-                  ? "bg-surface-raised border border-border text-text hover:border-accent/50"
-                  : "bg-accent text-black hover:scale-[1.02]"
-              }`}
-            >
-              {passkeyStatus === "loading" ? "Authenticating..." : "Log in with passkey 🔑"}
-            </button>
-          </form>
+          {actionData && "error" in actionData && actionData.method === "passkey" && (
+            <p className="text-red-400 text-sm">{actionData.error}</p>
+          )}
+          {passkeyError && (
+            <p className="text-red-400 text-sm">{passkeyError}</p>
+          )}
+          {passkeyStatus === "loading" && (
+            <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-accent">Waiting for passkey…</p>
+          )}
 
-          <p className="mt-8 text-sm text-text-muted text-center">
-            Don't have an account?{" "}
-            <Link to="/signup" className="text-accent hover:text-accent-soft transition-colors">Sign up</Link>
-          </p>
-        </div>
+          <button
+            type="submit"
+            disabled={passkeyStatus === "loading"}
+            className={`w-full min-h-12 rounded-full px-6 text-sm font-extrabold transition-colors disabled:opacity-50 ${
+              UI_FEATURES.magicLink
+                ? "border border-border bg-surface-raised text-text hover:border-accent"
+                : "bg-accent text-black hover:bg-accent-soft"
+            }`}
+          >
+            {passkeyStatus === "loading" ? "Authenticating..." : "Log in with passkey"}
+          </button>
+        </form>
+
+        <p className="mt-10 text-sm text-text-muted">
+          Don&apos;t have an account?{" "}
+          <Link to="/signup" className="font-semibold text-accent hover:underline">Sign up</Link>
+        </p>
       </div>
-    </main>
+    </SiteChrome>
   );
 }

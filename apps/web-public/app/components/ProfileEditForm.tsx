@@ -87,9 +87,9 @@ export function ProfileEditForm({
   }
 
   return (
-    <div className="bg-surface-raised rounded-2xl border border-border p-4 sm:p-6 space-y-5">
+    <div className="bg-surface-raised border border-border p-4 sm:p-6 space-y-5">
       <div>
-        <label className="block text-xs font-medium text-text-muted mb-1.5">Avatar</label>
+        <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-accent mb-1.5">Avatar</label>
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center overflow-hidden shrink-0">
             {avatarUrl ? (
@@ -112,7 +112,7 @@ export function ProfileEditForm({
               type="button"
               disabled={uploading || saving}
               onClick={() => fileRef.current?.click()}
-              className="rounded-lg bg-surface border border-border px-3 py-1.5 text-xs font-semibold text-text hover:border-accent/50 transition-all disabled:opacity-50"
+              className="rounded-full bg-accent px-4 py-1.5 text-xs font-extrabold text-black hover:bg-accent-soft transition-colors disabled:opacity-50"
             >
               {uploading ? "Uploading…" : "Upload photo"}
             </button>
@@ -132,20 +132,20 @@ export function ProfileEditForm({
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-text-muted mb-1.5">Bio</label>
+        <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-accent mb-1.5">Bio</label>
         <textarea
           value={bio}
           onChange={(e) => onBioChange(e.target.value)}
           maxLength={300}
           rows={3}
           placeholder="Tell people about yourself..."
-          className="w-full rounded-xl bg-surface border border-border px-3 py-2.5 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
+          className="w-full bg-surface border border-border px-3 py-2.5 text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:border-accent resize-none"
         />
         <p className="text-xs text-text-muted mt-1">{bio.length}/300</p>
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-text-muted mb-1.5">Social links</label>
+        <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-accent mb-1.5">Social links</label>
         <p className="text-xs text-text-muted/70 mb-2">Paste a link — we&apos;ll detect the platform automatically.</p>
         <div className="space-y-2">
           {socials.map((s, i) => {
@@ -207,7 +207,7 @@ export function ProfileEditForm({
           type="button"
           onClick={onCancel}
           disabled={saving || uploading}
-          className="flex-1 rounded-xl bg-surface border border-border px-4 py-3 text-sm font-bold text-text hover:border-accent/50 transition-all disabled:opacity-50"
+          className="flex-1 border border-border bg-surface px-4 py-3 text-sm font-extrabold text-text hover:border-accent/50 transition-colors disabled:opacity-50"
         >
           Cancel
         </button>
@@ -215,7 +215,7 @@ export function ProfileEditForm({
           type="button"
           onClick={onSave}
           disabled={saving || uploading}
-          className="flex-1 rounded-xl bg-accent px-4 py-3 text-sm font-bold text-black hover:scale-[1.01] transition-all disabled:opacity-50"
+          className="flex-1 rounded-full bg-accent px-4 py-3 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save profile"}
         </button>

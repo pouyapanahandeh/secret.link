@@ -29,15 +29,15 @@ export default function MessagesPage() {
     <main className="h-screen flex flex-col bg-surface">
       {/* Nav — hidden when embedded */}
       {!isEmbed && (
-        <nav className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border/50 z-20">
+        <nav className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border z-20">
           <Link to="/" className="flex items-center gap-2">
-            <img src="/secretlink.png" alt="" className="w-7 h-7" />
-            <span className="text-lg font-bold tracking-tight">
+            <img src="/secretlink.png" alt="" className="w-8 h-8" />
+            <span className="text-sm font-extrabold tracking-tight">
               secretlink<span className="text-accent">.</span>life
             </span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link to="/dashboard" className="text-sm text-text-muted hover:text-text">Dashboard</Link>
+            <Link to="/dashboard" className="rounded-full bg-accent px-4 py-2 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors">Dashboard</Link>
             <ThemeToggle />
           </div>
         </nav>

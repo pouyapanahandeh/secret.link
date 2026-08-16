@@ -86,24 +86,25 @@ export function DashboardInboxTab({
           className="border-2 border-accent"
         />
         <div className="flex-1 min-w-0">
-          <h1 className="text-base sm:text-lg font-bold truncate">@{user.handle}</h1>
-          <p className="text-xs text-text-muted truncate">
-            {user.email ?? "No email"} · {user.isPro ? "Pro ⭐" : "Free"}
+          <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent mb-0.5">Home</p>
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight truncate">@{user.handle}</h1>
+          <p className="font-mono text-[10px] tracking-wide uppercase text-text-muted truncate">
+            {user.email ?? "No email"} · {user.isPro ? "Pro" : "Free"}
           </p>
         </div>
-        <Link to={`/${user.handle}`} className="shrink-0 text-xs bg-accent/10 text-accent px-3 py-1.5 rounded-full">
+        <Link to={`/${user.handle}`} className="shrink-0 rounded-full bg-accent px-4 py-2 text-xs font-extrabold text-black">
           View
         </Link>
       </div>
 
       {UI_FEATURES.live && <LiveStreams compact />}
 
-      <div className="flex items-center gap-2 mb-6 bg-surface-raised rounded-xl border border-border px-3 py-2.5">
-        <span className="text-xs text-text-muted shrink-0">🔗</span>
-        <code className="text-xs sm:text-sm text-text truncate flex-1">secretlink.life/@{user.handle}</code>
+      <div className="flex items-center gap-2 mb-6 bg-surface-raised border border-border px-3 py-2.5">
+        <span className="font-mono text-[10px] text-text-muted shrink-0">URL</span>
+        <code className="font-mono text-xs sm:text-sm text-text truncate flex-1">secretlink.life/@{user.handle}</code>
         <button
           onClick={() => navigator.clipboard?.writeText(getProfileUrl(user.handle))}
-          className="text-xs text-accent shrink-0"
+          className="font-mono text-[10px] tracking-[0.14em] uppercase text-accent shrink-0 font-semibold"
         >
           Copy
         </button>
@@ -126,14 +127,14 @@ export function DashboardInboxTab({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search @username..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-raised border border-border text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:ring-2 focus:ring-accent/50"
+            className="w-full pl-10 pr-4 py-2.5 min-h-11 bg-surface-raised border border-border text-sm text-text placeholder:text-text-muted/40 focus:outline-none focus:border-accent"
           />
         </div>
         {searching && <p className="text-xs text-text-muted text-center mt-2">Searching...</p>}
         {searchResults.length > 0 && (
           <div className="mt-3 space-y-2">
             {searchResults.map((u) => (
-              <div key={u.id} className="flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3">
+              <div key={u.id} className="flex items-center gap-3 bg-surface-raised border border-border p-3">
                 <Link to={`/${u.handle}`} className="flex items-center gap-3 flex-1 min-w-0">
                   <Avatar handle={u.handle} avatarUrl={u.avatarUrl} />
                   <div className="flex-1 min-w-0">
@@ -144,7 +145,7 @@ export function DashboardInboxTab({
                 {u.id !== user.id && (
                   <button
                     onClick={() => toggleFollow(u.id)}
-                    className={`shrink-0 text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+                    className={`shrink-0 text-xs px-3 py-1.5 rounded-full font-extrabold transition-colors ${
                       followingMap[u.id]
                         ? "bg-surface border border-border text-text-muted"
                         : "bg-accent text-black"
@@ -180,44 +181,43 @@ export function DashboardInboxTab({
         <button
           onClick={passkey.onAddPasskey}
           disabled={passkey.status === "loading"}
-          className="w-full mb-4 text-sm bg-surface-raised border border-border text-text px-4 py-3 rounded-xl hover:border-accent/50 transition-colors disabled:opacity-50"
+          className="w-full mb-4 text-sm bg-surface-raised border border-border text-text px-4 py-3 min-h-11 font-semibold hover:border-accent/50 transition-colors disabled:opacity-50"
         >
           {passkey.status === "loading" ? "Setting up..." : "🔑 Add passkey for faster login"}
         </button>
       )}
       {passkey.error && <p className="text-red-400 text-xs mb-4">{passkey.error}</p>}
 
-      <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        📥 Inbox
-        {inbox.length > 0 && <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">{inbox.length}</span>}
+      <h2 className="font-mono text-[11px] tracking-[0.2em] uppercase text-accent mb-3 flex items-center gap-2">
+        Inbox
+        {inbox.length > 0 && <span className="font-sans text-[10px] font-extrabold bg-accent text-black px-2 py-0.5 rounded-full">{inbox.length}</span>}
       </h2>
 
       {inbox.length === 0 ? (
-        <div className="bg-surface-raised rounded-xl border border-border p-6 text-center">
-          <span className="text-3xl block mb-2">📥</span>
-          <p className="text-sm text-text-muted">No secrets yet</p>
-          <p className="text-xs text-text-muted/60 mt-1">
+        <div className="bg-surface-raised border border-border p-6 text-center">
+          <p className="text-sm font-semibold">No secrets yet</p>
+          <p className="text-xs text-text-muted mt-1">
             Share your link on Instagram or TikTok to receive secrets
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="border border-border divide-y divide-border">
           {inbox.map((secret: any) => (
             <Link
               key={secret.id}
               to={`/s/${secret.id}`}
-              className="flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3 sm:p-4 hover:border-accent/50 transition-colors active:scale-[0.98]"
+              className="group flex items-center gap-3 bg-surface p-3 sm:p-4 hover:bg-accent hover:text-black transition-colors"
             >
               <span className="text-xl">
                 {secret.contentType === "text" ? "💬" : secret.contentType === "image" ? "🖼️" : "📎"}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{secret.contentType} secret</p>
-                <p className="text-xs text-text-muted">
-                  {secret.burned ? "🔥 Burned" : secret.viewCount > 0 ? "👁️ Viewed" : "✨ New"}
+                <p className="text-sm font-extrabold truncate">{secret.contentType} secret</p>
+                <p className="text-xs text-text-muted group-hover:text-black/70">
+                  {secret.burned ? "Burned" : secret.viewCount > 0 ? "Viewed" : "New"}
                 </p>
               </div>
-              <span className="text-xs text-text-muted shrink-0">
+              <span className="font-mono text-[10px] text-text-muted shrink-0">
                 {new Date(secret.createdAt).toLocaleDateString()}
               </span>
             </Link>
@@ -225,28 +225,28 @@ export function DashboardInboxTab({
         </div>
       )}
 
-      <h2 className="text-sm font-semibold mt-8 mb-3">📤 Sent</h2>
+      <h2 className="font-mono text-[11px] tracking-[0.2em] uppercase text-accent mt-8 mb-3">Sent</h2>
       {sent.length === 0 ? (
-        <div className="bg-surface-raised rounded-xl border border-border p-6 text-center">
-          <p className="text-sm text-text-muted">No secrets sent</p>
-          <Link to="/send" className="text-xs text-accent mt-1 inline-block">Send one →</Link>
+        <div className="bg-surface-raised border border-border p-6 text-center">
+          <p className="text-sm font-semibold">No secrets sent</p>
+          <Link to="/send" className="text-xs font-extrabold text-accent mt-2 inline-block">Send one →</Link>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="border border-border divide-y divide-border">
           {sent.map((secret: any) => (
-            <div key={secret.id} className="flex items-center gap-3 bg-surface-raised rounded-xl border border-border p-3 sm:p-4">
+            <div key={secret.id} className="flex items-center gap-3 bg-surface p-3 sm:p-4">
               <span className="text-xl">
                 {secret.contentType === "text" ? "💬" : "📎"}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
+                <p className="text-sm font-extrabold truncate">
                   → {secret.recipientHandle ? `@${secret.recipientHandle}` : "Link"}
                 </p>
                 <p className="text-xs text-text-muted">
-                  {secret.burned ? "🔥 Burned" : secret.viewCount > 0 ? `👁️ ${secret.viewCount}/${secret.maxViews}` : "⏳ Pending"}
+                  {secret.burned ? "Burned" : secret.viewCount > 0 ? `${secret.viewCount}/${secret.maxViews}` : "Pending"}
                 </p>
               </div>
-              <span className="text-xs text-text-muted shrink-0">
+              <span className="font-mono text-[10px] text-text-muted shrink-0">
                 {new Date(secret.createdAt).toLocaleDateString()}
               </span>
             </div>

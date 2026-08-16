@@ -389,7 +389,7 @@ export default function ProfilePage() {
         <Nav isLoggedIn={isLoggedIn} />
         <div className="text-center pt-24">
           <span className="text-5xl mb-4 block">👻</span>
-          <h1 className="text-2xl font-bold mb-2">User not found</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight mb-2">User not found</h1>
           <p className="text-text-muted mb-6">@{handle} doesn&apos;t exist on Secretlink.life</p>
           <Link to="/" className="text-accent text-sm font-semibold hover:underline">
             Go home →
@@ -409,10 +409,10 @@ export default function ProfilePage() {
               userHandle={ownHandle ?? handle}
               userAvatarUrl={navAvatarUrl}
             />
-            <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
+            <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
               <Link to="/dashboard" className="flex items-center gap-2">
                 <img src="/secretlink.png" alt="" className="w-7 h-7" />
-                <span className="text-lg font-bold tracking-tight">
+                <span className="text-sm font-extrabold tracking-tight">
                   secretlink<span className="text-accent">.</span>life
                 </span>
               </Link>
@@ -438,7 +438,7 @@ export default function ProfilePage() {
             <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
               <span className="text-3xl">✓</span>
             </div>
-            <h1 className="text-2xl font-bold mb-2">Secret sent!</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight mb-2">Secret sent!</h1>
             <p className="text-text-muted mb-6">
               Your anonymous message has been delivered to{" "}
               <span className="text-accent">@{handle}</span>. It will self-destruct after being read.
@@ -447,7 +447,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => setShowSentConfirmation(false)}
-                className="inline-flex justify-center rounded-full bg-accent px-6 py-3 text-sm font-bold text-black hover:scale-[1.02] transition-all"
+                className="inline-flex justify-center rounded-full bg-accent px-6 py-3 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors"
               >
                 Send another →
               </button>
@@ -455,7 +455,7 @@ export default function ProfilePage() {
                 <Link
                   to={`/${ownHandle}?share=1`}
                   onClick={() => setShowSentConfirmation(false)}
-                  className="inline-flex justify-center rounded-full border border-border px-6 py-3 text-sm font-semibold text-text hover:border-accent transition-all"
+                  className="inline-flex justify-center rounded-full border border-border px-6 py-3 text-sm font-extrabold text-text hover:border-accent transition-colors"
                 >
                   Share your profile
                 </Link>
@@ -479,10 +479,10 @@ export default function ProfilePage() {
       {isLoggedIn ? (
         <>
           <Sidebar profileHref={profileHref} userHandle={ownHandle ?? handle} userAvatarUrl={navAvatarUrl} />
-          <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border/50 bg-surface shrink-0">
+          <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
             <Link to="/dashboard" className="flex items-center gap-2">
               <img src="/secretlink.png" alt="" className="w-7 h-7" />
-              <span className="text-lg font-bold tracking-tight">
+              <span className="text-sm font-extrabold tracking-tight">
                 secretlink<span className="text-accent">.</span>life
               </span>
             </Link>
@@ -550,7 +550,7 @@ export default function ProfilePage() {
               </p>
               <Link
                 to="/signup"
-                className="inline-flex rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-black hover:scale-[1.02] transition-all"
+                className="inline-flex rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors"
               >
                 Get your @handle
               </Link>
@@ -632,11 +632,11 @@ function Sidebar({
   ];
 
   return (
-    <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border/50 bg-surface shrink-0">
-      <div className="px-5 py-5 border-b border-border/50">
+    <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border bg-surface shrink-0">
+      <div className="px-5 py-5 border-b border-border">
         <Link to="/dashboard" className="flex items-center gap-2">
-          <img src="/secretlink.png" alt="" className="w-7 h-7" />
-          <span className="text-lg font-bold tracking-tight">
+          <img src="/secretlink.png" alt="" className="w-8 h-8" />
+          <span className="text-sm font-extrabold tracking-tight">
             secretlink<span className="text-accent">.</span>life
           </span>
         </Link>
@@ -646,18 +646,22 @@ function Sidebar({
           <Link
             key={item.id}
             to={item.href}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-text-muted hover:text-text hover:bg-surface-raised transition-all"
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-semibold transition-colors ${
+              item.id === "profile"
+                ? "bg-accent text-black"
+                : "text-text-muted hover:text-text hover:bg-surface-raised"
+            }`}
           >
             {item.icon}
             <span>{item.label}</span>
           </Link>
         ))}
       </nav>
-      <div className="px-3 py-4 border-t border-border/50 space-y-2">
+      <div className="px-3 py-4 border-t border-border space-y-2">
         <div className="flex items-center justify-between px-3">
           <ThemeToggle />
           <form method="post" action="/logout">
-            <button type="submit" className="text-xs text-text-muted hover:text-text">Log out</button>
+            <button type="submit" className="font-mono text-[10px] tracking-[0.14em] uppercase text-text-muted hover:text-accent">Log out</button>
           </form>
         </div>
       </div>
@@ -675,25 +679,25 @@ function MobileBottomNav({
   userAvatarUrl?: string | null;
 }) {
   return (
-    <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border/50 z-30">
+    <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border z-30 pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
-        <Link to="/dashboard" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
+        <Link to="/dashboard" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-full text-text-muted">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
-          <span className="text-[10px] font-medium">Home</span>
+          <span className="text-[10px] font-extrabold tracking-wide uppercase">Home</span>
         </Link>
-        <Link to="/dashboard#map" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
+        <Link to="/dashboard#map" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-full text-text-muted">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503-11.307l4.994-2.497A.75.75 0 0121 4.196v13.608a.75.75 0 01-.497.708l-5.006 2.503m-6.994-3.015l-5.006 2.503A.75.75 0 013 19.804V6.196a.75.75 0 01.497-.708l5.006-2.503m6.994 3.015L9 4.485m6.497 1.53L9 8.515" /></svg>
-          <span className="text-[10px] font-medium">Map</span>
+          <span className="text-[10px] font-extrabold tracking-wide uppercase">Map</span>
         </Link>
         {UI_FEATURES.messages && (
-        <Link to="/messages" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted">
+        <Link to="/messages" className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-full text-text-muted">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443h.004c2.174-.063 4.322-.258 6.426-.573 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg>
-          <span className="text-[10px] font-medium">Messages</span>
+          <span className="text-[10px] font-extrabold tracking-wide uppercase">Messages</span>
         </Link>
         )}
-        <Link to={profileHref} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-accent">
+        <Link to={profileHref} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-full text-accent">
           <Avatar handle={userHandle} avatarUrl={userAvatarUrl} sizeClass="w-5 h-5" textClass="text-[10px]" className="border-0" />
-          <span className="text-[10px] font-medium">Profile</span>
+          <span className="text-[10px] font-extrabold tracking-wide uppercase">Profile</span>
         </Link>
       </div>
     </nav>
@@ -702,23 +706,25 @@ function MobileBottomNav({
 
 function Nav({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
-    <nav className={`${isLoggedIn ? "sm:hidden" : ""} fixed top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50`}>
-      <Link to="/" className="flex items-center gap-2">
-        <img src="/secretlink.png" alt="Secretlink.life" className="w-7 h-7" />
-        <span className="text-lg font-bold tracking-tight">
-          secretlink<span className="text-accent">.</span>life
-        </span>
-      </Link>
-      <div className="flex items-center gap-3">
-        <ThemeToggle />
-        {!isLoggedIn && (
-          <Link
-            to="/login"
-            className="rounded-full bg-accent px-3 py-1.5 text-sm font-bold text-black hover:scale-[1.03] transition-all"
-          >
-            Sign in
-          </Link>
-        )}
+    <nav className={`${isLoggedIn ? "sm:hidden" : ""} fixed top-0 left-0 right-0 z-50 pt-[max(0.75rem,env(safe-area-inset-top))] px-3 sm:px-4`}>
+      <div className="mx-auto max-w-6xl flex items-center justify-between gap-3 rounded-full border border-border/80 bg-surface/80 backdrop-blur-xl px-3 sm:px-4 py-2 shadow-[0_8px_40px_rgba(0,0,0,0.35)]">
+        <Link to="/" className="flex items-center gap-2 min-w-0">
+          <img src="/secretlink.png" alt="Secretlink.life" className="w-8 h-8 shrink-0" />
+          <span className="text-sm sm:text-base font-extrabold tracking-tight truncate">
+            secretlink<span className="text-accent">.</span>life
+          </span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {!isLoggedIn && (
+            <Link
+              to="/login"
+              className="rounded-full bg-accent px-4 py-2 text-sm font-extrabold text-black hover:bg-accent-soft transition-colors"
+            >
+              Sign in
+            </Link>
+          )}
+        </div>
       </div>
     </nav>
   );
