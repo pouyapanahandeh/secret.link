@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, Link } from "@remix-run/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ProtectedViewer } from "../components/ProtectedViewer";
 import { AppNav } from "../components/AppNav";
 import { getApiBase } from "../lib/api.client";
@@ -32,9 +32,15 @@ export default function RevealSecret() {
   const [viewDurationSeconds, setViewDurationSeconds] = useState(30);
   const [remainingViews, setRemainingViews] = useState<number | null>(null);
   const [maxViews, setMaxViews] = useState(1);
+  // Sync guard — React state alone can miss a double-tap before re-render.
+  const revealInFlight = useRef(false);
+  const unlockedRef = useRef(false);
 
   const handleReveal = async () => {
+    if (revealInFlight.current || unlockedRef.current || expired) return;
+    revealInFlight.current = true;
     setRevealing(true);
+    setError(null);
 
     try {
       const apiBase = getApiBase();
@@ -42,9 +48,26 @@ export default function RevealSecret() {
       const fragment = window.location.hash;
       const keyParam = fragment.match(/k=([A-Za-z0-9_-]+)/)?.[1];
 
-      // Profile secrets have no key in the URL. Reveal burns after one read, so
-      // refuse to call the API until this browser has local unlock keys.
+      // Prefer status check (no burn) so a missing #k= key never destroys the secret.
       if (!keyParam) {
+        const statusRes = await fetch(`${apiBase}/v1/secrets/${secretId}`);
+        if (!statusRes.ok) {
+          const body = await statusRes.json().catch(() => null);
+          const errorKind = body?.error ?? "unknown";
+          if (errorKind === "not_found") setError("This secret doesn't exist.");
+          else if (errorKind === "burned" || errorKind === "max_views_reached") {
+            setError("This secret has already been viewed and is now destroyed.");
+          } else if (errorKind === "expired") setError("This secret has expired.");
+          else setError("Something went wrong. The secret may no longer exist.");
+          return;
+        }
+        const status = await statusRes.json();
+        if (!status.hasWraps) {
+          setError(
+            "This shared link is missing its decryption key. Copy the full URL, including the #k=… part at the end.",
+          );
+          return;
+        }
         const { loadExistingKeyPair } = await import("../lib/dm-crypto");
         const kp = await loadExistingKeyPair();
         if (!kp) {
@@ -55,11 +78,13 @@ export default function RevealSecret() {
         }
       }
 
-      // Fetch secret metadata from API
-      const res = await fetch(`${apiBase}/v1/secrets/${secretId}`);
+      // Burn + ciphertext. Only called once we know we can attempt decrypt.
+      const res = await fetch(`${apiBase}/v1/secrets/${secretId}/reveal`, { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         const errorKind = body?.error ?? "unknown";
+        // If a racing request already unlocked content, keep showing it.
+        if (unlockedRef.current) return;
         if (errorKind === "not_found") {
           setError("This secret doesn't exist.");
         } else if (errorKind === "burned" || errorKind === "max_views_reached") {
@@ -132,16 +157,18 @@ export default function RevealSecret() {
             else setContent({ type: "file", objectUrl, mimeType });
           }
           setRevealed(true);
+          unlockedRef.current = true;
+          setError(null);
           return;
         }
 
         if (contentType === "text") {
-          setContent({ type: "text", text: data.ciphertext });
-        } else {
-          setError("Cannot decrypt: missing encryption key in URL.");
+          setError(
+            "This shared link is missing its decryption key. Copy the full URL, including the #k=… part at the end.",
+          );
           return;
         }
-        setRevealed(true);
+        setError("Cannot decrypt: missing encryption key in URL.");
         return;
       }
 
@@ -183,15 +210,24 @@ export default function RevealSecret() {
       }
 
       setRevealed(true);
+      unlockedRef.current = true;
+      setError(null);
     } catch (e) {
       console.error("Reveal error:", e);
-      setError("Failed to decrypt. The link may be corrupted.");
+      if (!unlockedRef.current) {
+        setError("Failed to decrypt. The link may be corrupted — make sure the full URL including #k=… was copied.");
+      }
     } finally {
       setRevealing(false);
+      // Allow retry only when unlock failed (e.g. missing local keys before fetch).
+      if (!unlockedRef.current) {
+        revealInFlight.current = false;
+      }
     }
   };
 
-  if (error) {
+  // Prefer unlocked content over a late/racing error (e.g. double-tap burn).
+  if (error && !unlockedRef.current && !content) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center px-4">
         <AppNav />
@@ -239,8 +275,8 @@ export default function RevealSecret() {
         <div className="max-w-lg w-full">
           <p className="text-xs text-text-muted mb-4 text-center">
             {maxViews === 1
-              ? "This secret has been revealed and is now destroyed"
-              : `${remainingViews ?? 0} view${(remainingViews ?? 0) === 1 ? "" : "s"} remaining`
+              ? "You're viewing it now — it won't open again after this"
+              : `${remainingViews ?? 0} view${(remainingViews ?? 0) === 1 ? "" : "s"} remaining after this`
             }
           </p>
 

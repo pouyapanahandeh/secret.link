@@ -332,6 +332,10 @@ export default function Send() {
                 <p className="font-mono text-xs sm:text-sm break-all text-accent bg-accent/10 border border-accent/20 px-4 py-3">
                   {link}
                 </p>
+                <p className="mt-3 text-xs text-text-muted leading-relaxed">
+                  Copy the full link, including the <span className="font-mono text-accent">#k=…</span> part.
+                  It can only be opened once — refreshing after reveal will show it’s gone.
+                </p>
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">

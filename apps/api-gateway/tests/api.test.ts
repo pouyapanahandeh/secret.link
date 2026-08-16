@@ -55,15 +55,15 @@ describe("Secrets API", () => {
     expect(created.id).toBeTruthy();
     expect(created.expiresAt).toBeTruthy();
 
-    // Reveal
-    const revealRes = await fetch(`${baseUrl}/v1/secrets/${created.id}`);
+    // Reveal (burns)
+    const revealRes = await fetch(`${baseUrl}/v1/secrets/${created.id}/reveal`, { method: "POST" });
     expect(revealRes.status).toBe(200);
     const revealed = await revealRes.json();
     expect(revealed.ciphertext).toBe("test-encrypted-data");
     expect(revealed.remainingViews).toBe(0);
 
     // Second reveal should fail (burned)
-    const burnedRes = await fetch(`${baseUrl}/v1/secrets/${created.id}`);
+    const burnedRes = await fetch(`${baseUrl}/v1/secrets/${created.id}/reveal`, { method: "POST" });
     expect(burnedRes.status).toBe(410);
   });
 
@@ -714,7 +714,7 @@ describe("Multi-device DM keys", () => {
     expect(createRes.status).toBe(201);
     const created = await createRes.json();
 
-    const revealRes = await fetch(`${baseUrl}/v1/secrets/${created.id}`);
+    const revealRes = await fetch(`${baseUrl}/v1/secrets/${created.id}/reveal`, { method: "POST" });
     expect(revealRes.status).toBe(200);
     const revealed = await revealRes.json();
     expect(revealed.wraps).toHaveLength(2);

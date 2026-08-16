@@ -212,6 +212,48 @@ secretsRouter.post("/map/:id/report", validateBody(MapReportInput), async (ctx: 
 
 secretsRouter.get("/:id", async (ctx: Context) => {
   const id = ctx.params["id"]!;
+  const record = await secretRepo.findById(id);
+  if (!record) {
+    ctx.status = 404;
+    ctx.body = { error: "not_found" };
+    return;
+  }
+  if (record.burned) {
+    ctx.status = 410;
+    ctx.body = { error: "burned" };
+    return;
+  }
+  const revealActivatedTtl = record.ttlSeconds != null;
+  if (
+    (!revealActivatedTtl || record.viewCount > 0) &&
+    new Date() > record.expiresAt
+  ) {
+    ctx.status = 410;
+    ctx.body = { error: "expired" };
+    return;
+  }
+  if (record.viewCount >= record.maxViews) {
+    ctx.status = 410;
+    ctx.body = { error: "max_views_reached" };
+    return;
+  }
+
+  const row = secretRepo.findRowById(id);
+  const wraps = coalesceWrapsFromRow(row);
+  ctx.status = 200;
+  ctx.body = {
+    id,
+    contentType: record.contentType,
+    maxViews: record.maxViews,
+    viewCount: record.viewCount,
+    viewDurationSeconds: record.viewDurationSeconds ?? null,
+    hasWraps: wraps.length > 0,
+    available: true,
+  };
+});
+
+async function handleReveal(ctx: Context) {
+  const id = ctx.params["id"]!;
   const result = await revealSecret(createSecretDeps)(id);
   result.match(
     (val) => {
@@ -250,6 +292,11 @@ secretsRouter.get("/:id", async (ctx: Context) => {
       ctx.body = { error: e.kind };
     },
   );
+}
+
+// Burn + return ciphertext. Prefer this over GET for clients that can decrypt.
+secretsRouter.post("/:id/reveal", async (ctx: Context) => {
+  await handleReveal(ctx);
 });
 
 secretsRouter.post("/blob", blobUploadRateLimiter(), async (ctx: Context) => {

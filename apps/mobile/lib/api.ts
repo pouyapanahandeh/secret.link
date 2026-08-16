@@ -258,7 +258,7 @@ export const secretsApi = {
       viewDurationSeconds?: number;
       remainingViews: number;
       maxViews: number;
-    }>(`/secrets/${id}`, { auth: true }),
+    }>(`/secrets/${id}/reveal`, { method: "POST", auth: true }),
 
   getInbox: (handle: string) =>
     api<
