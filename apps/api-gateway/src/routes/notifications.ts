@@ -3,7 +3,8 @@ import type { Context } from "koa";
 import { requireAuth, type AuthPayload } from "../middleware/auth.js";
 import {
   notificationsHub,
-  listNotifications,
+  listNotificationsPage,
+  countNotifications,
   countUnread,
   markRead,
   markAllRead,
@@ -17,10 +18,17 @@ export const notificationsRouter = new Router({ prefix: "/notifications" });
 // ─── List notifications ─────────────────────────────────────────────────────
 notificationsRouter.get("/", requireAuth(), async (ctx: Context) => {
   const auth = ctx.state.user as AuthPayload;
-  const limit = Number(ctx.query["limit"]) || 50;
+  const limit = Math.min(Math.max(Number(ctx.query["limit"]) || 50, 1), 50);
+  const offset = Math.max(Number(ctx.query["offset"]) || 0, 0);
+  const items = listNotificationsPage(auth.userId, limit, offset);
+  const total = countNotifications(auth.userId);
+  const nextOffset = offset + items.length;
   ctx.body = {
-    notifications: listNotifications(auth.userId, limit),
+    notifications: items,
     unreadCount: countUnread(auth.userId),
+    hasMore: nextOffset < total,
+    nextOffset,
+    total,
   };
 });
 

@@ -2,23 +2,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBase } from "../lib/api.client";
 import type { NotificationDTO } from "../lib/notifications.client";
 
+export const NOTIFICATION_PAGE_SIZE = 10;
+
 interface UseNotificationsResult {
   notifications: NotificationDTO[];
   unreadCount: number;
+  hasMore: boolean;
+  loadingMore: boolean;
   markRead: (id: string) => Promise<void>;
-  markAllRead: () => Promise<void>;
+  loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
-/**
- * Loads the current user's notifications and keeps them live via SSE.
- * Mirrors the DM stream pattern: POST for a short-lived ticket, then open an
- * EventSource (EventSource can't send Authorization headers).
- */
 export function useNotifications(token: string): UseNotificationsResult {
   const [notifications, setNotifications] = useState<NotificationDTO[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const sseRef = useRef<EventSource | null>(null);
+  const loadingRef = useRef(false);
+  const nextOffsetRef = useRef(0);
+  const hasMoreRef = useRef(false);
 
   const authHeaders = useCallback(
     () => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }),
@@ -27,19 +31,54 @@ export function useNotifications(token: string): UseNotificationsResult {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${getApiBase()}/v1/notifications`, { headers: authHeaders() });
+      const res = await fetch(
+        `${getApiBase()}/v1/notifications?limit=${NOTIFICATION_PAGE_SIZE}&offset=0`,
+        { headers: authHeaders() },
+      );
       if (!res.ok) return;
       const data = await res.json();
-      setNotifications(data.notifications ?? []);
+      const items = (data.notifications ?? []) as NotificationDTO[];
+      setNotifications(items);
       setUnreadCount(data.unreadCount ?? 0);
+      setHasMore(!!data.hasMore);
+      const offset = Number(data.nextOffset ?? items.length);
+      nextOffsetRef.current = offset;
+      hasMoreRef.current = !!data.hasMore;
     } catch {
       /* offline / transient — keep previous state */
+    }
+  }, [authHeaders]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingRef.current || !hasMoreRef.current) return;
+    loadingRef.current = true;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(
+        `${getApiBase()}/v1/notifications?limit=${NOTIFICATION_PAGE_SIZE}&offset=${nextOffsetRef.current}`,
+        { headers: authHeaders() },
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const items = (data.notifications ?? []) as NotificationDTO[];
+      setNotifications((prev) => {
+        const seen = new Set(prev.map((n) => n.id));
+        return [...prev, ...items.filter((n) => !seen.has(n.id))];
+      });
+      setHasMore(!!data.hasMore);
+      const offset = Number(data.nextOffset ?? nextOffsetRef.current + items.length);
+      nextOffsetRef.current = offset;
+      hasMoreRef.current = !!data.hasMore;
+    } finally {
+      loadingRef.current = false;
+      setLoadingMore(false);
     }
   }, [authHeaders]);
 
   const markRead = useCallback(
     async (id: string) => {
       setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+      setUnreadCount((count) => Math.max(0, count - 1));
       try {
         const res = await fetch(`${getApiBase()}/v1/notifications/read`, {
           method: "POST",
@@ -47,8 +86,8 @@ export function useNotifications(token: string): UseNotificationsResult {
           body: JSON.stringify({ id }),
         });
         if (res.ok) {
-          const { unreadCount } = await res.json();
-          if (typeof unreadCount === "number") setUnreadCount(unreadCount);
+          const body = await res.json();
+          if (typeof body.unreadCount === "number") setUnreadCount(body.unreadCount);
         }
       } catch {
         /* ignore */
@@ -56,20 +95,6 @@ export function useNotifications(token: string): UseNotificationsResult {
     },
     [authHeaders],
   );
-
-  const markAllRead = useCallback(async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    setUnreadCount(0);
-    try {
-      await fetch(`${getApiBase()}/v1/notifications/read`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({}),
-      });
-    } catch {
-      /* ignore */
-    }
-  }, [authHeaders]);
 
   useEffect(() => {
     if (!token) return;
@@ -97,7 +122,7 @@ export function useNotifications(token: string): UseNotificationsResult {
             const incoming: NotificationDTO | undefined = payload.notification;
             if (incoming) {
               setNotifications((prev) =>
-                prev.some((n) => n.id === incoming.id) ? prev : [incoming, ...prev].slice(0, 50),
+                prev.some((n) => n.id === incoming.id) ? prev : [incoming, ...prev],
               );
             }
             if (typeof payload.unreadCount === "number") setUnreadCount(payload.unreadCount);
@@ -119,5 +144,5 @@ export function useNotifications(token: string): UseNotificationsResult {
     };
   }, [token, authHeaders, refresh]);
 
-  return { notifications, unreadCount, markRead, markAllRead, refresh };
+  return { notifications, unreadCount, hasMore, loadingMore, markRead, loadMore, refresh };
 }

@@ -161,6 +161,12 @@ const stmts = {
   list: db.prepare(
     `SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`,
   ),
+  listPage: db.prepare(
+    `SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+  ),
+  countAll: db.prepare(
+    `SELECT COUNT(*) AS count FROM notifications WHERE user_id = ?`,
+  ),
   countUnread: db.prepare(
     `SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND read = 0`,
   ),
@@ -238,6 +244,17 @@ export function createNotification(input: CreateNotificationInput): Notification
 export function listNotifications(userId: string, limit = 50): NotificationDTO[] {
   const rows = stmts.list.all(userId, Math.min(Math.max(limit, 1), 100)) as NotificationRow[];
   return rows.map(toDTO);
+}
+
+export function listNotificationsPage(userId: string, limit: number, offset: number): NotificationDTO[] {
+  const cap = Math.min(Math.max(limit, 1), 50);
+  const off = Math.max(offset, 0);
+  const rows = stmts.listPage.all(userId, cap, off) as NotificationRow[];
+  return rows.map(toDTO);
+}
+
+export function countNotifications(userId: string): number {
+  return (stmts.countAll.get(userId) as { count: number } | undefined)?.count ?? 0;
 }
 
 export function countUnread(userId: string): number {
