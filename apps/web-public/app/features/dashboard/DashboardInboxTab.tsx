@@ -1,17 +1,22 @@
 import { Link, useFetcher } from "@remix-run/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getProfileUrl } from "@secretlink/core/profile-url";
 import { Avatar } from "../../components/Avatar";
 import { NotificationPrompt } from "../../components/NotificationPrompt";
 import { StoriesRow } from "../../components/StoriesRow";
 import { LiveStreams } from "../../components/LiveStreams";
 import { UI_FEATURES } from "../../lib/feature-flags";
-import type { DashboardInboxTabProps } from "./types";
+import { getApiBase } from "../../lib/api.client";
+import type { DashboardInboxTabProps, SentSecret } from "./types";
+
+const SENT_PAGE_SIZE = 10;
 
 export function DashboardInboxTab({
   user,
   inbox,
-  sent,
+  sent: initialSent,
+  sentHasMore: initialHasMore,
+  sentNextOffset: initialNextOffset,
   token,
   following,
   storyHandleSet,
@@ -24,6 +29,59 @@ export function DashboardInboxTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
   const lastFollowRef = useRef<string | null>(null);
+
+  const [sent, setSent] = useState<SentSecret[]>(initialSent);
+  const [sentHasMore, setSentHasMore] = useState(initialHasMore);
+  const [sentNextOffset, setSentNextOffset] = useState(initialNextOffset);
+  const [sentLoading, setSentLoading] = useState(false);
+  const sentSentinelRef = useRef<HTMLDivElement | null>(null);
+  const sentLoadingRef = useRef(false);
+
+  useEffect(() => {
+    setSent(initialSent);
+    setSentHasMore(initialHasMore);
+    setSentNextOffset(initialNextOffset);
+  }, [initialSent, initialHasMore, initialNextOffset]);
+
+  const loadMoreSent = useCallback(async () => {
+    if (sentLoadingRef.current || !sentHasMore) return;
+    sentLoadingRef.current = true;
+    setSentLoading(true);
+    try {
+      const res = await fetch(
+        `${getApiBase()}/v1/secrets/sent/${user.id}?limit=${SENT_PAGE_SIZE}&offset=${sentNextOffset}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) return;
+      const body = await res.json();
+      const items = (Array.isArray(body.items) ? body.items : []) as SentSecret[];
+      setSent((prev) => {
+        const seen = new Set(prev.map((s) => s.id));
+        return [...prev, ...items.filter((s) => !seen.has(s.id))];
+      });
+      setSentHasMore(!!body.hasMore);
+      setSentNextOffset(Number(body.nextOffset ?? sentNextOffset + items.length));
+    } finally {
+      sentLoadingRef.current = false;
+      setSentLoading(false);
+    }
+  }, [sentHasMore, sentNextOffset, token, user.id]);
+
+  useEffect(() => {
+    const node = sentSentinelRef.current;
+    if (!node || !sentHasMore) return;
+    const root = node.closest(".overflow-y-auto");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          void loadMoreSent();
+        }
+      },
+      { root: root instanceof Element ? root : null, rootMargin: "160px", threshold: 0 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loadMoreSent, sentHasMore, sent.length]);
 
   const searchResults = (Array.isArray(searchFetcher.data) ? searchFetcher.data : []) as Array<{
     id: string;
@@ -233,7 +291,7 @@ export function DashboardInboxTab({
         </div>
       ) : (
         <div className="border border-border divide-y divide-border">
-          {sent.map((secret: any) => (
+          {sent.map((secret) => (
             <div key={secret.id} className="flex items-center gap-3 bg-surface p-3 sm:p-4">
               <span className="text-xl">
                 {secret.contentType === "text" ? "💬" : "📎"}
@@ -243,7 +301,7 @@ export function DashboardInboxTab({
                   → {secret.recipientHandle ? `@${secret.recipientHandle}` : "Link"}
                 </p>
                 <p className="text-xs text-text-muted">
-                  {secret.burned ? "Burned" : secret.viewCount > 0 ? `${secret.viewCount}/${secret.maxViews}` : "Pending"}
+                  {secret.burned ? "Burned" : (secret.viewCount ?? 0) > 0 ? `${secret.viewCount}/${secret.maxViews}` : "Pending"}
                 </p>
               </div>
               <span className="font-mono text-[10px] text-text-muted shrink-0">
@@ -251,6 +309,13 @@ export function DashboardInboxTab({
               </span>
             </div>
           ))}
+          {sentHasMore && (
+            <div ref={sentSentinelRef} className="py-4 text-center">
+              <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-text-muted">
+                {sentLoading ? "Loading…" : "Scroll for older sends"}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </section>

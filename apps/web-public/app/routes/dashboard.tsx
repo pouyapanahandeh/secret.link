@@ -107,10 +107,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   const inbox = inboxRes.ok ? await inboxRes.json() : [];
 
-  const sentRes = await fetch(`${API_URL}/v1/secrets/sent/${user.id}`, {
+  const sentRes = await fetch(`${API_URL}/v1/secrets/sent/${user.id}?limit=10&offset=0`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  const sent = sentRes.ok ? await sentRes.json() : [];
+  let sent: unknown[] = [];
+  let sentHasMore = false;
+  let sentNextOffset = 0;
+  if (sentRes.ok) {
+    const sentBody = await sentRes.json();
+    if (Array.isArray(sentBody)) {
+      sent = sentBody;
+    } else {
+      sent = Array.isArray(sentBody.items) ? sentBody.items : [];
+      sentHasMore = !!sentBody.hasMore;
+      sentNextOffset = Number(sentBody.nextOffset ?? sent.length);
+    }
+  }
 
   const followingRes = await fetch(`${API_URL}/v1/users/me/following`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -133,7 +145,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     (storyIdsByHandle[h] ??= []).push(String(m.id));
   }
 
-  return json({ user, inbox, sent, token, following, storyHandles, storyIdsByHandle, mapSecrets });
+  return json({ user, inbox, sent, sentHasMore, sentNextOffset, token, following, storyHandles, storyIdsByHandle, mapSecrets });
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {

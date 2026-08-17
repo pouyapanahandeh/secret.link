@@ -33,10 +33,22 @@ export type PasskeyState = {
   onAddPasskey: () => void;
 };
 
+export type SentSecret = {
+  id: string;
+  contentType?: string;
+  recipientHandle?: string | null;
+  createdAt: string;
+  viewCount?: number;
+  maxViews?: number;
+  burned?: boolean;
+};
+
 export type DashboardInboxTabProps = {
   user: DashboardUser;
   inbox: unknown[];
-  sent: unknown[];
+  sent: SentSecret[];
+  sentHasMore: boolean;
+  sentNextOffset: number;
   token: string;
   following: UserLite[];
   storyHandleSet: Set<string>;

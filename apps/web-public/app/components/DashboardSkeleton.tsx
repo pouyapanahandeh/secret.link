@@ -60,11 +60,10 @@ function DashboardShell({
       </aside>
 
       <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
-        <Pulse className="w-7 h-7 rounded-lg" />
-        <div className="flex items-center gap-2">
+        <Pulse className="h-5 w-36" />
+        <div className="flex items-center gap-1">
           <Pulse className="w-8 h-8 rounded-full" />
-          <Pulse className="w-8 h-8 rounded-full" />
-          <Pulse className="h-3 w-12" />
+          <Pulse className="w-9 h-9 rounded-full" />
         </div>
       </header>
 

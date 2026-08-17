@@ -4,6 +4,7 @@ import {
   useLoaderData,
   useActionData,
   useFetcher,
+  useNavigate,
   Link,
   useSearchParams,
   type ClientLoaderFunctionArgs,
@@ -26,6 +27,7 @@ import { Avatar } from "../components/Avatar";
 import type { UserLite } from "../lib/users";
 import { UI_FEATURES } from "../lib/feature-flags";
 import { ProfilePageSkeleton } from "../components/DashboardSkeleton";
+import { DashboardMobileHeader } from "../features/dashboard/DashboardNav";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const handle = data?.profile?.handle ?? data?.handle ?? "user";
@@ -226,6 +228,7 @@ export default function ProfilePage() {
   const actionData = useActionData<typeof action>();
   const secretFetcher = useFetcher<typeof action>();
   const profileFetcher = useFetcher<{ error?: string | null; intent?: string }>();
+  const navigate = useNavigate();
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersCount, setFollowersCount] = useState(profile?.followersCount ?? 0);
   const [followModal, setFollowModal] = useState<FollowListTab | null>(null);
@@ -243,6 +246,22 @@ export default function ProfilePage() {
   const mode = resolveProfileViewMode(isLoggedIn, isOwnProfile);
   const profileHref = ownHandle ? `/${ownHandle}` : "/dashboard#profile";
   const navAvatarUrl = isOwnProfile ? avatarUrl : ownAvatarUrl;
+
+  function handleMobileNav(id: string) {
+    if (id === "profile") {
+      navigate(profileHref);
+      return;
+    }
+    if (id === "messages") {
+      navigate("/messages");
+      return;
+    }
+    if (id === "map") {
+      navigate("/dashboard#map");
+      return;
+    }
+    navigate("/dashboard");
+  }
 
   useEffect(() => {
     if (isOwnProfile && searchParams.get("share") === "1") {
@@ -409,22 +428,7 @@ export default function ProfilePage() {
               userHandle={ownHandle ?? handle}
               userAvatarUrl={navAvatarUrl}
             />
-            <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
-              <Link to="/dashboard" className="flex items-center gap-2">
-                <img src="/secretlink.png" alt="" className="w-7 h-7" />
-                <span className="text-sm font-extrabold tracking-tight">
-                  secretlink<span className="text-accent">.</span>life
-                </span>
-              </Link>
-              <div className="flex items-center gap-2">
-                {ownHandle && (
-                  <Link to={profileHref} aria-label="Your profile" className="rounded-full">
-                    <Avatar handle={ownHandle} avatarUrl={navAvatarUrl} sizeClass="w-8 h-8" textClass="text-xs" />
-                  </Link>
-                )}
-                <ThemeToggle />
-              </div>
-            </header>
+            {token && <DashboardMobileHeader token={token} onNavClick={handleMobileNav} />}
           </>
         ) : (
           <Nav isLoggedIn={isLoggedIn} />
@@ -479,22 +483,7 @@ export default function ProfilePage() {
       {isLoggedIn ? (
         <>
           <Sidebar profileHref={profileHref} userHandle={ownHandle ?? handle} userAvatarUrl={navAvatarUrl} />
-          <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
-            <Link to="/dashboard" className="flex items-center gap-2">
-              <img src="/secretlink.png" alt="" className="w-7 h-7" />
-              <span className="text-sm font-extrabold tracking-tight">
-                secretlink<span className="text-accent">.</span>life
-              </span>
-            </Link>
-            <div className="flex items-center gap-2">
-              {ownHandle && (
-                <Link to={profileHref} aria-label="Your profile" className="rounded-full">
-                  <Avatar handle={ownHandle} avatarUrl={navAvatarUrl} sizeClass="w-8 h-8" textClass="text-xs" />
-                </Link>
-              )}
-              <ThemeToggle />
-            </div>
-          </header>
+          {token && <DashboardMobileHeader token={token} onNavClick={handleMobileNav} />}
         </>
       ) : (
         <Nav isLoggedIn={isLoggedIn} />

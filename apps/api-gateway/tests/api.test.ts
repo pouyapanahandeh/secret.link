@@ -3,6 +3,7 @@ import Koa from "koa";
 import bodyParser from "koa-bodyparser";
 import { router } from "../src/routes/index.js";
 import { errorHandler } from "../src/middleware/error-handler.js";
+import { optionalAuth } from "../src/middleware/auth.js";
 import type { Server } from "http";
 import db from "../src/db.js";
 import { signToken } from "../src/middleware/auth.js";
@@ -14,6 +15,7 @@ beforeAll(async () => {
   const app = new Koa();
   app.use(errorHandler());
   app.use(bodyParser());
+  app.use(optionalAuth());
   app.use(router.routes());
   app.use(router.allowedMethods());
 
@@ -65,6 +67,47 @@ describe("Secrets API", () => {
     // Second reveal should fail (burned)
     const burnedRes = await fetch(`${baseUrl}/v1/secrets/${created.id}/reveal`, { method: "POST" });
     expect(burnedRes.status).toBe(410);
+  });
+
+  it("paginates sent secrets with limit/offset", async () => {
+    const handle = `sentpage${Date.now().toString(36)}`;
+    const signup = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle }),
+    });
+    expect(signup.status).toBe(201);
+    const { user } = (await signup.json()) as { user: { id: string; handle: string } };
+    const token = decodeURIComponent(/sl_token=([^;]+)/.exec(signup.headers.get("set-cookie") ?? "")?.[1] ?? "");
+    expect(token).toBeTruthy();
+
+    for (let i = 0; i < 12; i++) {
+      const createRes = await fetch(`${baseUrl}/v1/secrets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ciphertext: `sent-${i}`, ttlSeconds: 3600 }),
+      });
+      expect(createRes.status).toBe(201);
+    }
+
+    const page1 = await fetch(`${baseUrl}/v1/secrets/sent/${user.id}?limit=10&offset=0`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(page1.status).toBe(200);
+    const body1 = await page1.json();
+    expect(body1.items).toHaveLength(10);
+    expect(body1.hasMore).toBe(true);
+    expect(body1.nextOffset).toBe(10);
+
+    const page2 = await fetch(`${baseUrl}/v1/secrets/sent/${user.id}?limit=10&offset=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body2 = await page2.json();
+    expect(body2.items.length).toBeGreaterThanOrEqual(2);
+    expect(body2.hasMore).toBe(false);
   });
 
   it("rejects invalid input with validation_error shape", async () => {

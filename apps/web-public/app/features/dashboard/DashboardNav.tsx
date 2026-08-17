@@ -1,9 +1,65 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@remix-run/react";
 import { Avatar } from "../../components/Avatar";
 import { ThemeToggle } from "../../components/ThemeToggle";
 import { NotificationBell } from "../../components/NotificationBell";
 import { UI_FEATURES } from "../../lib/feature-flags";
 import type { DashboardNavProps, DashboardTab } from "./types";
+
+function AccountMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        aria-label="Account menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="w-9 h-9 rounded-full flex items-center justify-center border border-border text-text-muted hover:text-text hover:border-accent/50 transition-colors"
+      >
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="6" r="1.6" />
+          <circle cx="12" cy="12" r="1.6" />
+          <circle cx="12" cy="18" r="1.6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 z-50 w-52 border border-border bg-surface shadow-xl">
+          <div className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-border">
+            <span className="font-mono text-[10px] tracking-[0.16em] uppercase text-text-muted">Theme</span>
+            <ThemeToggle />
+          </div>
+          <form method="post" action="/logout">
+            <button
+              type="submit"
+              className="w-full text-left px-3 py-3 font-mono text-[10px] tracking-[0.16em] uppercase text-text-muted hover:text-accent hover:bg-surface-raised transition-colors"
+            >
+              Log out
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function navIcon(id: DashboardTab | "messages", userHandle?: string, userAvatarUrl?: string | null) {
   if (id === "profile" && userHandle) {
@@ -104,34 +160,19 @@ export function DashboardSidebar({ activeTab, inboxCount, token, userHandle, use
 
 export function DashboardMobileHeader({
   token,
-  userHandle,
-  userAvatarUrl,
   onNavClick,
-}: Pick<DashboardNavProps, "token" | "userHandle" | "userAvatarUrl" | "onNavClick">) {
+}: Pick<DashboardNavProps, "token" | "onNavClick">) {
   return (
-    <header className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
-      <Link to="/dashboard" className="flex items-center gap-2">
-        <img src="/secretlink.png" alt="" className="w-7 h-7" />
-        <span className="text-sm font-extrabold tracking-tight">
+    <header className="sm:hidden flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-surface shrink-0">
+      <Link to="/dashboard" className="flex items-center gap-2 min-w-0">
+        <img src="/secretlink.png" alt="" className="w-7 h-7 shrink-0" />
+        <span className="text-sm font-extrabold tracking-tight truncate">
           secretlink<span className="text-accent">.</span>life
         </span>
       </Link>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onNavClick("profile")}
-          aria-label="Your profile"
-          className="rounded-full"
-        >
-          <Avatar handle={userHandle} avatarUrl={userAvatarUrl} sizeClass="w-8 h-8" textClass="text-xs" />
-        </button>
+      <div className="flex items-center gap-1 shrink-0">
         <NotificationBell token={token} onNavigate={onNavClick} />
-        <ThemeToggle />
-        <form method="post" action="/logout">
-          <button type="submit" className="font-mono text-[10px] tracking-[0.14em] uppercase text-text-muted hover:text-accent">
-            Log out
-          </button>
-        </form>
+        <AccountMenu />
       </div>
     </header>
   );

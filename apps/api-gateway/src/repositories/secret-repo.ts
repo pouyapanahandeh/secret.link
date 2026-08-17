@@ -18,6 +18,10 @@ const stmts = {
   sent: db.prepare(
     `SELECT id, content_type, recipient_handle, created_at, view_count, max_views, burned FROM secrets WHERE sender_id = ? ORDER BY created_at DESC`,
   ),
+  sentPage: db.prepare(
+    `SELECT id, content_type, recipient_handle, created_at, view_count, max_views, burned FROM secrets WHERE sender_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+  ),
+  sentCount: db.prepare(`SELECT COUNT(*) AS c FROM secrets WHERE sender_id = ?`),
 };
 
 function rowToRecord(row: Record<string, unknown>): SecretRecord {
@@ -126,6 +130,12 @@ export const secretRepo = {
   },
   listInbox: (handle: string) => stmts.inbox.all(handle) as Array<Record<string, unknown>>,
   listSent: (userId: string) => stmts.sent.all(userId) as Array<Record<string, unknown>>,
+  listSentPage: (userId: string, limit: number, offset: number) =>
+    stmts.sentPage.all(userId, limit, offset) as Array<Record<string, unknown>>,
+  countSent: (userId: string) => {
+    const row = stmts.sentCount.get(userId) as { c: number } | undefined;
+    return Number(row?.c ?? 0);
+  },
 };
 
 export const createSecretDeps = {

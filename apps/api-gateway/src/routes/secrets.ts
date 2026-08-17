@@ -371,7 +371,8 @@ secretsRouter.get("/sent/:userId", requireAuth(), async (ctx: Context) => {
     ctx.body = { error: "forbidden" };
     return;
   }
-  ctx.body = secretRepo.listSent(userId!).map((r) => ({
+
+  const mapRow = (r: Record<string, unknown>) => ({
     id: r.id,
     contentType: r.content_type,
     recipientHandle: r.recipient_handle,
@@ -379,5 +380,24 @@ secretsRouter.get("/sent/:userId", requireAuth(), async (ctx: Context) => {
     viewCount: r.view_count,
     maxViews: r.max_views,
     burned: !!r.burned,
-  }));
+  });
+
+  const limitRaw = ctx.query["limit"];
+  if (limitRaw === undefined) {
+    // Backward-compatible full list for older clients.
+    ctx.body = secretRepo.listSent(userId!).map(mapRow);
+    return;
+  }
+
+  const limit = Math.min(Math.max(Number(limitRaw) || 10, 1), 50);
+  const offset = Math.max(Number(ctx.query["offset"]) || 0, 0);
+  const items = secretRepo.listSentPage(userId!, limit, offset).map(mapRow);
+  const total = secretRepo.countSent(userId!);
+  const nextOffset = offset + items.length;
+  ctx.body = {
+    items,
+    hasMore: nextOffset < total,
+    nextOffset,
+    total,
+  };
 });
