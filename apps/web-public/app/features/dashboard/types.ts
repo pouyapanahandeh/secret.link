@@ -43,6 +43,18 @@ export type SentSecret = {
   burned?: boolean;
 };
 
+export function isSentUnseen(secret: SentSecret) {
+  return !secret.burned && !(secret.viewCount ?? 0);
+}
+
+export function sortSentSecrets(items: SentSecret[]) {
+  return [...items].sort((a, b) => {
+    const unseenDelta = Number(isSentUnseen(b)) - Number(isSentUnseen(a));
+    if (unseenDelta !== 0) return unseenDelta;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
 export type DashboardInboxTabProps = {
   user: DashboardUser;
   inbox: unknown[];

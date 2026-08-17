@@ -86,3 +86,43 @@
   opacity: 0.03;
   mix-blend-mode: multiply;
 }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes copy-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+
+@keyframes url-flash {
+  0% { border-color: var(--color-border); background-color: var(--color-surface-raised); }
+  35% { border-color: var(--color-accent); background-color: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface-raised)); }
+  100% { border-color: var(--color-border); background-color: var(--color-surface-raised); }
+}
+
+.toast-copy {
+  animation: toast-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.copy-btn-pop {
+  animation: copy-pop 0.35s ease-out;
+}
+
+@keyframes drawer-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.drawer-slide-up {
+  animation: drawer-up 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}

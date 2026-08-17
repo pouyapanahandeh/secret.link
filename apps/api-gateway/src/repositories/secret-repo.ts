@@ -16,10 +16,10 @@ const stmts = {
     `SELECT id, content_type, created_at, view_count, max_views, burned FROM secrets WHERE recipient_handle = ? AND burned = 0 ORDER BY created_at DESC`,
   ),
   sent: db.prepare(
-    `SELECT id, content_type, recipient_handle, created_at, view_count, max_views, burned FROM secrets WHERE sender_id = ? ORDER BY created_at DESC`,
+    `SELECT id, content_type, recipient_handle, created_at, view_count, max_views, burned FROM secrets WHERE sender_id = ? ORDER BY CASE WHEN burned = 0 AND view_count = 0 THEN 0 ELSE 1 END, created_at DESC`,
   ),
   sentPage: db.prepare(
-    `SELECT id, content_type, recipient_handle, created_at, view_count, max_views, burned FROM secrets WHERE sender_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT id, content_type, recipient_handle, created_at, view_count, max_views, burned FROM secrets WHERE sender_id = ? ORDER BY CASE WHEN burned = 0 AND view_count = 0 THEN 0 ELSE 1 END, created_at DESC LIMIT ? OFFSET ?`,
   ),
   sentCount: db.prepare(`SELECT COUNT(*) AS c FROM secrets WHERE sender_id = ?`),
 };

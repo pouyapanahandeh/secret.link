@@ -1,4 +1,5 @@
 import { Link, useFetcher } from "@remix-run/react";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getProfileUrl } from "@secretlink/core/profile-url";
 import { Avatar } from "../../components/Avatar";
@@ -7,7 +8,8 @@ import { StoriesRow } from "../../components/StoriesRow";
 import { LiveStreams } from "../../components/LiveStreams";
 import { UI_FEATURES } from "../../lib/feature-flags";
 import { getApiBase } from "../../lib/api.client";
-import type { DashboardInboxTabProps, SentSecret } from "./types";
+import { sortSentSecrets, type DashboardInboxTabProps, type SentSecret } from "./types";
+import { SentSecretRow, SentSecretsDrawer } from "./SentSecretsDrawer";
 
 const SENT_PAGE_SIZE = 10;
 
@@ -34,8 +36,10 @@ export function DashboardInboxTab({
   const [sentHasMore, setSentHasMore] = useState(initialHasMore);
   const [sentNextOffset, setSentNextOffset] = useState(initialNextOffset);
   const [sentLoading, setSentLoading] = useState(false);
-  const sentSentinelRef = useRef<HTMLDivElement | null>(null);
   const sentLoadingRef = useRef(false);
+  const [sentDrawerOpen, setSentDrawerOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setSent(initialSent);
@@ -67,21 +71,9 @@ export function DashboardInboxTab({
     }
   }, [sentHasMore, sentNextOffset, token, user.id]);
 
-  useEffect(() => {
-    const node = sentSentinelRef.current;
-    if (!node || !sentHasMore) return;
-    const root = node.closest(".overflow-y-auto");
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          void loadMoreSent();
-        }
-      },
-      { root: root instanceof Element ? root : null, rootMargin: "160px", threshold: 0 },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [loadMoreSent, sentHasMore, sent.length]);
+  const sortedSent = sortSentSecrets(sent);
+  const previewSent = sortedSent.slice(0, SENT_PAGE_SIZE);
+  const canOpenSentDrawer = sentHasMore || sent.length > SENT_PAGE_SIZE;
 
   const searchResults = (Array.isArray(searchFetcher.data) ? searchFetcher.data : []) as Array<{
     id: string;
@@ -121,6 +113,23 @@ export function DashboardInboxTab({
     }
   }, [followFetcher.state, followFetcher.data]);
 
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+
+  async function copyProfileLink() {
+    try {
+      await navigator.clipboard.writeText(getProfileUrl(user.handle));
+      setCopied(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2200);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
   function toggleFollow(targetId: string) {
     const next = !followingMap[targetId];
     lastFollowRef.current = targetId;
@@ -157,16 +166,44 @@ export function DashboardInboxTab({
 
       {UI_FEATURES.live && <LiveStreams compact />}
 
-      <div className="flex items-center gap-2 mb-6 bg-surface-raised border border-border px-3 py-2.5">
+      <div className={`flex items-center gap-2 mb-6 bg-surface-raised border border-border px-3 py-2.5 ${copied ? "url-copied" : ""}`}>
         <span className="font-mono text-[10px] text-text-muted shrink-0">URL</span>
         <code className="font-mono text-xs sm:text-sm text-text truncate flex-1">secretlink.life/@{user.handle}</code>
         <button
-          onClick={() => navigator.clipboard?.writeText(getProfileUrl(user.handle))}
-          className="font-mono text-[10px] tracking-[0.14em] uppercase text-accent shrink-0 font-semibold"
+          type="button"
+          aria-label="Copy"
+          onClick={copyProfileLink}
+          className={`font-mono text-[10px] tracking-[0.14em] uppercase text-accent shrink-0 font-semibold inline-flex items-center gap-1 ${
+            copied ? "copy-btn-pop" : ""
+          }`}
         >
-          Copy
+          {copied ? (
+            <>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              Copied
+            </>
+          ) : (
+            "Copy"
+          )}
         </button>
       </div>
+
+      {copied &&
+        createPortal(
+          <div
+            role="status"
+            aria-live="polite"
+            className="toast-copy pointer-events-none fixed left-1/2 bottom-24 sm:bottom-8 z-[250] flex items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-black shadow-lg shadow-black/30"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <span className="text-xs font-extrabold tracking-tight">Link copied</span>
+          </div>,
+          document.body,
+        )}
 
       <StoriesRow
         users={following}
@@ -290,33 +327,32 @@ export function DashboardInboxTab({
           <Link to="/send" className="text-xs font-extrabold text-accent mt-2 inline-block">Send one →</Link>
         </div>
       ) : (
-        <div className="border border-border divide-y divide-border">
-          {sent.map((secret) => (
-            <div key={secret.id} className="flex items-center gap-3 bg-surface p-3 sm:p-4">
-              <span className="text-xl">
-                {secret.contentType === "text" ? "💬" : "📎"}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-extrabold truncate">
-                  → {secret.recipientHandle ? `@${secret.recipientHandle}` : "Link"}
-                </p>
-                <p className="text-xs text-text-muted">
-                  {secret.burned ? "Burned" : (secret.viewCount ?? 0) > 0 ? `${secret.viewCount}/${secret.maxViews}` : "Pending"}
-                </p>
-              </div>
-              <span className="font-mono text-[10px] text-text-muted shrink-0">
-                {new Date(secret.createdAt).toLocaleDateString()}
-              </span>
-            </div>
-          ))}
-          {sentHasMore && (
-            <div ref={sentSentinelRef} className="py-4 text-center">
-              <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-text-muted">
-                {sentLoading ? "Loading…" : "Scroll for older sends"}
-              </p>
-            </div>
+        <>
+          <div className="border border-border divide-y divide-border">
+            {previewSent.map((secret) => (
+              <SentSecretRow key={secret.id} secret={secret} />
+            ))}
+          </div>
+          {canOpenSentDrawer && (
+            <button
+              type="button"
+              onClick={() => setSentDrawerOpen(true)}
+              className="w-full mt-3 min-h-11 rounded-full border border-border bg-surface-raised text-sm font-extrabold hover:border-accent transition-colors"
+            >
+              Load more
+            </button>
           )}
-        </div>
+        </>
+      )}
+
+      {sentDrawerOpen && (
+        <SentSecretsDrawer
+          secrets={sortedSent}
+          hasMore={sentHasMore}
+          loading={sentLoading}
+          onLoadMore={() => void loadMoreSent()}
+          onClose={() => setSentDrawerOpen(false)}
+        />
       )}
     </section>
   );
