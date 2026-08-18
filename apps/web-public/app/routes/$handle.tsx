@@ -31,7 +31,7 @@ import { DashboardMobileHeader } from "../features/dashboard/DashboardNav";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const handle = data?.profile?.handle ?? data?.handle ?? "user";
-  const title = `@${handle} — Secretlink.life`;
+  const title = `@${handle} - Secretlink.life`;
   const description =
     data?.profile?.bio ||
     `Send an anonymous secret to @${handle} on Secretlink.life. It burns after one read.`;
@@ -303,7 +303,7 @@ export default function ProfilePage() {
   }, [profile?.bio, profile?.socials, profile?.avatarUrl]);
 
   // Remix automatically revalidates loaders after a fetcher POST, so we only
-  // need to reconcile local UI state here — never trigger another revalidation
+  // need to reconcile local UI state here - never trigger another revalidation
   // (doing so caused a revalidation storm that briefly flipped the page to a
   // logged-out/visitor view until a manual reload settled it).
   useEffect(() => {

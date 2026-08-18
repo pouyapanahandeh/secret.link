@@ -253,7 +253,7 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
     try {
       sk = await deriveSharedKeyFromCryptoKey(myKeyPairRef.current.privateKey, otherPubKey);
     } catch {
-      setKeyWarning("Key mismatch — cannot derive shared secret. The other user may have rotated their key.");
+      setKeyWarning("Key mismatch - cannot derive shared secret. The other user may have rotated their key.");
       return;
     }
     setSharedKey(sk);
@@ -607,7 +607,7 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
                         : "bg-surface-raised border border-border text-text rounded-bl-md"
                     } ${isUndecryptable ? "opacity-60" : ""}`}>
                       <p className="text-sm break-words">
-                        {isUndecryptable ? "🔒 Encrypted — key mismatch" : text}
+                        {isUndecryptable ? "🔒 Encrypted - key mismatch" : text}
                       </p>
                       <div className={`flex items-center gap-2 mt-1 ${isMe ? "justify-end" : ""}`}>
                         <span className={`text-[10px] ${isMe ? "text-black/50" : "text-text-muted"}`}>
@@ -642,7 +642,7 @@ export function MessagingPanel({ token, toHandle }: MessagingPanelProps) {
               </div>
             )}
 
-            {/* Input — pinned to bottom */}
+            {/* Input - pinned to bottom */}
             <div className="mt-auto border-t border-border/50">
               <div className="px-4 py-3 flex items-center gap-2">
                 <input

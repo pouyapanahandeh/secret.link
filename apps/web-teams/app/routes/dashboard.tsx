@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 
 export const meta: MetaFunction = () => [
-  { title: "Dashboard — Secret.link for Teams" },
+  { title: "Dashboard - Secret.link for Teams" },
   { name: "description", content: "Your team workspace dashboard." },
 ];
 
@@ -101,7 +101,7 @@ export default function Dashboard() {
               </a>
               <a href="/dashboard/games/new" className="block bg-white rounded-xl p-4 shadow-sm border border-ink/5 hover:border-trust-blue/30 transition-colors">
                 <p className="font-medium text-ink mb-1">🎮 Start a team game</p>
-                <p className="text-sm text-ink/60">Drop a game link in Slack — the team plays async</p>
+                <p className="text-sm text-ink/60">Drop a game link in Slack - the team plays async</p>
               </a>
               <a href="/dashboard/invite" className="block bg-white rounded-xl p-4 shadow-sm border border-ink/5 hover:border-trust-blue/30 transition-colors">
                 <p className="font-medium text-ink mb-1">👥 Invite team members</p>

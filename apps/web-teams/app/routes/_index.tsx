@@ -2,7 +2,7 @@ import type { MetaFunction } from "@remix-run/node";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Secret.link for Teams — Where honesty meets safety" },
+    { title: "Secret.link for Teams - Where honesty meets safety" },
     {
       name: "description",
       content:
@@ -82,7 +82,7 @@ export default function Index() {
             <h3 className="text-lg font-semibold text-ink mb-2">Anonymous Feedback</h3>
             <p className="text-sm text-ink-soft leading-relaxed">
               Always-on channels where anyone can speak up. Two-way conversations 
-              with zero-knowledge handles — not even admins can identify who said what.
+              with zero-knowledge handles - not even admins can identify who said what.
             </p>
           </div>
           <div className="rounded-2xl bg-card p-8 shadow-sm border border-border hover:shadow-md hover:-translate-y-1 transition-all duration-300">
@@ -98,7 +98,7 @@ export default function Index() {
             <h3 className="text-lg font-semibold text-ink mb-2">Team Games</h3>
             <p className="text-sm text-ink-soft leading-relaxed">
               Two Truths, Secret Compliments, Mystery Coffee & more. Drop a link in 
-              Slack — the team plays async. No awkward video calls required.
+              Slack - the team plays async. No awkward video calls required.
             </p>
           </div>
         </div>
@@ -117,7 +117,7 @@ export default function Index() {
               { name: "Secret Compliments", desc: "Anonymous appreciation that makes someone's week.", emoji: "💜" },
               { name: "Mystery Coffee", desc: "Random 1:1 pairings with icebreaker prompts.", emoji: "☕" },
               { name: "Werewolf-Lite", desc: "10-minute social deduction. Async-friendly.", emoji: "🐺" },
-              { name: "Confession Bingo", desc: "\"Who in the team has ever…\" — surprisingly hilarious.", emoji: "🎯" },
+              { name: "Confession Bingo", desc: "\"Who in the team has ever…\" - surprisingly hilarious.", emoji: "🎯" },
               { name: "Retro: Mad/Sad/Glad", desc: "Anonymous sprint retro with AI grouping.", emoji: "🔄" },
             ].map((game) => (
               <div key={game.name} className="rounded-xl bg-card border border-border p-5 hover:border-primary/30 hover:shadow-sm transition-all duration-200">
@@ -173,7 +173,7 @@ export default function Index() {
       </section>
 
       <footer className="border-t border-border py-8 text-center text-sm text-ink-soft/60">
-        © 2026 Secret.link — <a href="/pricing" className="hover:text-ink transition-colors">Pricing</a> · <a href="https://secret.link" className="hover:text-ink transition-colors">Public app</a>
+        © 2026 Secret.link - <a href="/pricing" className="hover:text-ink transition-colors">Pricing</a> · <a href="https://secret.link" className="hover:text-ink transition-colors">Public app</a>
       </footer>
     </main>
   );

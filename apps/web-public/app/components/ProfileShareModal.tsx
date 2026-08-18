@@ -108,7 +108,7 @@ export function ProfileShareModal({ handle, onClose }: ProfileShareModalProps) {
         const result = await shareStoryImageBlob(blob, handle, profileUrl);
         if (result === "downloaded") {
           const label = platform.label.replace(" Story", "").replace(" Status", "");
-          setStoryHint(`Image saved — open ${label} and add it to your story.`);
+          setStoryHint(`Image saved - open ${label} and add it to your story.`);
         }
         return;
       }

@@ -45,7 +45,7 @@ function statusLabel(status: CheckStatus | SystemStatus["overall"]) {
 }
 
 function formatLatency(ms?: number) {
-  if (ms == null) return "—";
+  if (ms == null) return "-";
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`;
 }
 
@@ -89,7 +89,7 @@ function CheckTable({ checks, showUrl = false }: { checks: StatusCheck[]; showUr
                 </span>
               </td>
               <td className="py-3 pr-4 text-[var(--text-muted)]">
-                <div>{check.message ?? "—"}</div>
+                <div>{check.message ?? "-"}</div>
                 {showUrl && check.details?.url ? (
                   <div className="mt-1 truncate text-xs opacity-70">{String(check.details.url)}</div>
                 ) : null}

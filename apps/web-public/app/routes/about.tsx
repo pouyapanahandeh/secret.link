@@ -5,7 +5,7 @@ import { SiteChrome } from "../components/SiteChrome";
 import { getToken } from "../lib/session.server";
 
 export const meta: MetaFunction = () => [
-  { title: "About — Secretlink.life" },
+  { title: "About - Secretlink.life" },
   {
     name: "description",
     content: "Secretlink.life is a privacy-first platform where every message self-destructs. End-to-end encrypted. Open about our limitations.",
@@ -44,8 +44,8 @@ export default function About() {
             {[
               "Your message is encrypted on your device with XChaCha20-Poly1305",
               "The encrypted blob is stored with a self-destruct timer",
-              "A unique link is generated — that's the only way to access it",
-              "The recipient holds to reveal — once released, it's gone forever",
+              "A unique link is generated - that's the only way to access it",
+              "The recipient holds to reveal - once released, it's gone forever",
               "The server never sees your plaintext",
             ].map((item, i) => (
               <li key={item} className="flex gap-4">
@@ -57,12 +57,12 @@ export default function About() {
         </section>
 
         <section className="border-t border-border py-8">
-          <h2 className="text-xl font-extrabold tracking-tight mb-3">Privacy — honest version</h2>
+          <h2 className="text-xl font-extrabold tracking-tight mb-3">Privacy - honest version</h2>
           <p className="text-text-muted leading-relaxed mb-3">
             No software can make a perfectly secret message on a general-purpose device.
             The user with the screen always wins. What we <em>can</em> do is raise the
             cost of capture from "tap a button" to "borrow a second phone and aim a
-            camera" — which deters ~99% of casual leaks.
+            camera" - which deters ~99% of casual leaks.
           </p>
           <p className="font-mono text-[11px] tracking-wide uppercase text-accent">
             Capture-resistant, not capture-proof. We say so plainly because honesty
@@ -73,8 +73,8 @@ export default function About() {
         <section className="border-t border-border py-8">
           <h2 className="text-xl font-extrabold tracking-tight mb-4">Safety</h2>
           <ul className="space-y-2 text-text-muted">
-            <li>Secrets self-destruct after viewing — nothing persists</li>
-            <li>End-to-end encryption — we can't read your messages</li>
+            <li>Secrets self-destruct after viewing - nothing persists</li>
+            <li>End-to-end encryption - we can't read your messages</li>
             <li>No accounts required to send anonymously</li>
             <li>One-tap reporting for inappropriate content</li>
           </ul>

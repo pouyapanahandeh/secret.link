@@ -7,7 +7,7 @@ import { AppNav } from "../components/AppNav";
 import { getApiBase } from "../lib/api.client";
 
 export const meta: MetaFunction = () => [
-  { title: "Reveal Secret — Secretlink.life" },
+  { title: "Reveal Secret - Secretlink.life" },
   { name: "description", content: "You have a secret waiting. Tap to reveal." },
 ];
 
@@ -32,7 +32,7 @@ export default function RevealSecret() {
   const [viewDurationSeconds, setViewDurationSeconds] = useState(30);
   const [remainingViews, setRemainingViews] = useState<number | null>(null);
   const [maxViews, setMaxViews] = useState(1);
-  // Sync guard — React state alone can miss a double-tap before re-render.
+  // Sync guard - React state alone can miss a double-tap before re-render.
   const revealInFlight = useRef(false);
   const unlockedRef = useRef(false);
 
@@ -215,7 +215,7 @@ export default function RevealSecret() {
     } catch (e) {
       console.error("Reveal error:", e);
       if (!unlockedRef.current) {
-        setError("Failed to decrypt. The link may be corrupted — make sure the full URL including #k=… was copied.");
+        setError("Failed to decrypt. The link may be corrupted - make sure the full URL including #k=… was copied.");
       }
     } finally {
       setRevealing(false);
@@ -250,7 +250,7 @@ export default function RevealSecret() {
           <span className="text-4xl block mb-4">💨</span>
           <h1 className="text-2xl font-bold mb-3">Content destroyed</h1>
           <p className="text-text-muted text-sm">
-            The timer expired. This secret no longer exists anywhere — not on the server, not in your browser.
+            The timer expired. This secret no longer exists anywhere - not on the server, not in your browser.
           </p>
           <div className="mt-8 flex flex-col items-center gap-2">
             <Link
@@ -275,7 +275,7 @@ export default function RevealSecret() {
         <div className="max-w-lg w-full">
           <p className="text-xs text-text-muted mb-4 text-center">
             {maxViews === 1
-              ? "You're viewing it now — it won't open again after this"
+              ? "You're viewing it now - it won't open again after this"
               : `${remainingViews ?? 0} view${(remainingViews ?? 0) === 1 ? "" : "s"} remaining after this`
             }
           </p>

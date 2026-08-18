@@ -6,8 +6,8 @@ import { API_URL } from "../lib/api.server";
 import { getToken } from "../lib/session.server";
 
 export const meta: MetaFunction = () => [
-  { title: "Contact — Secretlink.life" },
-  { name: "description", content: "Get in touch with the Secretlink.life team. Questions, privacy requests, or feedback — we read every message." },
+  { title: "Contact - Secretlink.life" },
+  { name: "description", content: "Get in touch with the Secretlink.life team. Questions, privacy requests, or feedback - we read every message." },
 ];
 
 interface ActionResult {
@@ -85,7 +85,7 @@ export default function Contact() {
           Contact <span className="font-display font-bold text-accent">us</span>
         </h1>
         <p className="text-text-muted mb-10 leading-relaxed">
-          Questions, privacy requests, or feedback — we read every message.
+          Questions, privacy requests, or feedback - we read every message.
           Leave an email if you'd like a reply.
         </p>
 

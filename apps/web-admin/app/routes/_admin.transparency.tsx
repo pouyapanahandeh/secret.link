@@ -17,7 +17,7 @@ export default function Transparency() {
     <div>
       <PageHeader
         title="Transparency Report"
-        subtitle={`Period: ${new Date(stats.period.from).toLocaleDateString()} — ${new Date(stats.period.to).toLocaleDateString()}`}
+        subtitle={`Period: ${new Date(stats.period.from).toLocaleDateString()} - ${new Date(stats.period.to).toLocaleDateString()}`}
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">

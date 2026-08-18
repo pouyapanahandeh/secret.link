@@ -125,7 +125,7 @@ export function ProfileSettingsModal({
                 <span className="block text-xs text-text-muted mt-1 leading-relaxed">
                   {accepts
                     ? "People can send you anonymous secrets from your profile."
-                    : "Hidden — visitors can't send you secrets from your profile."}
+                    : "Hidden - visitors can't send you secrets from your profile."}
                 </span>
               </span>
 

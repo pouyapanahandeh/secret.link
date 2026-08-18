@@ -1,7 +1,7 @@
 import type { MetaFunction } from "@remix-run/node";
 
 export const meta: MetaFunction = () => [
-  { title: "Demo — Secret.link for Teams" },
+  { title: "Demo - Secret.link for Teams" },
   { name: "description", content: "See how Secret.link for Teams helps your organization collect honest feedback and build team culture." },
 ];
 
@@ -113,7 +113,7 @@ export default function Demo() {
             <div className="mt-6 p-4 rounded-lg bg-trust-blue/5 border border-trust-blue/10">
               <p className="text-sm font-medium text-trust-blue mb-1">AI Insight</p>
               <p className="text-sm text-ink/70">
-                Psychological safety rose 0.4 points — likely driven by the new "blameless postmortem"
+                Psychological safety rose 0.4 points - likely driven by the new "blameless postmortem"
                 process introduced in Engineering. Consider expanding this practice to Product.
               </p>
             </div>

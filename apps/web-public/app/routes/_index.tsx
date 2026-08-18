@@ -17,7 +17,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 const OG_IMAGE = "https://secretlink.life/og.png";
 
 export const meta: MetaFunction = () => {
-  const title = "Secretlink.life — Say what you really mean";
+  const title = "Secretlink.life - Say what you really mean";
   const description =
     "Claim your @handle and get an anonymous inbox. Friends send secrets that self-destruct after one read.";
   const url = "https://secretlink.life/";
@@ -64,7 +64,7 @@ export function ErrorBoundary() {
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="text-center max-w-md">
         <h1 className="text-2xl font-bold mb-2">
-          {isRouteErrorResponse(error) ? `${error.status} — ${error.statusText}` : "Something went wrong"}
+          {isRouteErrorResponse(error) ? `${error.status} - ${error.statusText}` : "Something went wrong"}
         </h1>
         <p className="text-text-muted mb-6">
           {isRouteErrorResponse(error) ? error.data : "An unexpected error occurred."}

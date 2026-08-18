@@ -1,6 +1,6 @@
 /** Share copy for profile links and story cards. */
 export function getProfileShareText(handle: string, profileUrl: string): string {
-  return `Send me an anonymous secret on Secretlink — @${handle}\n${profileUrl}`;
+  return `Send me an anonymous secret on Secretlink - @${handle}\n${profileUrl}`;
 }
 
 export function getWhatsAppShareUrl(text: string): string {

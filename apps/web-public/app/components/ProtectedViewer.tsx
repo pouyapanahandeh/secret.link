@@ -53,13 +53,13 @@ export function ProtectedViewer({ children, autoHideSeconds = 30, onExpired }: P
       });
     }, 1000);
 
-    // Visibility API — hide when tab not visible
+    // Visibility API - hide when tab not visible
     const handleVisibility = () => {
       if (document.hidden) setHidden(true);
       else setHidden(false);
     };
 
-    // Window blur — hide when window loses focus (most screenshot tools steal focus)
+    // Window blur - hide when window loses focus (most screenshot tools steal focus)
     const handleBlur = () => setHidden(true);
     const handleFocus = () => setHidden(false);
 
@@ -99,7 +99,7 @@ export function ProtectedViewer({ children, autoHideSeconds = 30, onExpired }: P
     return (
       <div className="rounded-2xl border border-red-500/30 bg-surface-raised p-8 text-center">
         <span className="text-3xl block mb-3">💨</span>
-        <p className="text-sm font-medium text-red-400">Time's up — content destroyed</p>
+        <p className="text-sm font-medium text-red-400">Time's up - content destroyed</p>
         <p className="text-xs text-text-muted mt-2">This secret no longer exists anywhere.</p>
       </div>
     );

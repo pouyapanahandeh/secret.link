@@ -2,7 +2,7 @@ const STEPS = [
   {
     n: "01",
     title: "Claim your @handle",
-    description: "Pick a name. That’s your anonymous inbox — no email required.",
+    description: "Pick a name. That’s your anonymous inbox - no email required.",
   },
   {
     n: "02",
@@ -11,7 +11,7 @@ const STEPS = [
   },
   {
     n: "03",
-    title: "Secrets arrive — then burn",
+    title: "Secrets arrive - then burn",
     description: "Friends send anonymous messages. Once you read them, they’re gone.",
   },
 ] as const;

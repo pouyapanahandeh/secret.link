@@ -91,7 +91,7 @@ export default function Reports() {
                   <div className="mt-2 text-xs">
                     <span className="text-[var(--success)]">Action: {report.action_type}</span>
                     {report.action_reason && (
-                      <span className="text-[var(--text-muted)]"> — {report.action_reason}</span>
+                      <span className="text-[var(--text-muted)]"> - {report.action_reason}</span>
                     )}
                   </div>
                 )}

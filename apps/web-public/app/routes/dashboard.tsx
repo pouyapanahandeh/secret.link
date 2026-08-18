@@ -7,7 +7,7 @@ import { DashboardSkeleton, readDashboardTabFromHash } from "../components/Dashb
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 
 export const meta: MetaFunction = () => [
-  { title: "Dashboard — Secretlink.life" },
+  { title: "Dashboard - Secretlink.life" },
 ];
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -165,7 +165,7 @@ export function ErrorBoundary() {
     <main className="min-h-screen flex items-center justify-center px-4 bg-surface">
       <div className="text-center max-w-md">
         <h1 className="text-2xl font-bold mb-2">
-          {isRouteErrorResponse(error) ? `${error.status} — ${error.statusText}` : "Dashboard Error"}
+          {isRouteErrorResponse(error) ? `${error.status} - ${error.statusText}` : "Dashboard Error"}
         </h1>
         <p className="text-text-muted mb-6">
           {isRouteErrorResponse(error) ? error.data : "Something went wrong loading your dashboard."}

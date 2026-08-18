@@ -7,7 +7,7 @@ import { getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 
 export const meta: MetaFunction = () => {
-  const title = "Blog — Secretlink.life";
+  const title = "Blog - Secretlink.life";
   const description =
     "Privacy, security, and ephemeral messaging insights from the Secretlink.life team. Learn how to communicate without a trace.";
   const url = "https://secretlink.life/blog";

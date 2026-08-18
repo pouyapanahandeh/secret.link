@@ -83,7 +83,7 @@ export function ProfileShareModal({ handle, visible, onClose }: ProfileShareModa
       if (canShare) {
         await Sharing.shareAsync(uri, {
           mimeType: "image/png",
-          dialogTitle: `@${handle} — Secretlink story`,
+          dialogTitle: `@${handle} - Secretlink story`,
           UTI: "public.png",
         });
         return;
@@ -226,7 +226,7 @@ export function ProfileShareModal({ handle, visible, onClose }: ProfileShareModa
               <Text style={{ fontSize: fontSize.sm, fontWeight: "700", color: "#000" }}>Share link</Text>
             </Pressable>
 
-            {/* QR code — compact */}
+            {/* QR code - compact */}
             <View
               style={{
                 flexDirection: "row",

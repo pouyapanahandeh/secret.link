@@ -60,7 +60,7 @@ export default function AuditLog() {
                     {log.target_type}{log.target_id ? `: ${log.target_id.slice(0, 8)}…` : ""}
                   </td>
                   <td className="max-w-[200px] truncate p-3 text-[var(--text-muted)]">
-                    {log.details ?? "—"}
+                    {log.details ?? "-"}
                   </td>
                 </tr>
               ))}

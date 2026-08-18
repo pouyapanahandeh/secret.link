@@ -5,10 +5,10 @@ import { SiteChrome } from "../components/SiteChrome";
 import { getToken } from "../lib/session.server";
 
 export const meta: MetaFunction = () => [
-  { title: "Privacy Policy — Secretlink.life" },
+  { title: "Privacy Policy - Secretlink.life" },
   {
     name: "description",
-    content: "Privacy Policy for Secretlink.life — how we handle your data, encryption, age restrictions, and user responsibilities.",
+    content: "Privacy Policy for Secretlink.life - how we handle your data, encryption, age restrictions, and user responsibilities.",
   },
 ];
 
@@ -82,8 +82,7 @@ export default function Privacy() {
           <h2 className="text-xl font-extrabold tracking-tight mb-3">5. End-to-End Encryption</h2>
           <p className="text-text leading-relaxed mb-3">
             All direct messages are encrypted using X25519 ECDH key exchange and AES-GCM encryption.
-            Encryption and decryption happen entirely on your device. Our servers relay ciphertext only —
-            we have zero ability to read your messages.
+            Encryption and decryption happen entirely on your device. Our servers relay ciphertext only; we have zero ability to read your messages.
           </p>
           <p className="text-text leading-relaxed">
             Anonymous secrets (one-time links) are encrypted with XChaCha20-Poly1305 on your device.
@@ -175,7 +174,7 @@ export default function Privacy() {
             your login on the web. The API may also set a separate HttpOnly JWT cookie (<code className="text-accent/80">sl_token</code>) during signup.
             Read our <Link to="/security" className="text-accent hover:underline">security overview</Link> for details.
             We use IndexedDB (browser local storage) to store your cryptographic
-            private keys — these never leave your device. We do not use third-party cookies,
+            private keys - these never leave your device. We do not use third-party cookies,
             tracking pixels, or advertising identifiers.
           </p>
         </section>

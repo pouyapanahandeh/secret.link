@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { API_URL } from "../lib/api.server";
 
-export const meta: MetaFunction = () => [{ title: "Transparency Report — Secretlink" }];
+export const meta: MetaFunction = () => [{ title: "Transparency Report - Secretlink" }];
 
 export async function loader() {
   try {
@@ -70,7 +70,7 @@ export default function Transparency() {
       ) : (
         <div className="text-gray-400 text-center py-12">
           <p>Transparency data is not yet available.</p>
-          <p className="text-xs mt-2">Check back soon — data is published once the moderation system is active.</p>
+          <p className="text-xs mt-2">Check back soon - data is published once the moderation system is active.</p>
         </div>
       )}
 

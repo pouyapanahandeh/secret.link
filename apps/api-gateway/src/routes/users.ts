@@ -134,7 +134,7 @@ usersRouter.get("/me", requireAuth(), async (ctx: Context) => {
   ctx.body = dbUserToPublic(row);
 });
 
-// ─── Profile stats (owner only — aggregate counters, no visitor data) ────────
+// ─── Profile stats (owner only - aggregate counters, no visitor data) ────────
 usersRouter.get("/me/stats", requireAuth(), async (ctx: Context) => {
   const { userId, handle } = ctx.state.user as AuthPayload;
   const days = Number(ctx.query["days"] ?? 30);
@@ -218,11 +218,11 @@ usersRouter.get("/:handle", async (ctx: Context) => {
   const dmPublicKeys = publicKeysForUser(row.id);
   const dmPublicKey = newestPublicKey(row.id);
 
-  // Follower/following counts are private — only the profile owner sees them.
+  // Follower/following counts are private - only the profile owner sees them.
   const requester = ctx.state.user as AuthPayload | undefined;
   const isOwner = requester?.userId === row.id;
 
-  // Aggregate profile view — skip owner self-views; no visitor identifiers stored.
+  // Aggregate profile view - skip owner self-views; no visitor identifiers stored.
   if (!isOwner) {
     recordProfileView(row.id);
   }
@@ -541,7 +541,7 @@ usersRouter.post("/auth/magic-link", async (ctx: Context) => {
       Source: SES_FROM,
       Destination: { ToAddresses: [email] },
       Message: {
-        Subject: { Data: "Your login link — Secretlink.life" },
+        Subject: { Data: "Your login link - Secretlink.life" },
         Body: {
           Html: {
             Data: `

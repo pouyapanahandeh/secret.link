@@ -10,7 +10,7 @@ import { ProfileShareModal } from "../components/ProfileShareModal";
 import { ThemeToggle } from "../components/ThemeToggle";
 
 export const meta: MetaFunction = () => [
-  { title: "Welcome — Secretlink.life" },
+  { title: "Welcome - Secretlink.life" },
   { name: "description", content: "Set up your profile and share your @handle." },
 ];
 

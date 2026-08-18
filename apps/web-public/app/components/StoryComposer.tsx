@@ -150,7 +150,7 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
     const first = data.issues?.[0];
     if (first) {
       const field = first.path?.join(".") ?? "field";
-      return `${data.error ?? "validation_error"}: ${field} — ${first.message ?? "invalid"}`;
+      return `${data.error ?? "validation_error"}: ${field} - ${first.message ?? "invalid"}`;
     }
     return data.error ?? "Couldn't post your story. Please try again.";
   }
@@ -276,7 +276,7 @@ export function StoryComposer({ handle, token, onClose, onPosted, initialCoords 
                   </div>
                 )}
                 {!searchingLocations && locationFocused && locationName.trim().length >= 3 && locationResults.length === 0 && (
-                  <p className="text-xs text-text-muted mt-1.5 px-1">No places found — try a different search or name this spot yourself.</p>
+                  <p className="text-xs text-text-muted mt-1.5 px-1">No places found - try a different search or name this spot yourself.</p>
                 )}
               </div>
 

@@ -114,7 +114,7 @@ export function downloadBlob(blob: Blob, filename: string) {
 
 export async function shareStoryImageBlob(blob: Blob, handle: string, profileUrl: string): Promise<"shared" | "downloaded"> {
   const file = new File([blob], `secretlink-${handle}-story.png`, { type: "image/png" });
-  const shareText = `Send me a secret — @${handle}`;
+  const shareText = `Send me a secret - @${handle}`;
 
   if (typeof navigator !== "undefined" && navigator.share) {
     try {

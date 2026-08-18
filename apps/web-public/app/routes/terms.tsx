@@ -1,6 +1,6 @@
 import type { MetaFunction } from "@remix-run/node";
 
-export const meta: MetaFunction = () => [{ title: "Terms of Service — Secretlink" }];
+export const meta: MetaFunction = () => [{ title: "Terms of Service - Secretlink" }];
 
 export default function Terms() {
   return (
@@ -79,7 +79,7 @@ export default function Terms() {
               <tr className="border-b border-gray-800">
                 <td className="p-2">1st violation</td>
                 <td className="p-2">Content removed + warning</td>
-                <td className="p-2">—</td>
+                <td className="p-2">-</td>
               </tr>
               <tr className="border-b border-gray-800">
                 <td className="p-2">2nd violation</td>

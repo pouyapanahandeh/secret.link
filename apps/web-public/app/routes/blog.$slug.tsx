@@ -19,11 +19,11 @@ type BlogPost = {
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   if (!data?.post) {
-    return [{ title: "Post not found — Secretlink.life" }];
+    return [{ title: "Post not found - Secretlink.life" }];
   }
 
   const { post, origin } = data;
-  const title = `${post.title} — Secretlink.life Blog`;
+  const title = `${post.title} - Secretlink.life Blog`;
   const url = `${origin}/blog/${post.slug}`;
   const image = post.coverImageUrl || `${origin}/og.png`;
   const usingSiteOg = !post.coverImageUrl;

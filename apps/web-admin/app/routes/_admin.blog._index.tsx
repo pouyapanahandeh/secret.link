@@ -44,7 +44,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   return new Date(value).toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",

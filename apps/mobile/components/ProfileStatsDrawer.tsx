@@ -324,7 +324,7 @@ export function ProfileStatsDrawer({ visible, onClose }: ProfileStatsDrawerProps
 
             {stats && !loading && (
               <View style={{ minHeight: 520, gap: spacing.lg }}>
-                {/* Breakdown grid — tap to filter chart */}
+                {/* Breakdown grid - tap to filter chart */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -453,7 +453,7 @@ export function ProfileStatsDrawer({ visible, onClose }: ProfileStatsDrawerProps
                     opacity: 0.7,
                   }}
                 >
-                  Aggregate counts only — no visitor identities stored.
+                  Aggregate counts only - no visitor identities stored.
                 </Text>
               </View>
             )}

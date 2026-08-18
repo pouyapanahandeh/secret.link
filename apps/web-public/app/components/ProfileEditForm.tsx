@@ -146,7 +146,7 @@ export function ProfileEditForm({
 
       <div>
         <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-accent mb-1.5">Social links</label>
-        <p className="text-xs text-text-muted/70 mb-2">Paste a link — we&apos;ll detect the platform automatically.</p>
+        <p className="text-xs text-text-muted/70 mb-2">Paste a link - we&apos;ll detect the platform automatically.</p>
         <div className="space-y-2">
           {socials.map((s, i) => {
             const meta = getSocialMeta(s.platform);

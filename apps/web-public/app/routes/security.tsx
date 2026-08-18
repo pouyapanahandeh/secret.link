@@ -3,7 +3,7 @@ import { Link } from "@remix-run/react";
 import { AppNav } from "../components/AppNav";
 
 export const meta: MetaFunction = () => [
-  { title: "Security — Secretlink.life" },
+  { title: "Security - Secretlink.life" },
   { name: "description", content: "How Secretlink protects your secrets with client-side encryption." },
 ];
 
@@ -35,7 +35,7 @@ export default function Security() {
         <h2 className="text-2xl font-semibold mt-10 mb-3">Map keys at rest</h2>
         <p className="text-text-muted leading-relaxed">
           Map drop data encryption keys are wrapped with a server <code>MASTER_KEY</code> (AWS SSM in production).
-          Reveal endpoints return key material for client decrypt — never plaintext messages.
+          Reveal endpoints return key material for client decrypt - never plaintext messages.
         </p>
 
         <h2 className="text-2xl font-semibold mt-10 mb-3">Reporting & moderation</h2>

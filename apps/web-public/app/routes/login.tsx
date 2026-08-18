@@ -8,7 +8,7 @@ import { createSessionRedirect, getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 
 export const meta: MetaFunction = () => [
-  { title: "Log In — Secretlink.life" },
+  { title: "Log In - Secretlink.life" },
   { name: "description", content: "Log in to your Secretlink.life account." },
 ];
 
@@ -23,7 +23,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const handle = String(form.get("handle") ?? "").trim().toLowerCase();
 
-  // Passkey token exchange — client posts token after WebAuthn ceremony
+  // Passkey token exchange - client posts token after WebAuthn ceremony
   if (method === "passkey-token") {
     const token = String(form.get("token") ?? "").trim();
     if (!token) {

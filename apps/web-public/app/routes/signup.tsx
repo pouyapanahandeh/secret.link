@@ -7,7 +7,7 @@ import { createSessionRedirect, getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 
 export const meta: MetaFunction = () => [
-  { title: "Sign Up — Secretlink.life" },
+  { title: "Sign Up - Secretlink.life" },
   { name: "description", content: "Claim your @handle on Secretlink.life. Anonymous, encrypted, ephemeral." },
 ];
 
@@ -57,7 +57,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ errors: { handle: data.error ?? "Something went wrong" }, values: { handle, email } }, { status: 400 });
   }
 
-  // The API no longer returns the token in the body — it is delivered via an
+  // The API no longer returns the token in the body - it is delivered via an
   // HttpOnly Set-Cookie header. Extract it here (server-to-server) and re-wrap
   // it into our own encrypted Remix session so it never touches page JS.
   const token = extractSlToken(res.headers.get("set-cookie"));

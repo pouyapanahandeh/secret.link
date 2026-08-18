@@ -1,6 +1,6 @@
 import type { MetaFunction } from "@remix-run/node";
 
-export const meta: MetaFunction = () => [{ title: "Community Guidelines — Secretlink" }];
+export const meta: MetaFunction = () => [{ title: "Community Guidelines - Secretlink" }];
 
 export default function CommunityGuidelines() {
   return (
@@ -57,7 +57,7 @@ export default function CommunityGuidelines() {
           <h3 className="text-sm font-semibold text-white mt-4 mb-1">Sexual Content</h3>
           <ul className="list-disc list-inside space-y-1 text-gray-400">
             <li>Non-consensual intimate imagery (NCII)</li>
-            <li>Child sexual abuse material (CSAM) — reported to authorities immediately</li>
+            <li>Child sexual abuse material (CSAM) - reported to authorities immediately</li>
             <li>Sexual solicitation of minors</li>
             <li>Unsolicited sexual content directed at other users</li>
           </ul>

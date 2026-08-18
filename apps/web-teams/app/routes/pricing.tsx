@@ -1,7 +1,7 @@
 import type { MetaFunction } from "@remix-run/node";
 
 export const meta: MetaFunction = () => [
-  { title: "Pricing — Secret.link for Teams" },
+  { title: "Pricing - Secret.link for Teams" },
   { name: "description", content: "Free for up to 15 seats. Team plan from $4/user/mo. Business from $8/user/mo." },
 ];
 
@@ -100,7 +100,7 @@ export default function Pricing() {
           <h2 className="text-xl font-semibold text-ink mb-4">Frequently asked</h2>
           <div className="max-w-2xl mx-auto text-left space-y-4">
             {[
-              { q: "Can I try before I buy?", a: "Yes — the Free plan has no time limit. Upgrade when you're ready." },
+              { q: "Can I try before I buy?", a: "Yes - the Free plan has no time limit. Upgrade when you're ready." },
               { q: "Do you require a credit card?", a: "No. The Free plan needs no payment info. Paid plans are billed via Paddle (Merchant of Record)." },
               { q: "Where is my data stored?", a: "You choose US or EU at workspace creation. Data never leaves your chosen region." },
               { q: "Is feedback truly anonymous?", a: "Yes. We use k-anonymity guards (k=5 default) and zero-knowledge handles. Even we can't re-identify respondents." },

@@ -1,7 +1,7 @@
 import type { MetaFunction } from "@remix-run/node";
 
 export const meta: MetaFunction = () => [
-  { title: "Log In — Secret.link for Teams" },
+  { title: "Log In - Secret.link for Teams" },
   { name: "description", content: "Log in to your Secret.link for Teams workspace." },
 ];
 

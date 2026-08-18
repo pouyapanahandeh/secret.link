@@ -16,7 +16,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export const meta: MetaFunction = () => [
-  { title: "Messages — Secretlink.life" },
+  { title: "Messages - Secretlink.life" },
 ];
 
 export default function MessagesPage() {
@@ -27,7 +27,7 @@ export default function MessagesPage() {
 
   return (
     <main className="h-screen flex flex-col bg-surface">
-      {/* Nav — hidden when embedded */}
+      {/* Nav - hidden when embedded */}
       {!isEmbed && (
         <nav className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border z-20">
           <Link to="/" className="flex items-center gap-2">

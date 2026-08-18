@@ -8,7 +8,7 @@ import { getApiBase } from "../lib/api.client";
 import { getToken } from "../lib/session.server";
 
 export const meta: MetaFunction = () => [
-  { title: "Send a Secret — Secretlink.life" },
+  { title: "Send a Secret - Secretlink.life" },
   { name: "description", content: "Send an anonymous, encrypted, self-destructing secret. Burns after one read." },
 ];
 
@@ -90,7 +90,7 @@ async function encryptAndUpload(
   }
 
   const secretData = await res.json();
-  // Key goes in URL fragment — never sent to server
+  // Key goes in URL fragment - never sent to server
   const link = `${window.location.origin}/s/${secretData.id}#k=${keyBase64}`;
   return { link };
 }
@@ -323,7 +323,7 @@ export default function Send() {
                   Secret <span className="font-display font-bold text-accent">created</span>
                 </h1>
                 <p className="text-text-muted leading-relaxed">
-                  End-to-end encrypted. The key lives in the link — we never see it.
+                  End-to-end encrypted. The key lives in the link - we never see it.
                 </p>
               </div>
 
@@ -334,7 +334,7 @@ export default function Send() {
                 </p>
                 <p className="mt-3 text-xs text-text-muted leading-relaxed">
                   Copy the full link, including the <span className="font-mono text-accent">#k=…</span> part.
-                  It can only be opened once — refreshing after reveal will show it’s gone.
+                  It can only be opened once - refreshing after reveal will show it’s gone.
                 </p>
               </div>
 
@@ -375,7 +375,7 @@ export default function Send() {
                   Send a <span className="font-display font-bold text-accent">secret</span>
                 </h1>
                 <p className="text-text-muted leading-relaxed">
-                  Encrypted on your device. Share the link — it self-destructs after reading.
+                  Encrypted on your device. Share the link - it self-destructs after reading.
                 </p>
               </div>
 

@@ -248,7 +248,7 @@ export function ProfileStatsModal({ token, onClose }: ProfileStatsModalProps) {
 
           {stats && !loading && (
             <div className="min-h-[520px] space-y-6">
-              {/* Breakdown — tap to filter chart */}
+              {/* Breakdown - tap to filter chart */}
               <section>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted/70 mb-3">
                   Overview · tap to filter chart
@@ -332,7 +332,7 @@ export function ProfileStatsModal({ token, onClose }: ProfileStatsModalProps) {
 
         <div className="px-6 py-4 shrink-0 border-t border-border/30 bg-surface pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <p className="text-[11px] text-text-muted/60 text-center leading-relaxed">
-            Aggregate counts only — no visitor identities stored.
+            Aggregate counts only - no visitor identities stored.
           </p>
         </div>
       </div>

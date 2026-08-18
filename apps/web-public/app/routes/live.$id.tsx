@@ -7,8 +7,8 @@ import { UI_FEATURES } from "../lib/feature-flags";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const title = data?.stream?.title
-    ? `${data.stream.title} — @${data.stream.handle} Live`
-    : "Live Stream — Secretlink";
+    ? `${data.stream.title} - @${data.stream.handle} Live`
+    : "Live Stream - Secretlink";
   return [{ title }, { name: "description", content: "Watch a live stream on Secretlink" }];
 };
 
@@ -78,7 +78,7 @@ export default function LiveStreamPage() {
             onClick={() => setNsfwAccepted(true)}
             className="w-full rounded-xl bg-accent px-5 py-3 text-sm font-bold text-black"
           >
-            I'm 18+ — Continue
+            I'm 18+ - Continue
           </button>
         </div>
       </main>
@@ -108,11 +108,11 @@ export default function LiveStreamPage() {
     );
   }
 
-  // Playing state — show stream (client-only to avoid hydration issues with IVS player)
+  // Playing state - show stream (client-only to avoid hydration issues with IVS player)
   return <ClientStreamPlayer stream={stream} />;
 }
 
-/** Client-only stream player wrapper — avoids SSR hydration issues with IVS SDK */
+/** Client-only stream player wrapper - avoids SSR hydration issues with IVS SDK */
 function ClientStreamPlayer({ stream }: { stream: any }) {
   const [Player, setPlayer] = useState<any>(null);
 

@@ -64,7 +64,7 @@ export default function Appeals() {
 
                 <div className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
                   <p className="text-sm text-[var(--text-muted)]">
-                    <strong>Original action:</strong> {appeal.action_type} — {appeal.report_reason}
+                    <strong>Original action:</strong> {appeal.action_type} - {appeal.report_reason}
                   </p>
                   <p className="mt-2 text-sm">
                     <strong>Appeal reason:</strong> {appeal.reason}

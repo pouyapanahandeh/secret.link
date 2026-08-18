@@ -3,7 +3,7 @@ import { json, redirect } from "@remix-run/node";
 import { useActionData } from "@remix-run/react";
 
 export const meta: MetaFunction = () => [
-  { title: "Sign Up — Secret.link for Teams" },
+  { title: "Sign Up - Secret.link for Teams" },
   { name: "description", content: "Create your team workspace on Secret.link. Free for up to 15 seats." },
 ];
 
