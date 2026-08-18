@@ -1,6 +1,7 @@
 import { Link } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { getApiBase } from "../../lib/api.client";
+import { LocateIcon } from "../MapControls";
 
 function LandingMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -258,9 +259,7 @@ function LandingMap() {
           className="absolute bottom-3 right-3 z-40 w-11 h-11 rounded-full bg-surface-raised border border-border shadow-lg flex items-center justify-center hover:border-accent/50 transition-colors"
           aria-label="Locate me"
         >
-          <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.364-6.364l-1.414 1.414M7.05 16.95l-1.414 1.414m12.728 0l-1.414-1.414M7.05 7.05L5.636 5.636M12 8a4 4 0 100 8 4 4 0 000-8z" />
-          </svg>
+          <LocateIcon />
         </button>
       </div>
 

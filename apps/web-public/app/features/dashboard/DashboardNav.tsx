@@ -180,7 +180,7 @@ export function DashboardMobileHeader({
 
 export function DashboardBottomNav({ activeTab, userHandle, userAvatarUrl, onNavClick }: Pick<DashboardNavProps, "activeTab" | "userHandle" | "userAvatarUrl" | "onNavClick">) {
   return (
-    <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border z-30 pb-[env(safe-area-inset-bottom)]">
+    <nav className="sm:hidden shrink-0 bg-surface/95 backdrop-blur-xl border-t border-border z-30 pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
         {NAV_ITEMS.map((item) => (
           <button

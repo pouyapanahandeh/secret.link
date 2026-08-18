@@ -27,7 +27,7 @@ function DashboardShell({
   ];
 
   return (
-    <main className="h-screen flex flex-col sm:flex-row bg-surface">
+    <main className="h-dvh flex flex-col sm:flex-row bg-surface overflow-hidden">
       <aside className="hidden sm:flex flex-col w-56 lg:w-64 border-r border-border bg-surface shrink-0">
         <div className="px-5 py-5 border-b border-border">
           <div className="flex items-center gap-2">
@@ -69,7 +69,7 @@ function DashboardShell({
 
       {children}
 
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border z-30">
+      <nav className="sm:hidden shrink-0 bg-surface/95 backdrop-blur-xl border-t border-border z-30 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
           {Array.from({ length: navCount }).map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-1 px-3 py-1.5">
@@ -229,7 +229,7 @@ export function ProfileViewContentSkeleton() {
 export function DashboardSkeleton({ tab = "inbox" }: { tab?: DashboardTab }) {
   return (
     <DashboardShell activeTab={tab}>
-      <div className="flex-1 overflow-y-auto pb-20 sm:pb-6">
+      <div className="flex-1 overflow-y-auto sm:pb-6">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
           {tab === "inbox" && <InboxContentSkeleton />}
           {tab === "map" && <MapContentSkeleton />}
@@ -243,7 +243,7 @@ export function DashboardSkeleton({ tab = "inbox" }: { tab?: DashboardTab }) {
 export function ProfilePageSkeleton() {
   return (
     <DashboardShell activeTab="profile">
-      <div className="flex-1 overflow-y-auto pb-20 sm:pb-8">
+      <div className="flex-1 overflow-y-auto sm:pb-8">
         <div className="max-w-lg mx-auto px-4 pt-8">
           <ProfileViewContentSkeleton />
         </div>
