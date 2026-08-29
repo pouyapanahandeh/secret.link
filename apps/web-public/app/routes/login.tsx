@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { UI_FEATURES } from "../lib/feature-flags";
 import { SiteChrome } from "../components/SiteChrome";
 import { createSessionRedirect, getToken } from "../lib/session.server";
-import { API_URL } from "../lib/api.server";
+import { API_URL, publicApiBase } from "../lib/api.server";
 import { extractRecoveryCode } from "@secretlink/core/user/schemas";
 
 export const meta: MetaFunction = () => [
@@ -15,8 +15,7 @@ export const meta: MetaFunction = () => [
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = await getToken(request);
-  const apiBase = API_URL.replace(/\/v1\/?$/, "");
-  return json({ isLoggedIn: Boolean(token), apiBase });
+  return json({ isLoggedIn: Boolean(token), apiBase: publicApiBase(request) });
 }
 
 export async function action({ request }: ActionFunctionArgs) {

@@ -10,3 +10,11 @@ function getApiUrl(): string {
 }
 
 export const API_URL = getApiUrl();
+
+/**
+ * Browser-facing API origin. `API_URL` is the server-to-server address
+ * (often http://localhost:4000 on the box) and must not be sent to the client.
+ */
+export function publicApiBase(request: Request): string {
+  return new URL(request.url).origin.replace(/:3000$/, ":4000").replace(/:3001$/, ":4000");
+}

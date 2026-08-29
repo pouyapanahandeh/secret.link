@@ -3,7 +3,7 @@ import { json, redirect } from "@remix-run/node";
 import { Link, useLoaderData, useNavigate } from "@remix-run/react";
 import { useState } from "react";
 import { commitTokenCookie, createSessionRedirect, requireToken } from "../lib/session.server";
-import { API_URL } from "../lib/api.server";
+import { API_URL, publicApiBase } from "../lib/api.server";
 import { SiteChrome } from "../components/SiteChrome";
 import { AddPasskeyButton } from "../components/passkeys/AddPasskeyButton";
 import { RecoveryCodesPanel } from "../components/passkeys/RecoveryCodesPanel";
@@ -22,8 +22,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const user = await res.json();
     if (!user?.handle) throw redirect("/login");
     if (!user.enrollmentRequired) throw redirect("/dashboard");
-    const apiBase = API_URL.replace(/\/v1\/?$/, "") || "http://localhost:4000";
-    return json({ user, token, apiBase });
+    return json({ user, token, apiBase: publicApiBase(request) });
   } catch (err) {
     if (err instanceof Response) throw err;
     throw redirect("/login");
