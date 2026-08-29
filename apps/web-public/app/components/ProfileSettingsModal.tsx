@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AddPasskeyButton } from "./passkeys/AddPasskeyButton";
 import { PasskeyList, type PasskeyRow } from "./passkeys/PasskeyList";
 import { RecoveryCodesPanel } from "./passkeys/RecoveryCodesPanel";
+import { browserApiBase } from "../lib/api-base";
 
 interface ProfileSettingsModalProps {
   handle: string;
@@ -68,11 +69,12 @@ export function ProfileSettingsModal({
   const [rotating, setRotating] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  const origin = browserApiBase() || apiBase;
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
   async function loadPasskeys() {
     try {
-      const res = await fetch(`${apiBase}/v1/users/me/passkeys`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${origin}/v1/users/me/passkeys`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return;
       const data = (await res.json()) as { passkeys?: PasskeyRow[] };
       setPasskeys(data.passkeys ?? []);
@@ -112,7 +114,7 @@ export function ProfileSettingsModal({
     setRemovingId(id);
     setPasskeyError("");
     try {
-      const res = await fetch(`${apiBase}/v1/users/me/passkeys/${encodeURIComponent(id)}`, {
+      const res = await fetch(`${origin}/v1/users/me/passkeys/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers,
       });
@@ -136,7 +138,7 @@ export function ProfileSettingsModal({
     setRotating(true);
     setPasskeyError("");
     try {
-      const res = await fetch(`${apiBase}/v1/users/me/recovery-codes/rotate`, {
+      const res = await fetch(`${origin}/v1/users/me/recovery-codes/rotate`, {
         method: "POST",
         headers,
       });

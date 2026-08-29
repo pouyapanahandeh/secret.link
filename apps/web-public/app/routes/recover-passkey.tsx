@@ -3,7 +3,7 @@ import { json, redirect } from "@remix-run/node";
 import { Link, useLoaderData, useNavigate } from "@remix-run/react";
 import { useState } from "react";
 import { commitTokenCookie, createSessionRedirect, requireToken } from "../lib/session.server";
-import { API_URL, publicApiBase } from "../lib/api.server";
+import { API_URL } from "../lib/api.server";
 import { SiteChrome } from "../components/SiteChrome";
 import { AddPasskeyButton } from "../components/passkeys/AddPasskeyButton";
 import { RecoveryCodesPanel } from "../components/passkeys/RecoveryCodesPanel";
@@ -22,7 +22,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const user = await res.json();
     if (!user?.handle) throw redirect("/login");
     if (!user.enrollmentRequired) throw redirect("/dashboard");
-    return json({ user, token, apiBase: publicApiBase(request) });
+    return json({ user, token });
   } catch (err) {
     if (err instanceof Response) throw err;
     throw redirect("/login");
@@ -46,7 +46,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function RecoverPasskey() {
-  const { user, token, apiBase } = useLoaderData<typeof loader>();
+  const { user, token } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
@@ -73,7 +73,7 @@ export default function RecoverPasskey() {
             </p>
             <AddPasskeyButton
               token={token}
-              apiBase={apiBase}
+              apiBase=""
               label="Add passkey"
               onSuccess={async (result) => {
                 if (result.token) {

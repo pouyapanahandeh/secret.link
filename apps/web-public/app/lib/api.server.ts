@@ -16,5 +16,11 @@ export const API_URL = getApiUrl();
  * (often http://localhost:4000 on the box) and must not be sent to the client.
  */
 export function publicApiBase(request: Request): string {
-  return new URL(request.url).origin.replace(/:3000$/, ":4000").replace(/:3001$/, ":4000");
+  const url = new URL(request.url);
+  const host = (request.headers.get("x-forwarded-host") ?? url.host).split(",")[0]!.trim();
+  const forwarded = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const proto =
+    forwarded ||
+    (host.includes("localhost") || host.startsWith("127.") ? url.protocol.replace(":", "") : "https");
+  return `${proto}://${host}`.replace(/:3000$/, ":4000").replace(/:3001$/, ":4000");
 }

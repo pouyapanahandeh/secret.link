@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { UI_FEATURES } from "../lib/feature-flags";
 import { SiteChrome } from "../components/SiteChrome";
 import { createSessionRedirect, getToken } from "../lib/session.server";
-import { API_URL, publicApiBase } from "../lib/api.server";
+import { API_URL } from "../lib/api.server";
+import { browserApiBase } from "../lib/api-base";
 import { extractRecoveryCode } from "@secretlink/core/user/schemas";
 
 export const meta: MetaFunction = () => [
@@ -15,7 +16,7 @@ export const meta: MetaFunction = () => [
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = await getToken(request);
-  return json({ isLoggedIn: Boolean(token), apiBase: publicApiBase(request) });
+  return json({ isLoggedIn: Boolean(token) });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -64,7 +65,7 @@ const inputClass =
 const labelClass = "block font-mono text-[10px] tracking-[0.18em] uppercase text-text-muted mb-2";
 
 export default function Login() {
-  const { isLoggedIn, apiBase } = useLoaderData<typeof loader>();
+  const { isLoggedIn } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [passkeyError, setPasskeyError] = useState("");
@@ -89,6 +90,7 @@ export default function Login() {
       const { startAuthentication } = await import("@simplewebauthn/browser");
 
       // 1. Get authentication options
+      const apiBase = browserApiBase();
       const optionsRes = await fetch(`${apiBase}/v1/users/auth/passkey/login-options`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,6 +138,7 @@ export default function Login() {
     setRecoveryStatus("loading");
     setRecoveryError("");
     try {
+      const apiBase = browserApiBase();
       const handle = recoveryHandle.trim().toLowerCase().replace(/^@+/, "");
       const code = extractRecoveryCode(recoveryCode);
       if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/i.test(code)) {

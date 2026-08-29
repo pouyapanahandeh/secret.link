@@ -18,7 +18,7 @@ import { ProfileShareModal } from "../components/ProfileShareModal";
 import { ProfileStatsModal } from "../components/ProfileStatsModal";
 import { ProfileSettingsModal } from "../components/ProfileSettingsModal";
 import { getToken } from "../lib/session.server";
-import { API_URL } from "../lib/api.server";
+import { API_URL, publicApiBase } from "../lib/api.server";
 import { getApiBase } from "../lib/api.client";
 import { resolveProfileViewMode } from "@secretlink/core/profile-types";
 import { FollowListModal, type FollowListTab } from "../components/FollowListModal";
@@ -97,7 +97,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       ownHandle,
       ownAvatarUrl,
       token: token ?? null,
-      apiBase: new URL(request.url).origin,
+      apiBase: publicApiBase(request),
       notFound: !profile,
       hasRecoveryCodes,
     },

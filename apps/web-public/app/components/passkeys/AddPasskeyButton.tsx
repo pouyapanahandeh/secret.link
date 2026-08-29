@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { registerPasskey, type RegisterPasskeyResult } from "../../lib/passkey-register";
+import { browserApiBase } from "../../lib/api-base";
 
 export function AddPasskeyButton({
   token,
@@ -23,7 +24,7 @@ export function AddPasskeyButton({
     setStatus("loading");
     setError("");
     try {
-      const result = await registerPasskey(apiBase, token);
+      const result = await registerPasskey(browserApiBase() || apiBase, token);
       setStatus("idle");
       onSuccess?.(result);
     } catch (err: unknown) {
