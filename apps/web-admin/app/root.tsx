@@ -8,6 +8,12 @@ export const links: LinksFunction = () => [
   { rel: "icon", type: "image/png", sizes: "16x16", href: "/secretlink.png" },
   { rel: "apple-touch-icon", sizes: "180x180", href: "/secretlink.png" },
   { rel: "manifest", href: "/manifest.webmanifest" },
+  { rel: "preconnect", href: "https://fonts.googleapis.com" },
+  { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+  {
+    rel: "stylesheet",
+    href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800;900&display=swap",
+  },
 ];
 
 export const meta: MetaFunction = () => [
@@ -17,11 +23,25 @@ export const meta: MetaFunction = () => [
   { name: "apple-mobile-web-app-title", content: "SL Admin" },
 ];
 
-const swScript = `
+const swScript =
+  process.env.NODE_ENV === "production"
+    ? `
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
       navigator.serviceWorker.register('/sw.js');
     });
+  }
+`
+    : `
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function (rs) {
+      rs.forEach(function (r) { r.unregister(); });
+    });
+    if (window.caches) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      });
+    }
   }
 `;
 
@@ -38,7 +58,7 @@ export default function App() {
         <Meta />
         <Links />
       </head>
-      <body className="min-h-screen min-h-[100dvh]">
+      <body className="min-h-screen min-h-[100dvh] bg-surface text-text font-sans antialiased">
         <Outlet />
         <ScrollRestoration />
         <Scripts />

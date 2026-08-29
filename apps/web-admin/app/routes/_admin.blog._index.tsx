@@ -2,7 +2,9 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { requireBlogReaderSession, requireBlogEditorSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
 import { Link, useLoaderData, useSearchParams, Form, useNavigation } from "@remix-run/react";
+import { EmptyState } from "~/components/EmptyState";
 import { FilterTabs } from "~/components/FilterTabs";
+import { NavIcon } from "~/components/NavIcon";
 import { PageHeader } from "~/components/PageHeader";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -63,14 +65,17 @@ export default function BlogAdmin() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader title="Blog" count={total} />
-        {canEdit && (
-          <Link to="/blog/new" className="btn btn-primary text-center">
-            New post
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        title="Blog"
+        count={total}
+        actions={
+          canEdit ? (
+            <Link to="/blog/new" className="btn btn-primary text-center">
+              New post
+            </Link>
+          ) : undefined
+        }
+      />
 
       <FilterTabs
         tabs={statuses.map((s) => ({
@@ -83,7 +88,11 @@ export default function BlogAdmin() {
 
       <div className="mt-6 space-y-4">
         {(posts as any[]).length === 0 && (
-          <p className="py-8 text-center text-[var(--text-muted)]">No {currentStatus} posts</p>
+          <EmptyState
+            icon={<NavIcon name="blog" className="h-8 w-8" />}
+            title={`No ${currentStatus} posts`}
+            description={canEdit ? "Write a post to publish on secretlink.life." : "Nothing in this tab yet."}
+          />
         )}
         {(posts as any[]).map((post: any) => (
           <div key={post.id} className="card">

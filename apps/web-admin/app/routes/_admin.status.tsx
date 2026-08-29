@@ -29,10 +29,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 function statusColor(status: CheckStatus | SystemStatus["overall"]) {
-  if (status === "ok") return "var(--success)";
-  if (status === "degraded" || status === "warn") return "var(--warning)";
-  if (status === "skipped") return "var(--text-muted)";
-  return "var(--danger)";
+  if (status === "ok") return "var(--color-success)";
+  if (status === "degraded" || status === "warn") return "var(--color-warning)";
+  if (status === "skipped") return "var(--color-text-muted)";
+  return "var(--color-danger)";
 }
 
 function statusLabel(status: CheckStatus | SystemStatus["overall"]) {
@@ -45,7 +45,7 @@ function statusLabel(status: CheckStatus | SystemStatus["overall"]) {
 }
 
 function formatLatency(ms?: number) {
-  if (ms == null) return "-";
+  if (ms == null) return "—";
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`;
 }
 
@@ -61,105 +61,115 @@ function formatUptime(ms?: unknown) {
   return `${day}d ${hr % 24}h`;
 }
 
-function CheckTable({ checks, showUrl = false }: { checks: StatusCheck[]; showUrl?: boolean }) {
+function latencyWidth(ms?: number) {
+  if (ms == null) return 0;
+  return Math.min(100, (ms / 2000) * 100);
+}
+
+function CheckCards({ checks, showUrl = false }: { checks: StatusCheck[]; showUrl?: boolean }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[520px] text-sm">
-        <thead>
-          <tr className="border-b border-[var(--border)] text-left text-[var(--text-muted)]">
-            <th className="pb-2 pr-4 font-medium">Name</th>
-            <th className="pb-2 pr-4 font-medium">Status</th>
-            <th className="pb-2 pr-4 font-medium">Details</th>
-            <th className="pb-2 font-medium">Latency</th>
-          </tr>
-        </thead>
-        <tbody>
-          {checks.map((check) => (
-            <tr key={check.name} className="border-b border-[var(--border)]/60 last:border-0">
-              <td className="py-3 pr-4 font-medium text-[var(--text)]">{check.name}</td>
-              <td className="py-3 pr-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {checks.map((check) => (
+        <div key={check.name} className="rounded-2xl border border-border bg-surface p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
                 <span
-                  className="badge"
-                  style={{
-                    background: `${statusColor(check.status)}22`,
-                    color: statusColor(check.status),
-                  }}
-                >
-                  {statusLabel(check.status)}
-                </span>
-              </td>
-              <td className="py-3 pr-4 text-[var(--text-muted)]">
-                <div>{check.message ?? "-"}</div>
-                {showUrl && check.details?.url ? (
-                  <div className="mt-1 truncate text-xs opacity-70">{String(check.details.url)}</div>
-                ) : null}
-                {check.details?.pid != null ? (
-                  <div className="mt-1 text-xs opacity-70">
-                    PID {String(check.details.pid)}
-                    {formatUptime(check.details.uptimeMs) ? ` · up ${formatUptime(check.details.uptimeMs)}` : ""}
-                    {check.details.restarts != null ? ` · restarts ${String(check.details.restarts)}` : ""}
-                  </div>
-                ) : null}
-              </td>
-              <td className="py-3 text-[var(--text-muted)]">{formatLatency(check.latencyMs)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${check.status === "ok" ? "animate-pulse" : ""}`}
+                  style={{ background: statusColor(check.status) }}
+                />
+                <h3 className="truncate font-semibold">{check.name}</h3>
+              </div>
+              <p className="mt-1 text-sm text-text-muted">{check.message ?? "—"}</p>
+              {showUrl && check.details?.url ? (
+                <p className="mt-1 truncate font-mono text-[10px] text-text-muted/70">{String(check.details.url)}</p>
+              ) : null}
+              {check.details?.pid != null ? (
+                <p className="mt-1 font-mono text-[10px] text-text-muted">
+                  PID {String(check.details.pid)}
+                  {formatUptime(check.details.uptimeMs) ? ` · up ${formatUptime(check.details.uptimeMs)}` : ""}
+                  {check.details.restarts != null ? ` · restarts ${String(check.details.restarts)}` : ""}
+                </p>
+              ) : null}
+            </div>
+            <span
+              className="badge shrink-0"
+              style={{
+                background: `${statusColor(check.status)}22`,
+                color: statusColor(check.status),
+              }}
+            >
+              {statusLabel(check.status)}
+            </span>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-raised">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${latencyWidth(check.latencyMs)}%`,
+                  background: statusColor(check.status),
+                }}
+              />
+            </div>
+            <span className="font-mono text-[10px] tabular-nums text-text-muted">{formatLatency(check.latencyMs)}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
 export default function StatusPage() {
   const { status } = useLoaderData<typeof loader>();
+  const okCount = [...status.services, ...status.instances, ...status.endpoints].filter((c) => c.status === "ok").length;
+  const totalCount = status.services.length + status.instances.length + status.endpoints.length;
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <PageHeader title="System Status" />
-        <Link to="/status" className="btn btn-outline text-sm">
-          Refresh
-        </Link>
-      </div>
+      <PageHeader
+        title="System status"
+        subtitle={`Checked ${new Date(status.checkedAt).toLocaleString()}`}
+        actions={
+          <Link to="/status" className="btn btn-outline text-sm">
+            Refresh
+          </Link>
+        }
+      />
 
-      <div className="card mb-6">
+      <div className="card mb-6 overflow-hidden p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-[var(--text-muted)]">Overall</p>
-            <p className="mt-1 text-2xl font-bold" style={{ color: statusColor(status.overall) }}>
-              {status.overall === "ok" ? "All systems operational" : statusLabel(status.overall)}
-            </p>
+          <div className="flex items-center gap-3">
+            <span
+              className={`h-3 w-3 rounded-full ${status.overall === "ok" ? "animate-pulse" : ""}`}
+              style={{ background: statusColor(status.overall) }}
+            />
+            <div>
+              <p className="label-mono">Overall</p>
+              <p className="mt-0.5 text-2xl font-extrabold tracking-tight" style={{ color: statusColor(status.overall) }}>
+                {status.overall === "ok" ? "All systems operational" : statusLabel(status.overall)}
+              </p>
+            </div>
           </div>
-          <div className="text-right text-sm text-[var(--text-muted)]">
-            <p>Checked on page load</p>
-            <p>{new Date(status.checkedAt).toLocaleString()}</p>
-          </div>
+          <p className="font-mono text-sm tabular-nums text-text-muted">
+            {okCount}/{totalCount} checks passing
+          </p>
         </div>
       </div>
 
-      <div className="space-y-6">
-        <section className="card">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Core services
-          </h2>
-          <CheckTable checks={status.services} />
+      <div className="space-y-8">
+        <section>
+          <h2 className="label-mono mb-3">Core services</h2>
+          <CheckCards checks={status.services} />
         </section>
-
-        <section className="card">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            PM2 instances
-          </h2>
-          <CheckTable checks={status.instances} />
+        <section>
+          <h2 className="label-mono mb-3">PM2 instances</h2>
+          <CheckCards checks={status.instances} />
         </section>
-
-        <section className="card">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Endpoint probes
-          </h2>
-          <p className="mb-4 text-xs text-[var(--text-muted)]">
-            Live HTTP requests sent when this page was loaded.
-          </p>
-          <CheckTable checks={status.endpoints} showUrl />
+        <section>
+          <h2 className="label-mono mb-3">Endpoint probes</h2>
+          <p className="mb-3 text-xs text-text-muted">Live HTTP requests sent when this page was loaded.</p>
+          <CheckCards checks={status.endpoints} showUrl />
         </section>
       </div>
     </div>

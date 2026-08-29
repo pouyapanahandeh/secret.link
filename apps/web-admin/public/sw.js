@@ -1,4 +1,4 @@
-const CACHE_NAME = "secretlink-admin-v2";
+const CACHE_NAME = "secretlink-admin-v3";
 const PRECACHE_URLS = ["/secretlink.png", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -18,10 +18,12 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.mode === "navigate" || event.request.url.includes("/v1/")) {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
-    );
+  const url = new URL(event.request.url);
+  const cacheable = PRECACHE_URLS.includes(url.pathname);
+
+  // Never cache the worker, HTML, or app JS — that froze the old inbox card.
+  if (!cacheable) {
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
     return;
   }
 

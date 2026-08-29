@@ -4,8 +4,9 @@ import { getSession } from "~/lib/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await getSession(request);
-  if (session.get("token")) {
-    return redirect("/dashboard");
+  const role = session.get("role") as string | undefined;
+  if (session.get("token") && role) {
+    return redirect(role === "editor" ? "/blog" : "/dashboard");
   }
   return redirect("/login");
 }

@@ -17,11 +17,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
-  const handle = (formData.get("handle") as string)?.trim().toLowerCase();
+  const handle = (formData.get("handle") as string)?.trim().toLowerCase().replace(/^@+/, "");
   const step = formData.get("step") as string;
 
   if (step === "get-options") {
-    // Step 1: Get passkey challenge
     const res = await fetch(`${API_URL}/v1/users/auth/passkey/login-options`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -30,7 +29,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      return { error: data.error === "no_passkey" ? "No passkey found for this handle" : "Login failed" };
+      return {
+        error: data.error === "no_passkey" ? "No passkey found for this handle" : "Login failed",
+        handle,
+      };
     }
 
     const options = await res.json();
@@ -38,7 +40,6 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (step === "verify") {
-    // Step 2: Verify the passkey response
     const credential = formData.get("credential") as string;
     const verifyHandle = formData.get("verifyHandle") as string;
 
@@ -54,7 +55,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const { token } = (await res.json()) as { token: string };
 
-    // Check if user is admin/moderator
     const meRes = await fetch(`${API_URL}/v1/users/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -63,12 +63,11 @@ export async function action({ request }: ActionFunctionArgs) {
       return { error: "Failed to verify user" };
     }
 
-    const me = (await meRes.json()) as any;
+    const me = (await meRes.json()) as { handle: string; role: string };
     if (!["admin", "moderator", "editor"].includes(me.role)) {
       return { error: "Access denied. Admin, moderator, or editor role required." };
     }
 
-    // Set session
     const session = await getSession(request);
     session.set("token", token);
     session.set("handle", me.handle);
@@ -84,58 +83,61 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Login() {
-  const actionData = useActionData<typeof action>() as { error?: string; options?: any; handle?: string } | undefined;
+  const actionData = useActionData<typeof action>() as { error?: string; options?: unknown; handle?: string } | undefined;
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
   return (
-    <div className="flex min-h-screen min-h-[100dvh] items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div className="card w-full max-w-sm">
-        <div className="text-center mb-6">
-          <img src="/secretlink.png" alt="Secretlink" className="mx-auto mb-3 h-12 w-12" />
-          <h1 className="text-2xl font-bold text-[var(--accent)]">Secretlink</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Admin Panel</p>
+    <div className="relative flex min-h-screen min-h-[100dvh] items-center justify-center overflow-hidden p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="pointer-events-none absolute -top-24 right-[-20%] h-[70vw] w-[70vw] max-h-[520px] max-w-[520px] rounded-full bg-accent/10 blur-[120px]" />
+
+      <div className="card relative w-full max-w-sm p-6 sm:p-8">
+        <div className="mb-8 text-center">
+          <img src="/secretlink.png" alt="" className="mx-auto mb-4 h-12 w-12" />
+          <h1 className="text-xl font-extrabold tracking-tight">
+            secretlink<span className="text-accent">.</span>life
+          </h1>
+          <p className="label-mono mt-2">Admin panel</p>
         </div>
 
         {actionData?.error && (
-          <div className="bg-[var(--danger)] bg-opacity-10 border border-[var(--danger)] rounded-lg p-3 mb-4">
-            <p className="text-sm text-[var(--danger)]">{actionData.error}</p>
+          <div className="mb-4 rounded-xl border border-danger/40 bg-danger/10 p-3">
+            <p className="text-sm text-danger">{actionData.error}</p>
           </div>
         )}
 
-        {/* Step 1: Handle input + get options */}
         {!actionData?.options && (
           <Form method="post">
             <input type="hidden" name="step" value="get-options" />
-            <label className="block text-sm text-[var(--text-muted)] mb-1">Handle</label>
+            <label className="label-mono mb-2 block">Handle</label>
             <input
               name="handle"
               type="text"
               placeholder="your-handle"
               required
-              className="input mb-4"
+              defaultValue={actionData?.handle ?? ""}
+              className="input mb-4 min-h-12"
               autoComplete="username webauthn"
             />
-            <button type="submit" disabled={isSubmitting} className="btn btn-primary w-full">
+            <button type="submit" disabled={isSubmitting} className="btn btn-primary w-full min-h-12">
               {isSubmitting ? "Loading..." : "Sign in with Passkey"}
             </button>
           </Form>
         )}
 
-        {/* Step 2: Passkey challenge (handled client-side) */}
-        {actionData?.options && (
+        {actionData?.options ? (
           <PasskeyVerify options={actionData.options} handle={actionData.handle!} />
-        )}
+        ) : null}
 
-        <p className="text-xs text-[var(--text-muted)] text-center mt-6">
-          Only admin, moderator, and editor accounts can access this panel.
+        <p className="mt-8 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted">
+          Admin, moderator, and editor only
         </p>
       </div>
     </div>
   );
 }
 
-function PasskeyVerify({ options, handle }: { options: any; handle: string }) {
+function PasskeyVerify({ options, handle }: { options: unknown; handle: string }) {
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const credentialRef = useRef<HTMLInputElement>(null);
@@ -145,14 +147,14 @@ function PasskeyVerify({ options, handle }: { options: any; handle: string }) {
     (async () => {
       try {
         const { startAuthentication } = await import("@simplewebauthn/browser");
-        const credential = await startAuthentication({ optionsJSON: options });
+        const credential = await startAuthentication({ optionsJSON: options as never });
         if (cancelled) return;
         credentialRef.current!.value = JSON.stringify(credential);
         formRef.current!.submit();
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (cancelled) return;
-        console.error("Passkey auth failed:", e);
-        setError(e?.message || "Passkey authentication failed");
+        const message = e instanceof Error ? e.message : "Passkey authentication failed";
+        setError(message);
       }
     })();
     return () => { cancelled = true; };
@@ -160,18 +162,18 @@ function PasskeyVerify({ options, handle }: { options: any; handle: string }) {
 
   return (
     <div>
-      <p className="text-sm text-[var(--text-muted)] mb-4">Passkey challenge received. Complete authentication on your device.</p>
+      <p className="mb-4 text-sm text-text-muted">Passkey challenge received. Complete authentication on your device.</p>
       <form method="post" ref={formRef} action="/login">
         <input type="hidden" name="step" value="verify" />
         <input type="hidden" name="verifyHandle" value={handle} />
         <input type="hidden" name="credential" ref={credentialRef} />
       </form>
       {error ? (
-        <p className="text-sm text-[var(--danger)] mt-2">
-          {error}. <a href="/login" className="text-[var(--accent)] underline">Try again</a>
+        <p className="mt-2 text-sm text-danger">
+          {error}. <a href="/login" className="text-accent underline">Try again</a>
         </p>
       ) : (
-        <p className="text-sm text-[var(--text-muted)] animate-pulse">Waiting for passkey...</p>
+        <p className="animate-pulse text-sm text-text-muted">Waiting for passkey...</p>
       )}
     </div>
   );

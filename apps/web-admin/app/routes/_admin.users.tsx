@@ -2,6 +2,8 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { requireAdminSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
 import { useLoaderData, useSearchParams, Form, useNavigation } from "@remix-run/react";
+import { EmptyState } from "~/components/EmptyState";
+import { NavIcon } from "~/components/NavIcon";
 import { PageHeader } from "~/components/PageHeader";
 import { ResponsiveTable } from "~/components/ResponsiveTable";
 
@@ -146,8 +148,16 @@ export default function Users() {
         </form>
       </div>
 
+      {(users as any[]).length === 0 && (
+        <EmptyState
+          icon={<NavIcon name="users" className="h-8 w-8" />}
+          title={search ? "No matching users" : "No users yet"}
+          description={search ? "Try a different handle." : "New accounts will show up here."}
+        />
+      )}
+
       {/* Mobile card list */}
-      <div className="space-y-3 md:hidden">
+      <div className={`space-y-3 md:hidden ${(users as any[]).length === 0 ? "hidden" : ""}`}>
         {(users as any[]).map((user: any) => (
           <div key={user.id} className="card">
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -181,7 +191,7 @@ export default function Users() {
       </div>
 
       {/* Desktop table */}
-      <div className="card hidden overflow-hidden p-0 md:block">
+      <div className={`card hidden overflow-hidden p-0 md:block ${(users as any[]).length === 0 ? "!hidden" : ""}`}>
         <ResponsiveTable>
           <table className="w-full min-w-[720px] text-sm">
             <thead>

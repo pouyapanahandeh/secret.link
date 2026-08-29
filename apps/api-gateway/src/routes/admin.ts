@@ -22,16 +22,56 @@ function logAudit(actorId: string, actorHandle: string, action: string, targetTy
 
 // ─── Dashboard Stats ────────────────────────────────────────────────────────
 
+function lastNDays(n: number): string[] {
+  const days: string[] = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+    days.push(d.toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+function fillDaySeries(rows: { day: string; c: number }[], days: string[]) {
+  const map = new Map(rows.map((row) => [row.day, Number(row.c)]));
+  return days.map((day) => ({ day, count: map.get(day) ?? 0 }));
+}
+
 adminRouter.get("/stats", async (ctx: Context) => {
+  const nowIso = new Date().toISOString();
+  const days = lastNDays(14);
+  const since = days[0];
+
+  const userSeries = fillDaySeries(
+    db.prepare(`SELECT substr(created_at, 1, 10) as day, count(*) as c FROM users WHERE created_at >= ? GROUP BY day`).all(since) as { day: string; c: number }[],
+    days,
+  );
+  const reportSeries = fillDaySeries(
+    db.prepare(`SELECT substr(created_at, 1, 10) as day, count(*) as c FROM secret_reports WHERE created_at >= ? GROUP BY day`).all(since) as { day: string; c: number }[],
+    days,
+  );
+  const secretSeries = fillDaySeries(
+    db.prepare(`SELECT substr(created_at, 1, 10) as day, count(*) as c FROM map_secrets WHERE created_at >= ? GROUP BY day`).all(since) as { day: string; c: number }[],
+    days,
+  );
+
   const stats = {
     users: (db.prepare("SELECT count(*) as c FROM users").get() as any).c,
     openReports: (db.prepare("SELECT count(*) as c FROM secret_reports WHERE status = 'open'").get() as any).c,
     totalReports: (db.prepare("SELECT count(*) as c FROM secret_reports").get() as any).c,
-    activeSecrets: (db.prepare("SELECT count(*) as c FROM map_secrets WHERE expires_at > ?").get(new Date().toISOString()) as any).c,
+    activeSecrets: (db.prepare("SELECT count(*) as c FROM map_secrets WHERE expires_at > ?").get(nowIso) as any).c,
     pendingAppeals: (db.prepare("SELECT count(*) as c FROM appeals WHERE status = 'pending'").get() as any).c,
-    suspendedUsers: (db.prepare("SELECT count(*) as c FROM user_suspensions WHERE lifted_at IS NULL AND (expires_at IS NULL OR expires_at > ?)").get(new Date().toISOString()) as any).c,
+    suspendedUsers: (db.prepare("SELECT count(*) as c FROM user_suspensions WHERE lifted_at IS NULL AND (expires_at IS NULL OR expires_at > ?)").get(nowIso) as any).c,
     pendingDeletions: (db.prepare("SELECT count(*) as c FROM deletion_requests WHERE status = 'pending'").get() as any).c,
     newContactMessages: (db.prepare("SELECT count(*) as c FROM contact_messages WHERE status = 'new'").get() as any).c,
+    series: {
+      users: userSeries,
+      reports: reportSeries,
+      secrets: secretSeries,
+    },
+    reportsByStatus: db.prepare("SELECT status, count(*) as count FROM secret_reports GROUP BY status").all(),
+    reportsByReason: db.prepare("SELECT reason, count(*) as count FROM secret_reports GROUP BY reason ORDER BY count DESC LIMIT 8").all(),
+    usersByRole: db.prepare("SELECT COALESCE(role, 'user') as role, count(*) as count FROM users GROUP BY role").all(),
   };
   ctx.body = stats;
 });
@@ -51,7 +91,12 @@ adminRouter.get("/contact-messages", async (ctx: Context) => {
   const offset = Number(ctx.query.offset) || 0;
 
   const messages = db.prepare(`
-    SELECT cm.*, u.handle as user_handle
+    SELECT cm.*,
+           u.handle as user_handle,
+           u.role as user_role,
+           u.created_at as user_created_at,
+           u.email as user_email,
+           u.avatar_url as user_avatar_url
     FROM contact_messages cm
     LEFT JOIN users u ON cm.user_id = u.id
     WHERE cm.status = ?
@@ -60,8 +105,10 @@ adminRouter.get("/contact-messages", async (ctx: Context) => {
   `).all(status, limit, offset);
 
   const total = (db.prepare("SELECT count(*) as c FROM contact_messages WHERE status = ?").get(status) as any).c;
+  const countRows = db.prepare("SELECT status, count(*) as count FROM contact_messages GROUP BY status").all() as { status: string; count: number }[];
+  const counts = { new: 0, read: 0, archived: 0, ...Object.fromEntries(countRows.map((row) => [row.status, row.count])) };
 
-  ctx.body = { messages, total, limit, offset };
+  ctx.body = { messages, total, counts, limit, offset };
 });
 
 adminRouter.patch("/contact-messages/:id", async (ctx: Context) => {

@@ -137,18 +137,20 @@ export default function BlogEditor() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <PageHeader title={isNew ? "New blog post" : "Edit blog post"} />
-        <Link to="/blog" className="btn btn-outline text-sm">
-          Back
-        </Link>
-      </div>
+      <PageHeader
+        title={isNew ? "New blog post" : "Edit blog post"}
+        actions={
+          <Link to="/blog" className="btn btn-outline text-sm">
+            Back
+          </Link>
+        }
+      />
 
       <Form method="post" encType="multipart/form-data" className="space-y-6">
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="card space-y-4">
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-muted)]">Title</label>
+              <label className="label-mono mb-2 block">Title</label>
               <input
                 name="title"
                 required
@@ -161,7 +163,7 @@ export default function BlogEditor() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-muted)]">Slug</label>
+              <label className="label-mono mb-2 block">Slug</label>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-[var(--text-muted)]">/blog/</span>
                 <input
@@ -178,8 +180,8 @@ export default function BlogEditor() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-muted)]">
-                Short description <span className="text-xs">({excerpt.length}/160 recommended for SEO)</span>
+              <label className="label-mono mb-2 block">
+                Short description <span className="tracking-normal">({excerpt.length}/160)</span>
               </label>
               <textarea
                 name="excerpt"
@@ -191,11 +193,11 @@ export default function BlogEditor() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-muted)]">Keywords (comma-separated)</label>
+              <label className="label-mono mb-2 block">Keywords</label>
               <input name="keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} className="input w-full" />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-muted)]">Cover photo</label>
+              <label className="label-mono mb-2 block">Cover photo</label>
               <input type="hidden" name="coverImageUrl" value={coverUrl ?? ""} />
               <BlogCoverUpload
                 coverUrl={coverUrl}
@@ -204,7 +206,7 @@ export default function BlogEditor() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-muted)]">Body (Markdown)</label>
+              <label className="label-mono mb-2 block">Body (Markdown)</label>
               <textarea
                 name="body"
                 required
@@ -225,7 +227,7 @@ export default function BlogEditor() {
           </div>
 
           <div className="card">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">Preview</h2>
+            <h2 className="label-mono mb-4">Preview</h2>
             {coverUrl && <img src={coverUrl} alt="" className="mb-4 h-48 w-full rounded-lg object-cover" />}
             <h1 className="mb-2 text-2xl font-bold text-[var(--text)]">{title || "Post title"}</h1>
             <p className="mb-4 text-sm text-[var(--text-muted)]">{excerpt || "Short description preview"}</p>

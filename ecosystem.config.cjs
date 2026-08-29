@@ -73,7 +73,7 @@ const apiEnv = {
   RP_ORIGIN: get("RP_ORIGIN") ?? "https://secretlink.life,https://admin.secretlink.life",
   CORS_ORIGINS:
     get("CORS_ORIGINS") ??
-    "https://secretlink.life,https://admin.secretlink.life,http://localhost:3000,http://localhost:3001",
+    "https://secretlink.life,https://admin.secretlink.life,http://localhost:3000,http://localhost:3001,http://localhost:3002",
   SES_REGION: get("SES_REGION") ?? "eu-north-1",
   SES_FROM: get("SES_FROM") ?? "hello@secretlink.life",
   AWS_REGION: get("AWS_REGION") ?? "eu-north-1",

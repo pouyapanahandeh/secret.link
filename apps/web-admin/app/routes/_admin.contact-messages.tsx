@@ -1,16 +1,26 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { requireAdminSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
-import { useLoaderData, useSearchParams, Form, useNavigation } from "@remix-run/react";
+import { useLoaderData, useSearchParams, useNavigation } from "@remix-run/react";
+import { ContactMessageCard, type ContactMessage } from "~/components/ContactMessageCard";
+import { EmptyState } from "~/components/EmptyState";
 import { FilterTabs } from "~/components/FilterTabs";
+import { NavIcon } from "~/components/NavIcon";
 import { PageHeader } from "~/components/PageHeader";
+
+interface ContactInbox {
+  messages: ContactMessage[];
+  total: number;
+  counts?: { new: number; read: number; archived: number };
+  currentStatus: string;
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { token } = await requireAdminSession(request);
   const url = new URL(request.url);
   const status = url.searchParams.get("status") ?? "new";
-  const data = await adminApi(`/contact-messages?status=${status}`, token);
-  return { ...(data as any), currentStatus: status };
+  const data = await adminApi<Omit<ContactInbox, "currentStatus">>(`/contact-messages?status=${status}`, token);
+  return { ...data, currentStatus: status };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -28,97 +38,40 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function ContactMessages() {
-  const { messages, total, currentStatus } = useLoaderData<typeof loader>();
+  const { messages, total, counts, currentStatus } = useLoaderData<typeof loader>();
   const [, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
   const isActioning = navigation.state === "submitting";
 
-  const statuses = ["new", "read", "archived"];
+  const tabs = [
+    { id: "new", label: "New", count: counts?.new },
+    { id: "read", label: "Read", count: counts?.read },
+    { id: "archived", label: "Archived", count: counts?.archived },
+  ];
 
   return (
     <div>
-      <PageHeader title="Contact Messages" count={total} />
+      <PageHeader title="Inbox" count={total} subtitle="Public contact form" />
 
       <FilterTabs
-        tabs={statuses.map((s) => ({
-          id: s,
-          label: s.charAt(0).toUpperCase() + s.slice(1),
-        }))}
+        tabs={tabs}
         activeId={currentStatus}
         onChange={(id) => setSearchParams({ status: id })}
       />
 
-      <div className="space-y-4">
-        {(messages as any[]).length === 0 && (
-          <p className="py-8 text-center text-[var(--text-muted)]">No {currentStatus} messages</p>
-        )}
-        {(messages as any[]).map((msg: any) => (
-          <div key={msg.id} className="card">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className={`badge badge-${msg.status}`}>{msg.status}</span>
-                  {msg.name && (
-                    <span
-                      className="badge"
-                      style={{ background: "var(--border)", color: "var(--text-muted)" }}
-                    >
-                      {msg.name}
-                    </span>
-                  )}
-                  {msg.user_handle && (
-                    <span
-                      className="badge"
-                      style={{ background: "var(--border)", color: "var(--accent)" }}
-                    >
-                      @{msg.user_handle}
-                    </span>
-                  )}
-                </div>
-
-                <div className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-                  <p className="whitespace-pre-wrap text-sm">{msg.message}</p>
-                </div>
-
-                <div className="flex flex-col gap-1 text-xs text-[var(--text-muted)] sm:flex-row sm:gap-4">
-                  <span>{msg.email ? `Reply to: ${msg.email}` : "No reply email"}</span>
-                  <span>{new Date(msg.created_at).toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="flex w-full flex-col gap-2 lg:min-w-[120px] lg:w-auto">
-                {msg.status !== "read" && (
-                  <Form method="post">
-                    <input type="hidden" name="messageId" value={msg.id} />
-                    <input type="hidden" name="status" value="read" />
-                    <button type="submit" disabled={isActioning} className="btn btn-primary w-full text-xs">
-                      Mark read
-                    </button>
-                  </Form>
-                )}
-                {msg.status !== "archived" && (
-                  <Form method="post">
-                    <input type="hidden" name="messageId" value={msg.id} />
-                    <input type="hidden" name="status" value="archived" />
-                    <button type="submit" disabled={isActioning} className="btn btn-outline w-full text-xs">
-                      Archive
-                    </button>
-                  </Form>
-                )}
-                {msg.status === "archived" && (
-                  <Form method="post">
-                    <input type="hidden" name="messageId" value={msg.id} />
-                    <input type="hidden" name="status" value="new" />
-                    <button type="submit" disabled={isActioning} className="btn btn-outline w-full text-xs">
-                      Restore
-                    </button>
-                  </Form>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {messages.length === 0 ? (
+        <EmptyState
+          icon={<NavIcon name="inbox" className="h-8 w-8" />}
+          title={`No ${currentStatus} messages`}
+          description="Contact form submissions from the public site appear here."
+        />
+      ) : (
+        <div className="space-y-3">
+          {messages.map((msg) => (
+            <ContactMessageCard key={msg.id} message={msg} isActioning={isActioning} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,13 +4,15 @@ import { AdminMobileHeader } from "~/components/AdminMobileHeader";
 import { AdminSidebar } from "~/components/AdminSidebar";
 import { PwaInstallBanner } from "~/components/PwaInstallBanner";
 import { getNavLabel } from "~/lib/nav-items";
+import type { AdminCounts } from "~/lib/stats";
 
 interface AdminShellProps {
   handle: string;
   role: string;
+  counts?: AdminCounts;
 }
 
-export function AdminShell({ handle, role }: AdminShellProps) {
+export function AdminShell({ handle, role, counts }: AdminShellProps) {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const pageTitle = getNavLabel(location.pathname);
@@ -38,7 +40,7 @@ export function AdminShell({ handle, role }: AdminShellProps) {
   }, [menuOpen, closeMenu]);
 
   return (
-    <div className="flex min-h-screen min-h-[100dvh]">
+    <div className="flex min-h-screen min-h-[100dvh] bg-surface">
       {menuOpen && (
         <button
           type="button"
@@ -50,9 +52,9 @@ export function AdminShell({ handle, role }: AdminShellProps) {
 
       <aside
         data-open={menuOpen}
-        className="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-[var(--border)] bg-[var(--surface-raised)] transition-transform duration-200 ease-out data-[open=true]:translate-x-0 lg:static lg:translate-x-0"
+        className="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-border bg-surface transition-transform duration-200 ease-out data-[open=true]:translate-x-0 lg:static lg:translate-x-0"
       >
-        <AdminSidebar handle={handle} role={role} onNavigate={closeMenu} />
+        <AdminSidebar handle={handle} role={role} counts={counts} onNavigate={closeMenu} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -63,8 +65,11 @@ export function AdminShell({ handle, role }: AdminShellProps) {
           onMenuToggle={() => setMenuOpen((open) => !open)}
         />
 
-        <main className="flex-1 overflow-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:p-6">
-          <Outlet />
+        <main className="relative flex-1 overflow-auto p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] lg:p-8">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-accent/10 blur-[100px]" />
+          <div className="relative mx-auto w-full max-w-6xl">
+            <Outlet />
+          </div>
         </main>
       </div>
 

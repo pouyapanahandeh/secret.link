@@ -58,16 +58,16 @@ export function PwaInstallBanner() {
 
   return (
     <div className="fixed bottom-4 left-0 right-0 z-50 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:bottom-6">
-      <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-raised)] p-4 shadow-xl">
+      <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-xl">
         <img src="/secretlink.png" alt="Secretlink Admin" className="h-10 w-10 shrink-0 rounded-xl" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[var(--text)]">Install Secretlink Admin</p>
+          <p className="text-sm font-semibold text-text">Install Secretlink Admin</p>
           {isIos ? (
-            <p className="text-xs text-[var(--text-muted)]">
+            <p className="text-xs text-text-muted">
               Tap Share then &quot;Add to Home Screen&quot;
             </p>
           ) : (
-            <p className="text-xs text-[var(--text-muted)]">
+            <p className="text-xs text-text-muted">
               Add to home screen for quick moderation access
             </p>
           )}
@@ -84,7 +84,7 @@ export function PwaInstallBanner() {
         <button
           type="button"
           onClick={handleDismiss}
-          className="shrink-0 p-1 text-[var(--text-muted)] hover:text-[var(--text)]"
+          className="shrink-0 p-1 text-text-muted hover:text-text"
           aria-label="Dismiss"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

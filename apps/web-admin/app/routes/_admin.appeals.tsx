@@ -2,7 +2,9 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { requireAdminSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
 import { useLoaderData, useSearchParams, Form, useNavigation } from "@remix-run/react";
+import { EmptyState } from "~/components/EmptyState";
 import { FilterTabs } from "~/components/FilterTabs";
+import { NavIcon } from "~/components/NavIcon";
 import { PageHeader } from "~/components/PageHeader";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -51,7 +53,11 @@ export default function Appeals() {
 
       <div className="space-y-4">
         {(appeals as any[]).length === 0 && (
-          <p className="py-8 text-center text-[var(--text-muted)]">No {currentStatus} appeals</p>
+          <EmptyState
+            icon={<NavIcon name="appeals" className="h-8 w-8" />}
+            title={`No ${currentStatus} appeals`}
+            description="Users can appeal moderation decisions. Those cases show up here."
+          />
         )}
         {(appeals as any[]).map((appeal: any) => (
           <div key={appeal.id} className="card">
