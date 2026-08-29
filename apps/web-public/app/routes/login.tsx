@@ -6,6 +6,7 @@ import { UI_FEATURES } from "../lib/feature-flags";
 import { SiteChrome } from "../components/SiteChrome";
 import { createSessionRedirect, getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
+import { extractRecoveryCode } from "@secretlink/core/user/schemas";
 
 export const meta: MetaFunction = () => [
   { title: "Log In - Secretlink.life" },
@@ -14,7 +15,8 @@ export const meta: MetaFunction = () => [
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = await getToken(request);
-  return json({ isLoggedIn: Boolean(token) });
+  const apiBase = API_URL.replace(/\/v1\/?$/, "");
+  return json({ isLoggedIn: Boolean(token), apiBase });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -63,10 +65,15 @@ const inputClass =
 const labelClass = "block font-mono text-[10px] tracking-[0.18em] uppercase text-text-muted mb-2";
 
 export default function Login() {
-  const { isLoggedIn } = useLoaderData<typeof loader>();
+  const { isLoggedIn, apiBase } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [passkeyError, setPasskeyError] = useState("");
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryHandle, setRecoveryHandle] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryStatus, setRecoveryStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [recoveryError, setRecoveryError] = useState("");
 
   // When server returns a handle for passkey login, trigger WebAuthn ceremony
   useEffect(() => {
@@ -81,9 +88,6 @@ export default function Login() {
 
     try {
       const { startAuthentication } = await import("@simplewebauthn/browser");
-
-      const origin = window.location.origin;
-      const apiBase = window.location.port === "3000" ? origin.replace(":3000", ":4000") : origin;
 
       // 1. Get authentication options
       const optionsRes = await fetch(`${apiBase}/v1/users/auth/passkey/login-options`, {
@@ -123,9 +127,41 @@ export default function Login() {
       } else {
         window.location.href = "/dashboard";
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setPasskeyStatus("error");
-      setPasskeyError(err?.message ?? "Something went wrong");
+      setPasskeyError(err instanceof Error ? err.message : "Something went wrong");
+    }
+  }
+
+  async function performRecovery() {
+    setRecoveryStatus("loading");
+    setRecoveryError("");
+    try {
+      const handle = recoveryHandle.trim().toLowerCase().replace(/^@+/, "");
+      const code = extractRecoveryCode(recoveryCode);
+      if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/i.test(code)) {
+        throw new Error("Enter one code, like ABCD-EFGH. You can paste the whole list.");
+      }
+      setRecoveryHandle(handle);
+      setRecoveryCode(code);
+      const res = await fetch(`${apiBase}/v1/users/auth/recovery-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle, code }),
+      });
+      if (!res.ok) {
+        throw new Error("Could not recover this account. Check the handle and code and try again.");
+      }
+      const { token } = (await res.json()) as { token?: string };
+      if (!token) throw new Error("Could not recover this account. Check the handle and code and try again.");
+      const form = new FormData();
+      form.append("intent", "begin");
+      form.append("token", token);
+      const setCookieRes = await fetch("/recover-passkey", { method: "POST", body: form, redirect: "follow" });
+      window.location.href = setCookieRes.redirected ? setCookieRes.url : "/recover-passkey";
+    } catch (err: unknown) {
+      setRecoveryStatus("error");
+      setRecoveryError(err instanceof Error ? err.message : "Something went wrong");
     }
   }
 
@@ -241,6 +277,69 @@ export default function Login() {
             {passkeyStatus === "loading" ? "Authenticating..." : "Log in with passkey"}
           </button>
         </form>
+
+        <p className="mt-4 text-sm text-text-muted">
+          <button
+            type="button"
+            onClick={() => setShowRecovery((v) => !v)}
+            className="font-semibold text-accent hover:underline"
+          >
+            Can&apos;t use your passkey?
+          </button>
+        </p>
+
+        {showRecovery && (
+          <form
+            className="mt-6 space-y-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void performRecovery();
+            }}
+          >
+            <div>
+              <label htmlFor="recovery-handle" className={labelClass}>
+                Handle
+              </label>
+              <div className="flex items-center min-h-12 bg-surface-raised border border-border focus-within:border-accent">
+                <span className="font-mono text-sm text-text-muted pl-4 pr-1">@</span>
+                <input
+                  id="recovery-handle"
+                  value={recoveryHandle}
+                  onChange={(e) => setRecoveryHandle(e.target.value)}
+                  type="text"
+                  autoComplete="username"
+                  placeholder="yourname"
+                  className="flex-1 min-h-12 bg-transparent px-2 py-3 text-text placeholder:text-text-muted/50 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="recovery-code" className={labelClass}>
+                Recovery code
+              </label>
+              <input
+                id="recovery-code"
+                value={recoveryCode}
+                onChange={(e) => setRecoveryCode(e.target.value)}
+                type="text"
+                autoComplete="one-time-code"
+                placeholder="XXXX-XXXX"
+                className={inputClass}
+              />
+              <p className="mt-2 text-xs text-text-muted">
+                Use any one code. Pasting the whole list is fine — we only use the first.
+              </p>
+            </div>
+            {recoveryError && <p className="text-red-400 text-sm">{recoveryError}</p>}
+            <button
+              type="submit"
+              disabled={recoveryStatus === "loading"}
+              className="w-full min-h-12 rounded-full border border-border bg-surface-raised px-6 text-sm font-extrabold text-text hover:border-accent transition-colors disabled:opacity-50"
+            >
+              {recoveryStatus === "loading" ? "Checking…" : "Continue with recovery code"}
+            </button>
+          </form>
+        )}
 
         <p className="mt-10 text-sm text-text-muted">
           Don&apos;t have an account?{" "}

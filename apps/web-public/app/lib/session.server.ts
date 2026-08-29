@@ -37,6 +37,12 @@ export async function createSessionRedirect(token: string, redirectTo: string) {
   });
 }
 
+export async function commitTokenCookie(token: string): Promise<string> {
+  const session = await sessionStorage.getSession();
+  session.set("token", token);
+  return sessionStorage.commitSession(session);
+}
+
 export async function destroySessionRedirect(request: Request, redirectTo: string = "/") {
   const session = await getSession(request);
   return redirect(redirectTo, {

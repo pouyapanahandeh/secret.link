@@ -13,7 +13,15 @@ export interface AuthPayload {
   userId: string;
   handle: string;
   jti?: string;
+  scope?: "enroll_passkey";
 }
+
+/** Routes a recovery (enroll-only) JWT may call. Anything else is 403. */
+const ENROLL_SCOPE_PATHS = new Set([
+  "GET /v1/users/me/profile",
+  "POST /v1/users/me/passkey/register-options",
+  "POST /v1/users/me/passkey/register-verify",
+]);
 
 // ─── Token revocation (logout / forced sign-out) ────────────────────────────
 const revokeStmts = {
@@ -119,6 +127,15 @@ export function requireAuth() {
       ctx.status = 403;
       ctx.body = { error: "account_suspended", message: "Your account is suspended." };
       return;
+    }
+
+    if (payload.scope === "enroll_passkey") {
+      const allowed = ENROLL_SCOPE_PATHS.has(`${ctx.method} ${ctx.path}`);
+      if (!allowed) {
+        ctx.status = 403;
+        ctx.body = { error: "insufficient_scope" };
+        return;
+      }
     }
 
     ctx.state.user = payload;

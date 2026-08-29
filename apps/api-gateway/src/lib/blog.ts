@@ -17,6 +17,8 @@ export const RESERVED_HANDLES = new Set([
   "live",
   "og",
   "s",
+  "recover-passkey",
+  "recover",
 ]);
 
 export function slugifyTitle(title: string): string {

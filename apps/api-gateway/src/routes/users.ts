@@ -9,10 +9,21 @@ import {
   PasskeyLoginOptionsInput,
   SearchUsersQuery,
   FollowTargetParams,
+  PasskeyIdParams,
+  RecoveryCodeLoginInput,
 } from "@secretlink/core/user/schemas";
 import { signToken, requireAuth, revokeToken, type AuthPayload } from "../middleware/auth.js";
 import { validateBody, validateQuery, validateParams } from "../middleware/validate.js";
+import { recoveryCodeRateLimiter } from "../middleware/rate-limiter.js";
 import db from "../db.js";
+import {
+  mintRecoveryCodes,
+  countUnusedRecoveryCodes,
+  consumeRecoveryCode,
+  stretchRecoveryCodeCheck,
+} from "../lib/recovery-codes.js";
+import { writeAuditLog } from "../lib/audit.js";
+import { logger } from "../middleware/logger.js";
 import { createNotification } from "../notifications.js";
 import {
   recordProfileView,
@@ -46,14 +57,60 @@ const SES_REGION = process.env["SES_REGION"] ?? "eu-north-1";
 const SES_FROM = process.env["SES_FROM"] ?? "noreply@secretlink.life";
 const ses = new SESClient({ region: SES_REGION });
 
+/** Best-effort owner notice. Never include a recovery code or token. Must not throw. */
+async function notifyRecoveryByEmail(handle: string, email: string | null): Promise<void> {
+  const to = email?.trim().toLowerCase();
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return;
+  const when = new Date().toISOString();
+  try {
+    await ses.send(new SendEmailCommand({
+      Source: SES_FROM,
+      Destination: { ToAddresses: [to] },
+      Message: {
+        Subject: { Data: "A recovery code was used on your Secretlink.life account" },
+        Body: {
+          Html: {
+            Data: `
+              <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+                <h2 style="margin: 0 0 16px;">Recovery code used</h2>
+                <p style="color: #666; margin: 0 0 16px;">
+                  A recovery code was used for <strong>@${handle}</strong> at ${when} (UTC).
+                  That starts a passkey reset. If this was you, you can ignore this email.
+                </p>
+                <p style="color: #666; margin: 0 0 16px;">
+                  If this was not you, contact support at
+                  <a href="https://secretlink.life/contact">secretlink.life/contact</a>.
+                </p>
+              </div>
+            `,
+          },
+        },
+      },
+    }));
+  } catch (err) {
+    logger.warn({ handle, err: err instanceof Error ? err.message : err }, "recovery notice email failed");
+  }
+}
+
 // ─── DB helpers (auth-specific; user/profile/follow live in repositories) ───
 const stmts = {
   updateMagicLink: db.prepare(`UPDATE users SET magic_link_token = ?, magic_link_expires_at = ? WHERE id = ?`),
   clearMagicLink: db.prepare(`UPDATE users SET magic_link_token = NULL, magic_link_expires_at = NULL WHERE id = ?`),
   getUserByMagicToken: db.prepare(`SELECT * FROM users WHERE magic_link_token = ? AND magic_link_expires_at > ?`),
-  insertCredential: db.prepare(`INSERT INTO credentials (id, user_id, public_key, counter, transports) VALUES (?, ?, ?, ?, ?)`),
+  insertCredential: db.prepare(
+    `INSERT INTO credentials (id, user_id, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+  ),
   getCredentials: db.prepare(`SELECT * FROM credentials WHERE user_id = ?`),
-  updateCredentialCounter: db.prepare(`UPDATE credentials SET counter = ? WHERE id = ?`),
+  listPasskeys: db.prepare(
+    `SELECT id, created_at, last_used_at FROM credentials WHERE user_id = ? ORDER BY created_at ASC`,
+  ),
+  getCredentialById: db.prepare(`SELECT id, user_id FROM credentials WHERE id = ? AND user_id = ?`),
+  deleteCredential: db.prepare(`DELETE FROM credentials WHERE id = ? AND user_id = ?`),
+  deleteOtherCredentials: db.prepare(`DELETE FROM credentials WHERE user_id = ? AND id != ?`),
+  countCredentials: db.prepare(`SELECT COUNT(*) AS c FROM credentials WHERE user_id = ?`),
+  updateCredentialCounter: db.prepare(
+    `UPDATE credentials SET counter = ?, last_used_at = ? WHERE id = ?`,
+  ),
 };
 
 // ─── Signup ─────────────────────────────────────────────────────────────────
@@ -258,11 +315,15 @@ usersRouter.get("/me/profile", requireAuth(), async (ctx: Context) => {
   const creds = stmts.getCredentials.all(userId) as any[];
   const followersCount = (profileRepo.countFollowers.get(userId) as any)?.count ?? 0;
   const followingCount = (profileRepo.countFollowing.get(userId) as any)?.count ?? 0;
+  const payload = ctx.state.user as AuthPayload;
 
   ctx.status = 200;
   ctx.body = {
     ...dbUserToPublic(row),
     hasPasskey: creds.length > 0,
+    passkeyCount: creds.length,
+    hasRecoveryCodes: countUnusedRecoveryCodes(userId) > 0,
+    enrollmentRequired: payload.scope === "enroll_passkey",
     followersCount,
     followingCount,
   };
@@ -381,13 +442,69 @@ usersRouter.get("/follow/:targetId", requireAuth(), validateParams(FollowTargetP
   ctx.body = { isFollowing, followersCount, followingCount };
 });
 
+// ─── Passkeys: list ─────────────────────────────────────────────────────────
+usersRouter.get("/me/passkeys", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const rows = stmts.listPasskeys.all(userId) as Array<{
+    id: string;
+    created_at: string | null;
+    last_used_at: string | null;
+  }>;
+  ctx.body = {
+    passkeys: rows.map((r) => ({
+      id: r.id,
+      createdAt: r.created_at,
+      lastUsedAt: r.last_used_at,
+    })),
+  };
+});
+
+// ─── Passkeys: delete one ───────────────────────────────────────────────────
+usersRouter.delete("/me/passkeys/:id", requireAuth(), validateParams(PasskeyIdParams), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const { id } = ctx.state.params as { id: string };
+  const row = stmts.getCredentialById.get(id, userId) as { id: string } | undefined;
+  if (!row) {
+    ctx.status = 404;
+    ctx.body = { error: "credential_not_found" };
+    return;
+  }
+
+  const count = (stmts.countCredentials.get(userId) as { c: number } | undefined)?.c ?? 0;
+  if (count <= 1 && countUnusedRecoveryCodes(userId) === 0) {
+    ctx.status = 400;
+    ctx.body = { error: "last_passkey" };
+    return;
+  }
+
+  stmts.deleteCredential.run(id, userId);
+  ctx.body = { ok: true };
+});
+
+// ─── Recovery codes: rotate ─────────────────────────────────────────────────
+usersRouter.post("/me/recovery-codes/rotate", requireAuth(), async (ctx: Context) => {
+  const { userId } = ctx.state.user as AuthPayload;
+  const recoveryCodes = mintRecoveryCodes(userId);
+  ctx.body = { recoveryCodes };
+});
+
 // ─── WebAuthn: Start registration ───────────────────────────────────────────
 usersRouter.post("/me/passkey/register-options", requireAuth(), async (ctx: Context) => {
   const { userId } = ctx.state.user as AuthPayload;
   const row = userRepo.getUserById.get(userId) as any;
   if (!row) { ctx.status = 404; ctx.body = { error: "user_not_found" }; return; }
 
+  const payload = ctx.state.user as AuthPayload;
   const creds = stmts.getCredentials.all(userId) as any[];
+  // Recovery replaces lost authenticators — excluding the old credential blocks
+  // the same browser/device from enrolling a replacement.
+  const excludeCredentials =
+    payload.scope === "enroll_passkey"
+      ? []
+      : creds.map((c) => ({
+          id: c.id,
+          transports: JSON.parse(c.transports || "[]"),
+        }));
 
   const options = await generateRegistrationOptions({
     rpName: RP_NAME,
@@ -395,10 +512,7 @@ usersRouter.post("/me/passkey/register-options", requireAuth(), async (ctx: Cont
     userName: row.handle,
     userDisplayName: row.handle,
     attestationType: "none",
-    excludeCredentials: creds.map((c) => ({
-      id: c.id,
-      transports: JSON.parse(c.transports || "[]"),
-    })),
+    excludeCredentials,
     authenticatorSelection: {
       residentKey: "preferred",
       userVerification: "preferred",
@@ -434,16 +548,51 @@ usersRouter.post("/me/passkey/register-verify", requireAuth(), async (ctx: Conte
     return;
   }
 
+  const existingCount = (stmts.countCredentials.get(userId) as { c: number } | undefined)?.c ?? 0;
   const { credential } = verification.registrationInfo;
+  const createdAt = new Date().toISOString();
   stmts.insertCredential.run(
     credential.id,
     userId,
     Buffer.from(credential.publicKey),
     credential.counter,
     JSON.stringify(body.response?.transports ?? []),
+    createdAt,
   );
 
   challengeStmts.del.run(userId);
+
+  const payload = ctx.state.user as AuthPayload;
+  if (payload.scope === "enroll_passkey") {
+    stmts.deleteOtherCredentials.run(userId, credential.id);
+    const authHeader = ctx.get("Authorization");
+    const presented = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : ctx.cookies.get("sl_token");
+    if (presented) revokeToken(presented);
+    const recoveryCodes = mintRecoveryCodes(userId);
+    const token = signToken({ userId, handle: row.handle });
+    ctx.cookies.set("sl_token", token, {
+      httpOnly: true,
+      secure: ctx.protocol === "https",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    writeAuditLog({
+      actorId: userId,
+      actorHandle: row.handle,
+      action: "passkey_replaced_via_recovery",
+      targetType: "user",
+      targetId: userId,
+      details: JSON.stringify({ ip: ctx.ip }),
+    });
+    ctx.body = { verified: true, token, recoveryCodes };
+    return;
+  }
+
+  if (existingCount === 0 && countUnusedRecoveryCodes(userId) === 0) {
+    ctx.body = { verified: true, recoveryCodes: mintRecoveryCodes(userId) };
+    return;
+  }
+
   ctx.body = { verified: true };
 });
 
@@ -505,7 +654,11 @@ usersRouter.post("/auth/passkey/login-verify", async (ctx: Context) => {
     return;
   }
 
-  stmts.updateCredentialCounter.run(verification.authenticationInfo.newCounter, credential.id);
+  stmts.updateCredentialCounter.run(
+    verification.authenticationInfo.newCounter,
+    new Date().toISOString(),
+    credential.id,
+  );
   challengeStmts.del.run(row.id);
 
   const token = signToken({ userId: row.id, handle: row.handle });
@@ -518,6 +671,56 @@ usersRouter.post("/auth/passkey/login-verify", async (ctx: Context) => {
 
   ctx.body = { token, user: { id: row.id, handle: row.handle } };
 });
+
+// ─── Recovery code: scoped enroll session ───────────────────────────────────
+usersRouter.post(
+  "/auth/recovery-code",
+  recoveryCodeRateLimiter(),
+  validateBody(RecoveryCodeLoginInput),
+  async (ctx: Context) => {
+    const { handle, code } = ctx.state.body as { handle: string; code: string };
+    const invalid = () => {
+      ctx.status = 401;
+      ctx.body = { error: "invalid_recovery" };
+    };
+
+    const foundUser = userRepo.getUserByHandle.get(handle) as
+      | { id: string; handle: string; email?: string | null }
+      | undefined;
+    if (!foundUser) {
+      stretchRecoveryCodeCheck(code);
+      invalid();
+      return;
+    }
+
+    if (!consumeRecoveryCode(foundUser.id, code)) {
+      invalid();
+      return;
+    }
+
+    writeAuditLog({
+      actorId: foundUser.id,
+      actorHandle: foundUser.handle,
+      action: "recovery_code_used",
+      targetType: "user",
+      targetId: foundUser.id,
+      details: JSON.stringify({ ip: ctx.ip }),
+    });
+    void notifyRecoveryByEmail(foundUser.handle, foundUser.email ?? null);
+
+    const token = signToken(
+      { userId: foundUser.id, handle: foundUser.handle, scope: "enroll_passkey" },
+      "15m",
+    );
+    ctx.cookies.set("sl_token", token, {
+      httpOnly: true,
+      secure: ctx.protocol === "https",
+      sameSite: "lax",
+      maxAge: 15 * 60 * 1000,
+    });
+    ctx.body = { token, user: { id: foundUser.id, handle: foundUser.handle } };
+  },
+);
 
 // ─── Magic Link: Request ────────────────────────────────────────────────────
 usersRouter.post("/auth/magic-link", async (ctx: Context) => {

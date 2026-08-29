@@ -129,3 +129,35 @@ export function blobUploadRateLimiter() {
     await next();
   };
 }
+
+const RECOVERY_WINDOW_MS = 15 * 60_000;
+const RECOVERY_MAX = 5;
+
+/** Tight limit on recovery-code attempts (IP and handle). Does not skip loopback. */
+export function recoveryCodeRateLimiter() {
+  return async (ctx: Context, next: Next) => {
+    const body = (ctx.request.body ?? {}) as { handle?: unknown };
+    const handle = String(body.handle ?? "").trim().toLowerCase();
+    const ipBucket = hit(`recovery-ip:${ctx.ip}`, RECOVERY_WINDOW_MS);
+    if (ipBucket.count > RECOVERY_MAX) {
+      ctx.status = 429;
+      ctx.body = {
+        error: "rate_limit_exceeded",
+        retryAfter: Math.ceil((ipBucket.resetAt - Date.now()) / 1000),
+      };
+      return;
+    }
+    if (handle) {
+      const handleBucket = hit(`recovery-handle:${handle}`, RECOVERY_WINDOW_MS);
+      if (handleBucket.count > RECOVERY_MAX) {
+        ctx.status = 429;
+        ctx.body = {
+          error: "rate_limit_exceeded",
+          retryAfter: Math.ceil((handleBucket.resetAt - Date.now()) / 1000),
+        };
+        return;
+      }
+    }
+    await next();
+  };
+}

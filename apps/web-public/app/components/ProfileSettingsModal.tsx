@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { AddPasskeyButton } from "./passkeys/AddPasskeyButton";
+import { PasskeyList, type PasskeyRow } from "./passkeys/PasskeyList";
+import { RecoveryCodesPanel } from "./passkeys/RecoveryCodesPanel";
 
 interface ProfileSettingsModalProps {
   handle: string;
+  token: string;
+  apiBase: string;
   acceptsSecrets: boolean;
+  hasRecoveryCodes?: boolean;
   saving?: boolean;
   onSave: (acceptsSecrets: boolean) => void;
   onClose: () => void;
@@ -45,17 +51,48 @@ function EyeOffIcon() {
 
 export function ProfileSettingsModal({
   handle,
+  token,
+  apiBase,
   acceptsSecrets,
+  hasRecoveryCodes = false,
   saving = false,
   onSave,
   onClose,
 }: ProfileSettingsModalProps) {
   const [accepts, setAccepts] = useState(acceptsSecrets);
+  const [passkeys, setPasskeys] = useState<PasskeyRow[]>([]);
+  const [codesOnFile, setCodesOnFile] = useState(hasRecoveryCodes);
+  const [freshCodes, setFreshCodes] = useState<string[] | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [passkeyError, setPasskeyError] = useState("");
+  const [rotating, setRotating] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+  async function loadPasskeys() {
+    try {
+      const res = await fetch(`${apiBase}/v1/users/me/passkeys`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const data = (await res.json()) as { passkeys?: PasskeyRow[] };
+      setPasskeys(data.passkeys ?? []);
+    } catch {
+      /* ignore */
+    }
+  }
 
   useEffect(() => {
     setAccepts(acceptsSecrets);
   }, [acceptsSecrets]);
+
+  useEffect(() => {
+    setCodesOnFile(hasRecoveryCodes);
+  }, [hasRecoveryCodes]);
+
+  useEffect(() => {
+    void loadPasskeys();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on open
+  }, [token, apiBase]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -63,13 +100,59 @@ export function ProfileSettingsModal({
     }
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
-    // Move focus into the sheet for keyboard/screen-reader users.
     panelRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
   }, [onClose]);
+
+  async function removePasskey(id: string) {
+    if (!window.confirm("Remove this passkey? You will not be able to sign in with that device.")) return;
+    setRemovingId(id);
+    setPasskeyError("");
+    try {
+      const res = await fetch(`${apiBase}/v1/users/me/passkeys/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers,
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setPasskeyError(
+          data.error === "last_passkey"
+            ? "Add recovery codes or another passkey before removing your last one."
+            : "Could not remove that passkey.",
+        );
+        return;
+      }
+      setPasskeys((prev) => prev.filter((p) => p.id !== id));
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  async function rotateCodes() {
+    if (codesOnFile && !window.confirm("Generate new codes? Unused old codes will stop working.")) return;
+    setRotating(true);
+    setPasskeyError("");
+    try {
+      const res = await fetch(`${apiBase}/v1/users/me/recovery-codes/rotate`, {
+        method: "POST",
+        headers,
+      });
+      if (!res.ok) {
+        setPasskeyError("Could not generate recovery codes.");
+        return;
+      }
+      const data = (await res.json()) as { recoveryCodes?: string[] };
+      if (data.recoveryCodes?.length) {
+        setFreshCodes(data.recoveryCodes);
+        setCodesOnFile(true);
+      }
+    } finally {
+      setRotating(false);
+    }
+  }
 
   const dirty = accepts !== acceptsSecrets;
 
@@ -108,6 +191,50 @@ export function ProfileSettingsModal({
         </div>
 
         <div className="px-6 pb-8 overflow-y-auto flex-1 space-y-5">
+          <section>
+            <p className="font-mono text-[11px] tracking-[0.2em] uppercase text-accent mb-2">
+              Sign-in
+            </p>
+            {freshCodes ? (
+              <RecoveryCodesPanel
+                codes={freshCodes}
+                confirmLabel="Done"
+                onConfirmed={() => setFreshCodes(null)}
+              />
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-text-muted leading-relaxed">
+                  Passkeys stay on this device or in iCloud / Google. To use another device, add a
+                  passkey there. Recovery codes are the backup if a device is lost.
+                </p>
+                <PasskeyList passkeys={passkeys} removingId={removingId} onRemove={removePasskey} />
+                <AddPasskeyButton
+                  token={token}
+                  apiBase={apiBase}
+                  label={passkeys.length === 0 ? "Add passkey" : "Add another passkey"}
+                  className="w-full text-sm bg-surface-raised border border-border text-text px-4 py-3 font-semibold hover:border-accent/50 transition-colors disabled:opacity-50 rounded-xl"
+                  onSuccess={(result) => {
+                    void loadPasskeys();
+                    if (result.recoveryCodes?.length) setFreshCodes(result.recoveryCodes);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void rotateCodes()}
+                  disabled={rotating}
+                  className="w-full rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-text hover:border-accent/50 transition-colors disabled:opacity-50"
+                >
+                  {rotating
+                    ? "Generating…"
+                    : codesOnFile
+                      ? "Generate new recovery codes"
+                      : "Generate recovery codes"}
+                </button>
+                {passkeyError && <p className="text-red-400 text-xs">{passkeyError}</p>}
+              </div>
+            )}
+          </section>
+
           <section>
             <p className="font-mono text-[11px] tracking-[0.2em] uppercase text-accent mb-2">
               Privacy

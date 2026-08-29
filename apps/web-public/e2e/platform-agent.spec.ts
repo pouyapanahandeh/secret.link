@@ -58,8 +58,10 @@ test.describe("platform agent — signup + feature walkthrough", () => {
   });
 
   test("3. onboarding: share modal then dashboard", async () => {
-    await expect(ownerPage.getByText(/Step 1 of 3/i)).toBeVisible();
+    await expect(ownerPage.getByText(/Step 1 of 5/i)).toBeVisible();
     await ownerPage.getByRole("button", { name: /Continue →/i }).click();
+    await expect(ownerPage.getByText(/Add a passkey/i)).toBeVisible();
+    await ownerPage.getByRole("button", { name: /Skip for now/i }).click();
     await expect(ownerPage.getByText(/Make it yours/i)).toBeVisible();
     await ownerPage.getByRole("button", { name: /^Cancel$/i }).click();
     await expect(ownerPage.getByText(/Share your profile/i)).toBeVisible();

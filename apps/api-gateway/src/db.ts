@@ -593,8 +593,33 @@ migrate("dm_device_keys.v1", () => {
   }
 });
 
+migrate("dm_device_keys.created_at.v1", () => {
+  addColumn("dm_device_keys", "created_at", "TEXT");
+  db.exec(`UPDATE dm_device_keys SET created_at = COALESCE(created_at, updated_at, datetime('now')) WHERE created_at IS NULL`);
+});
+
 migrate("secrets.wraps_json.v1", () => {
   addColumn("secrets", "wraps_json", "TEXT");
+});
+
+migrate("credentials.timestamps.v1", () => {
+  addColumn("credentials", "created_at", "TEXT");
+  addColumn("credentials", "last_used_at", "TEXT");
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE credentials SET created_at = ? WHERE created_at IS NULL`).run(now);
+});
+
+migrate("recovery_codes.v1", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS recovery_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      code_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      used_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_recovery_codes_user ON recovery_codes(user_id);
+  `);
 });
 
 export { db };

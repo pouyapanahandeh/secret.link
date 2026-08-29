@@ -8,6 +8,8 @@ import { getApiBase } from "../lib/api.client";
 import { ProfileEditForm } from "../components/ProfileEditForm";
 import { ProfileShareModal } from "../components/ProfileShareModal";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { AddPasskeyButton } from "../components/passkeys/AddPasskeyButton";
+import { RecoveryCodesPanel } from "../components/passkeys/RecoveryCodesPanel";
 
 export const meta: MetaFunction = () => [
   { title: "Welcome - Secretlink.life" },
@@ -45,7 +47,34 @@ export async function action({ request }: ActionFunctionArgs) {
   return json({ error: "Unknown intent", ok: false }, { status: 400 });
 }
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4 | 5;
+
+const STEP_KEY = "sl_onboarding_step";
+const CODES_KEY = "sl_onboarding_recovery_codes";
+
+function readStoredStep(): Step | null {
+  const n = Number(sessionStorage.getItem(STEP_KEY));
+  if (n >= 1 && n <= 5) return n as Step;
+  return null;
+}
+
+function readStoredCodes(): string[] | null {
+  try {
+    const raw = sessionStorage.getItem(CODES_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || !parsed.every((c) => typeof c === "string")) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function persistOnboardingProgress(nextStep: Step, codes?: string[] | null) {
+  sessionStorage.setItem(STEP_KEY, String(nextStep));
+  if (codes?.length) sessionStorage.setItem(CODES_KEY, JSON.stringify(codes));
+  if (codes === null) sessionStorage.removeItem(CODES_KEY);
+}
 
 export default function Onboarding() {
   const { user, token } = useLoaderData<typeof loader>();
@@ -56,7 +85,33 @@ export default function Onboarding() {
   const [socials, setSocials] = useState<{ platform: string; url: string }[]>(user.socials ?? []);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatarUrl ?? null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const saving = profileFetcher.state !== "idle";
+
+  function goTo(next: Step, codes?: string[] | null) {
+    if (codes !== undefined) {
+      persistOnboardingProgress(next, codes);
+      setRecoveryCodes(codes);
+    } else {
+      persistOnboardingProgress(next);
+    }
+    setStep(next);
+  }
+
+  useEffect(() => {
+    const saved = readStoredStep();
+    const codes = readStoredCodes();
+    if (codes?.length) {
+      setRecoveryCodes(codes);
+      setStep(saved && saved >= 3 ? saved : 3);
+      return;
+    }
+    if (user.hasPasskey && (!saved || saved <= 2)) {
+      setStep(4);
+      return;
+    }
+    if (saved && saved !== 1) setStep(saved);
+  }, [user.hasPasskey]);
 
   useEffect(() => {
     if (!token) return;
@@ -66,7 +121,7 @@ export default function Onboarding() {
   }, [token]);
 
   useEffect(() => {
-    if (step !== 3 || !token) return;
+    if (step !== 5 || !token) return;
     import("../lib/dm-crypto")
       .then(({ ensureAndPublishKey }) => ensureAndPublishKey(getApiBase(), token))
       .catch(() => {});
@@ -74,7 +129,7 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (profileFetcher.state === "idle" && profileFetcher.data?.ok) {
-      setStep(3);
+      goTo(5);
     }
   }, [profileFetcher.state, profileFetcher.data]);
 
@@ -107,10 +162,10 @@ export default function Onboarding() {
 
       <div className="max-w-lg mx-auto px-4 py-10">
         <p className="text-xs text-text-muted mb-2">
-          Step {step} of 3
+          Step {step} of 5
         </p>
         <div className="flex gap-1.5 mb-8">
-          {[1, 2, 3].map((n) => (
+          {[1, 2, 3, 4, 5].map((n) => (
             <div
               key={n}
               className={`h-1 flex-1 rounded-full ${n <= step ? "bg-accent" : "bg-border"}`}
@@ -132,7 +187,7 @@ export default function Onboarding() {
             </div>
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => goTo(2)}
               className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-bold text-black hover:scale-[1.01] transition-all"
             >
               Continue →
@@ -148,6 +203,47 @@ export default function Onboarding() {
         )}
 
         {step === 2 && (
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-2xl font-bold mb-2">Add a passkey</h1>
+              <p className="text-text-muted text-sm leading-relaxed">
+                Use Face ID, Touch ID, or your device lock to sign in. Passkeys stay on this device
+                or in iCloud / Google. You can add another device later in Settings.
+              </p>
+            </div>
+            <AddPasskeyButton
+              token={token}
+              apiBase={getApiBase()}
+              label="Add passkey"
+              onSuccess={(result) => {
+                if (result.recoveryCodes?.length) {
+                  goTo(3, result.recoveryCodes);
+                } else {
+                  goTo(4);
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => goTo(4)}
+              className="w-full text-sm text-text-muted hover:text-accent"
+            >
+              Skip for now
+            </button>
+          </div>
+        )}
+
+        {step === 3 && recoveryCodes && (
+          <RecoveryCodesPanel
+            codes={recoveryCodes}
+            onConfirmed={() => {
+              persistOnboardingProgress(4, null);
+              goTo(4);
+            }}
+          />
+        )}
+
+        {step === 4 && (
           <div className="space-y-4">
             <div>
               <h1 className="text-2xl font-bold mb-2">Make it yours</h1>
@@ -164,7 +260,7 @@ export default function Onboarding() {
               onSocialsChange={setSocials}
               onAvatarUrlChange={setAvatarUrl}
               onSave={saveProfile}
-              onCancel={() => setStep(3)}
+              onCancel={() => goTo(5)}
               saving={saving}
             />
             {profileFetcher.data?.error && (
@@ -173,7 +269,7 @@ export default function Onboarding() {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 5 && (
           <div className="space-y-6">
             <div>
               <h1 className="text-2xl font-bold mb-2">Share your profile</h1>

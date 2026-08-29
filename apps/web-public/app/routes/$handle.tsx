@@ -69,6 +69,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   let isOwnProfile = false;
   let ownHandle: string | null = null;
   let ownAvatarUrl: string | null = null;
+  let hasRecoveryCodes = false;
   if (token) {
     const meRes = await fetch(`${API_URL}/v1/users/me/profile`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -78,6 +79,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       ownHandle = me.handle ?? null;
       ownAvatarUrl = me.avatarUrl ?? null;
       isOwnProfile = me.handle?.toLowerCase() === handle.toLowerCase();
+      hasRecoveryCodes = Boolean(me.hasRecoveryCodes);
     }
   }
 
@@ -97,6 +99,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       token: token ?? null,
       apiBase: new URL(request.url).origin,
       notFound: !profile,
+      hasRecoveryCodes,
     },
     { headers: { "Cache-Control": cacheControl } },
   );
@@ -224,6 +227,7 @@ export default function ProfilePage() {
     token,
     apiBase,
     notFound,
+    hasRecoveryCodes,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const secretFetcher = useFetcher<typeof action>();
@@ -578,10 +582,13 @@ export default function ProfilePage() {
       {isOwnProfile && token && statsOpen && (
         <ProfileStatsModal token={token} onClose={() => setStatsOpen(false)} />
       )}
-      {isOwnProfile && settingsOpen && (
+      {isOwnProfile && settingsOpen && token && (
         <ProfileSettingsModal
           handle={handle}
+          token={token}
+          apiBase={getApiBase()}
           acceptsSecrets={profile?.acceptsSecrets !== false}
+          hasRecoveryCodes={hasRecoveryCodes}
           saving={profileSaving}
           onSave={saveSettings}
           onClose={() => setSettingsOpen(false)}

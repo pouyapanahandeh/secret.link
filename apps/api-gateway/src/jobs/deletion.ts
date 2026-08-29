@@ -30,6 +30,7 @@ const purgeUser = db.transaction((userId: string, handle: string) => {
   db.prepare(`DELETE FROM notifications WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM credentials WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM recovery_codes WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM challenges WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM appeals WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM user_suspensions WHERE user_id = ?`).run(userId);

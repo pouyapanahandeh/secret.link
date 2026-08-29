@@ -19,6 +19,8 @@ export async function signupNewAccount(page: Page, handle: string): Promise<void
 /** Finish onboarding through share step and open dashboard. */
 export async function completeOnboardingToDashboard(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Continue →/i }).click();
+  await page.getByText(/Add a passkey/i).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: /Skip for now/i }).click();
   await page.getByText(/Make it yours/i).waitFor({ state: "visible" });
   // Skip profile edit — Cancel advances to share step
   await page.getByRole("button", { name: /^Cancel$/i }).click();

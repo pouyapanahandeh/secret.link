@@ -17,6 +17,8 @@ import {
 import { DashboardOverlays } from "./DashboardOverlays";
 import { readTabFromHash, type DashboardTab, type SentSecret } from "./types";
 import type { loader } from "../../routes/dashboard";
+import { registerPasskey } from "../../lib/passkey-register";
+import { RecoveryCodesPanel } from "../../components/passkeys/RecoveryCodesPanel";
 
 export function DashboardPage() {
   const { user, inbox, sent, sentHasMore, sentNextOffset, token, following, storyHandles, storyIdsByHandle, mapSecrets } = useLoaderData<typeof loader>();
@@ -26,6 +28,7 @@ export function DashboardPage() {
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [passkeyError, setPasskeyError] = useState("");
   const [hasPasskey, setHasPasskey] = useState(user.hasPasskey);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [bio, setBio] = useState(user.bio ?? "");
   const [socials, setSocials] = useState<{ platform: string; url: string }[]>(user.socials ?? []);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatarUrl ?? null);
@@ -114,27 +117,13 @@ export function DashboardPage() {
     setPasskeyStatus("loading");
     setPasskeyError("");
     try {
-      const { startRegistration } = await import("@simplewebauthn/browser");
-      const apiBase = getApiBase();
-      const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-      const optionsRes = await fetch(`${apiBase}/v1/users/me/passkey/register-options`, {
-        method: "POST",
-        headers: authHeaders,
-      });
-      if (!optionsRes.ok) throw new Error("Failed to get registration options");
-      const options = await optionsRes.json();
-      const credential = await startRegistration({ optionsJSON: options });
-      const verifyRes = await fetch(`${apiBase}/v1/users/me/passkey/register-verify`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify(credential),
-      });
-      if (!verifyRes.ok) throw new Error("Passkey verification failed");
+      const result = await registerPasskey(getApiBase(), token);
       setPasskeyStatus("done");
       setHasPasskey(true);
-    } catch (err: any) {
+      if (result.recoveryCodes?.length) setRecoveryCodes(result.recoveryCodes);
+    } catch (err: unknown) {
       setPasskeyStatus("error");
-      setPasskeyError(err?.message ?? "Something went wrong");
+      setPasskeyError(err instanceof Error ? err.message : "Something went wrong");
     }
   }
 
@@ -281,6 +270,15 @@ export function DashboardPage() {
         onOpenComposer={() => openStoryComposer()}
         onNavigateSend={() => navigate("/send")}
       />
+
+      {recoveryCodes && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+          <div className="relative z-10 w-full sm:max-w-md bg-surface border-t border-border sm:border sm:rounded-3xl p-6 mb-0 sm:mb-6">
+            <RecoveryCodesPanel codes={recoveryCodes} onConfirmed={() => setRecoveryCodes(null)} />
+          </div>
+        </div>
+      )}
     </main>
   );
 }
