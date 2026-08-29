@@ -8,6 +8,7 @@ import { createSessionRedirect, getToken } from "../lib/session.server";
 import { API_URL } from "../lib/api.server";
 import { browserApiBase } from "../lib/api-base";
 import { extractRecoveryCode } from "@secretlink/core/user/schemas";
+import { RecoveryCodeInput } from "../components/passkeys/RecoveryCodeInput";
 
 export const meta: MetaFunction = () => [
   { title: "Log In - Secretlink.life" },
@@ -319,17 +320,9 @@ export default function Login() {
               <label htmlFor="recovery-code" className={labelClass}>
                 Recovery code
               </label>
-              <input
-                id="recovery-code"
-                value={recoveryCode}
-                onChange={(e) => setRecoveryCode(e.target.value)}
-                type="text"
-                autoComplete="one-time-code"
-                placeholder="XXXX-XXXX"
-                className={inputClass}
-              />
+              <RecoveryCodeInput value={recoveryCode} onChange={setRecoveryCode} />
               <p className="mt-2 text-xs text-text-muted">
-                Use any one code. Pasting the whole list is fine — we only use the first.
+                Use any one code. Pasting the whole list is fine, we only use the first.
               </p>
             </div>
             {recoveryError && <p className="text-red-400 text-sm">{recoveryError}</p>}

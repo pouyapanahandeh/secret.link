@@ -17,6 +17,17 @@ async function addVirtualAuthenticator(page: Page): Promise<void> {
 }
 
 test.describe("passkey onboarding and recovery", () => {
+  test("recovery code entry uses one box per character", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByRole("button", { name: /Can't use your passkey/i }).click();
+    const boxes = page.locator('input[aria-label^="Recovery code character"]');
+    await expect(boxes).toHaveCount(8);
+    await page.locator("#recovery-code").fill("ABCD-EFGH");
+    for (const [i, ch] of [..."ABCDEFGH"].entries()) {
+      await expect(boxes.nth(i)).toHaveValue(ch);
+    }
+  });
+
   test("onboarding shows passkey step and skip reaches dashboard", async ({ page }) => {
     const handle = uniqueHandle("loc");
     await signupNewAccount(page, handle);
