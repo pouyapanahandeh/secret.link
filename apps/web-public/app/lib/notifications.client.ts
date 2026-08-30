@@ -8,7 +8,8 @@ export type NotificationType =
   | "message_read"
   | "secret"
   | "secret_read"
-  | "follow";
+  | "follow"
+  | "admin";
 
 export interface NotificationDTO {
   id: string;
@@ -56,6 +57,15 @@ export const NOTIFICATION_META: Record<NotificationType, NotificationMeta> = {
     icon: "➕",
     message: (n) => `${actor(n)} followed you`,
     tab: "profile",
+  },
+  admin: {
+    icon: "🔔",
+    message: (n) => {
+      const body = typeof n.data?.["body"] === "string" ? n.data["body"] : "";
+      const title = typeof n.data?.["title"] === "string" ? n.data["title"] : "";
+      return body || title || "A message from Secretlink";
+    },
+    tab: "inbox",
   },
 };
 

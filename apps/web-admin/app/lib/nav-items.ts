@@ -4,6 +4,7 @@ export const navItems = [
   { to: "/reports", label: "Reports", icon: "reports", roles: ["admin", "moderator"] as const },
   { to: "/appeals", label: "Appeals", icon: "appeals", roles: ["admin", "moderator"] as const },
   { to: "/users", label: "Users", icon: "users", roles: ["admin", "moderator"] as const },
+  { to: "/notify", label: "Notify", icon: "notify", roles: ["admin", "moderator"] as const },
   { to: "/blog", label: "Blog", icon: "blog", roles: ["admin", "editor", "moderator"] as const },
   { to: "/contact-messages", label: "Inbox", icon: "inbox", roles: ["admin", "moderator"] as const },
   { to: "/audit", label: "Audit log", icon: "audit", roles: ["admin", "moderator"] as const },

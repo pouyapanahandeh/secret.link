@@ -10,7 +10,8 @@ export type NotificationType =
   | "message_read" // your DM was read
   | "secret" // received a secret
   | "secret_read" // your secret was read
-  | "follow"; // someone followed you
+  | "follow" // someone followed you
+  | "admin"; // operator message from the admin panel
 
 export interface NotificationRow {
   id: string;
@@ -93,6 +94,11 @@ function pushCopy(dto: NotificationDTO): { title: string; body: string } {
       return { title: "Secret opened", body: "Someone opened your secret 👀" };
     case "follow":
       return { title: "New follower", body: `${who} followed you` };
+    case "admin": {
+      const title = typeof dto.data?.["title"] === "string" ? dto.data["title"] : "Secretlink";
+      const body = typeof dto.data?.["body"] === "string" ? dto.data["body"] : "You have a new notification";
+      return { title, body };
+    }
     default:
       return { title: "Secretlink", body: "You have a new notification" };
   }
@@ -151,6 +157,7 @@ const NOTIFICATION_TAB: Record<NotificationType, "inbox" | "messages" | "profile
   secret: "inbox",
   secret_read: "inbox",
   follow: "profile",
+  admin: "inbox",
 };
 
 const stmts = {
@@ -273,4 +280,77 @@ export function markAllRead(userId: string): void {
 export function getUserIdByHandle(handle: string): string | null {
   const row = stmts.getUserIdByHandle.get(handle) as { id: string } | undefined;
   return row?.id ?? null;
+}
+
+export interface CreateAdminNotificationsInput {
+  userIds: string[];
+  title: string;
+  body: string;
+  campaignId: string;
+  actorId: string;
+  actorHandle: string;
+}
+
+const FANOUT_CHUNK = 50;
+
+/**
+ * Insert admin notifications in one transaction, then fan out SSE + web-push
+ * after commit in small chunks so a large send does not block the HTTP request.
+ */
+export function createAdminNotifications(input: CreateAdminNotificationsInput): { sent: number } {
+  if (input.userIds.length === 0) return { sent: 0 };
+
+  const createdAt = new Date().toISOString();
+  const data = JSON.stringify({
+    title: input.title,
+    body: input.body,
+    campaignId: input.campaignId,
+  });
+
+  const rows: NotificationRow[] = input.userIds.map((userId) => ({
+    id: nanoid(),
+    user_id: userId,
+    type: "admin",
+    actor_id: input.actorId,
+    actor_handle: input.actorHandle,
+    entity_id: input.campaignId,
+    data,
+    read: 0,
+    created_at: createdAt,
+  }));
+
+  const insertMany = db.transaction((batch: NotificationRow[]) => {
+    for (const row of batch) {
+      stmts.insert.run(
+        row.id,
+        row.user_id,
+        row.type,
+        row.actor_id,
+        row.actor_handle,
+        row.entity_id,
+        row.data,
+        row.created_at,
+      );
+    }
+  });
+  insertMany(rows);
+
+  const queue = typeof setImmediate === "function" ? setImmediate : (fn: () => void) => setTimeout(fn, 0);
+  const fanOut = (offset: number) => {
+    const slice = rows.slice(offset, offset + FANOUT_CHUNK);
+    for (const row of slice) {
+      const dto = toDTO(row);
+      notificationsHub.notify(row.user_id, "notification", {
+        notification: dto,
+        unreadCount: countUnread(row.user_id),
+      });
+      sendWebPush(row.user_id, dto);
+    }
+    if (offset + FANOUT_CHUNK < rows.length) {
+      queue(() => fanOut(offset + FANOUT_CHUNK));
+    }
+  };
+  queue(() => fanOut(0));
+
+  return { sent: rows.length };
 }

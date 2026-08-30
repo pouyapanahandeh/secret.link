@@ -139,6 +139,28 @@ export function requireAuth() {
     }
 
     ctx.state.user = payload;
+    touchLastSeen(payload.userId);
     await next();
   };
+}
+
+const LAST_SEEN_MS = 60 * 60 * 1000;
+const lastSeenTouchedAt = new Map<string, number>();
+const updateLastSeen = db.prepare(
+  `UPDATE users SET last_seen_at = ? WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at < ?)`,
+);
+
+/** Record activity at most once per hour so last-seen filters stay cheap. */
+function touchLastSeen(userId: string): void {
+  const now = Date.now();
+  const previous = lastSeenTouchedAt.get(userId) ?? 0;
+  if (now - previous < LAST_SEEN_MS) return;
+  lastSeenTouchedAt.set(userId, now);
+  const iso = new Date(now).toISOString();
+  const staleBefore = new Date(now - LAST_SEEN_MS).toISOString();
+  try {
+    updateLastSeen.run(iso, userId, staleBefore);
+  } catch {
+    // Column may be missing on a mid-migration process; never fail the request.
+  }
 }

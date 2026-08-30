@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { requireAdminSession } from "~/lib/session.server";
 import { adminApi } from "~/lib/api.server";
-import { useLoaderData, useSearchParams, Form, useNavigation } from "@remix-run/react";
+import { Form, Link, useLoaderData, useSearchParams, useNavigation } from "@remix-run/react";
 import { EmptyState } from "~/components/EmptyState";
 import { NavIcon } from "~/components/NavIcon";
 import { PageHeader } from "~/components/PageHeader";
@@ -59,6 +59,9 @@ export async function action({ request }: ActionFunctionArgs) {
 function UserActions({ user, isActioning }: { user: any; isActioning: boolean }) {
   return (
     <div className="flex flex-wrap gap-2">
+      <Link to={`/notify?handle=${encodeURIComponent(user.handle)}`} className="btn btn-outline text-xs py-1 px-2">
+        Notify
+      </Link>
       {!user.suspended ? (
         <Form method="post" className="inline">
           <input type="hidden" name="userId" value={user.id} />

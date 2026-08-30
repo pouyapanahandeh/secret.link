@@ -5,6 +5,19 @@ import db from "../db.js";
 import { requireAuth, clearSuspensionCache } from "../middleware/auth.js";
 import { requireAdmin, requireSuperAdmin } from "../middleware/admin.js";
 import { runSystemStatusChecks } from "../lib/status-checks.js";
+import { writeAuditLog } from "../lib/audit.js";
+import { validateBody } from "../middleware/validate.js";
+import { createAdminNotifications } from "../notifications.js";
+import {
+  assertAudienceAllowed,
+  listAudienceIds,
+  MAX_ADMIN_NOTIFICATION_RECIPIENTS,
+  PreviewNotificationInput,
+  previewAudience,
+  SendNotificationInput,
+  summarizeAudience,
+  type Audience,
+} from "../lib/admin-notifications.js";
 
 export const adminRouter = new Router({ prefix: "/admin" });
 
@@ -468,4 +481,126 @@ adminRouter.get("/transparency", async (ctx: Context) => {
   };
 
   ctx.body = stats;
+});
+
+// ─── Admin notifications ────────────────────────────────────────────────────
+
+function actorFrom(ctx: Context): { userId: string; handle: string; role: string } {
+  const user = ctx.state.user as { userId: string; handle: string };
+  return { userId: user.userId, handle: user.handle, role: String(ctx.state.role) };
+}
+
+function rejectIfAudienceForbidden(ctx: Context, audience: Audience): boolean {
+  if (assertAudienceAllowed(actorFrom(ctx).role, audience)) return false;
+  ctx.status = 403;
+  ctx.body = { error: "forbidden", message: "Moderators can only notify a single handle." };
+  return true;
+}
+
+adminRouter.get("/notifications", async (ctx: Context) => {
+  const limit = Math.min(Number(ctx.query.limit) || 50, 100);
+  const offset = Number(ctx.query.offset) || 0;
+  const campaigns = db
+    .prepare(
+      `SELECT id, actor_id, actor_handle, title, body, audience_json, audience_summary, recipient_count, created_at
+       FROM admin_notification_campaigns
+       ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    )
+    .all(limit, offset);
+  const total = (db.prepare("SELECT count(*) as c FROM admin_notification_campaigns").get() as { c: number }).c;
+  ctx.body = { campaigns, total, limit, offset };
+});
+
+adminRouter.post("/notifications/preview", validateBody(PreviewNotificationInput), async (ctx: Context) => {
+  const { audience } = ctx.state.body as { audience: Audience };
+  if (rejectIfAudienceForbidden(ctx, audience)) return;
+  ctx.body = previewAudience(audience);
+});
+
+adminRouter.post("/notifications", validateBody(SendNotificationInput), async (ctx: Context) => {
+  const body = ctx.state.body as {
+    audience: Audience;
+    title: string;
+    body: string;
+    confirmCount: number;
+  };
+  if (rejectIfAudienceForbidden(ctx, body.audience)) return;
+
+  const preview = previewAudience(body.audience);
+  if (preview.count === 0) {
+    ctx.status = 400;
+    ctx.body = { error: "empty_audience", message: "No users match this audience." };
+    return;
+  }
+  if (preview.count !== body.confirmCount) {
+    ctx.status = 409;
+    ctx.body = {
+      error: "count_mismatch",
+      message: "Recipient count changed. Preview again before sending.",
+      count: preview.count,
+      sampleHandles: preview.sampleHandles,
+    };
+    return;
+  }
+  if (preview.count > MAX_ADMIN_NOTIFICATION_RECIPIENTS) {
+    ctx.status = 413;
+    ctx.body = {
+      error: "audience_too_large",
+      message: `Cannot notify more than ${MAX_ADMIN_NOTIFICATION_RECIPIENTS} users at once.`,
+      count: preview.count,
+    };
+    return;
+  }
+
+  const recipients = listAudienceIds(body.audience, MAX_ADMIN_NOTIFICATION_RECIPIENTS + 1);
+  if (recipients.length !== preview.count) {
+    ctx.status = 409;
+    ctx.body = {
+      error: "count_mismatch",
+      message: "Recipient count changed. Preview again before sending.",
+      count: recipients.length,
+    };
+    return;
+  }
+
+  const actor = actorFrom(ctx);
+  const campaignId = nanoid();
+  const createdAt = new Date().toISOString();
+  const summary = summarizeAudience(body.audience);
+
+  db.prepare(
+    `INSERT INTO admin_notification_campaigns
+      (id, actor_id, actor_handle, title, body, audience_json, audience_summary, recipient_count, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    campaignId,
+    actor.userId,
+    actor.handle,
+    body.title,
+    body.body,
+    JSON.stringify(body.audience),
+    summary,
+    recipients.length,
+    createdAt,
+  );
+
+  const result = createAdminNotifications({
+    userIds: recipients.map((row) => row.id),
+    title: body.title,
+    body: body.body,
+    campaignId,
+    actorId: actor.userId,
+    actorHandle: actor.handle,
+  });
+
+  writeAuditLog({
+    actorId: actor.userId,
+    actorHandle: actor.handle,
+    action: "admin_notification_sent",
+    targetType: "admin_notification_campaign",
+    targetId: campaignId,
+    details: `${result.sent} recipients · ${summary}`,
+  });
+
+  ctx.body = { ok: true, id: campaignId, sent: result.sent, audienceSummary: summary };
 });

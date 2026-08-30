@@ -622,5 +622,28 @@ migrate("recovery_codes.v1", () => {
   `);
 });
 
+migrate("users.last_seen_at.v1", () => {
+  addColumn("users", "last_seen_at", "TEXT");
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen_at)`);
+});
+
+migrate("admin_notification_campaigns.v1", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS admin_notification_campaigns (
+      id TEXT PRIMARY KEY,
+      actor_id TEXT NOT NULL,
+      actor_handle TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      audience_json TEXT NOT NULL,
+      audience_summary TEXT NOT NULL,
+      recipient_count INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_notif_campaigns_created
+      ON admin_notification_campaigns(created_at);
+  `);
+});
+
 export { db };
 export default db;
