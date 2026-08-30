@@ -83,8 +83,8 @@ export function BlogCoverUpload({ coverUrl, onCoverUrlChange, disabled }: BlogCo
   return (
     <div className="space-y-3">
       {displayUrl ? (
-        <div className="relative overflow-hidden rounded-lg border border-[var(--border)]">
-          <img src={displayUrl} alt="" className="h-40 w-full object-cover" />
+        <div className="relative flex min-h-40 items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+          <img src={displayUrl} alt="" className="mx-auto max-h-64 w-full object-contain" />
           {uploading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
               Uploading…

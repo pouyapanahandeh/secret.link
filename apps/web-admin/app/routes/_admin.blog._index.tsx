@@ -101,7 +101,7 @@ export default function BlogAdmin() {
                 <img
                   src={post.coverImageUrl}
                   alt=""
-                  className="h-28 w-full rounded-lg object-cover lg:h-24 lg:w-36 shrink-0"
+                  className="h-28 w-full rounded-lg object-contain bg-surface lg:h-24 lg:w-36 shrink-0"
                 />
               )}
               <div className="min-w-0 flex-1">

@@ -5,7 +5,9 @@ import { adminApi, uploadBlogCover } from "~/lib/api.server";
 import { Form, Link, useLoaderData, useNavigation, useActionData } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
 import { BlogCoverUpload } from "~/components/BlogCoverUpload";
+import { MarkdownEditor } from "~/components/MarkdownEditor";
 import { PageHeader } from "~/components/PageHeader";
+import { renderBlogMarkdown } from "~/lib/blog-markdown";
 
 function slugifyTitle(title: string) {
   const slug = title
@@ -73,25 +75,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 function MarkdownPreview({ markdown }: { markdown: string }) {
-  const html = useMemo(() => {
-    const escaped = markdown
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    return escaped
-      .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-      .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-      .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.+?)\*/g, "<em>$1</em>")
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-      .replace(/\n\n/g, "</p><p>")
-      .replace(/\n/g, "<br />");
-  }, [markdown]);
+  const html = useMemo(() => renderBlogMarkdown(markdown), [markdown]);
 
   return (
     <div
-      className="blog-preview prose-sm text-sm leading-relaxed text-[var(--text)]"
+      className="blog-preview text-sm leading-relaxed text-text"
       dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }}
     />
   );
@@ -124,7 +112,9 @@ export default function BlogEditor() {
       <div>
         <PageHeader title={initial.title ?? "Blog post"} />
         <div className="card space-y-4">
-          {coverUrl && <img src={coverUrl} alt="" className="w-full max-h-64 rounded-lg object-cover" />}
+          {coverUrl && (
+            <img src={coverUrl} alt="" className="mx-auto w-full max-h-64 rounded-lg object-contain bg-surface" />
+          )}
           <p className="text-sm text-[var(--text-muted)]">{initial.excerpt}</p>
           <pre className="whitespace-pre-wrap text-sm">{initial.body}</pre>
           <Link to="/blog" className="btn btn-outline inline-block">
@@ -207,14 +197,7 @@ export default function BlogEditor() {
             </div>
             <div>
               <label className="label-mono mb-2 block">Body (Markdown)</label>
-              <textarea
-                name="body"
-                required
-                rows={16}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                className="input w-full resize-y font-mono text-sm"
-              />
+              <MarkdownEditor name="body" required value={body} onChange={setBody} disabled={isSubmitting} />
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="submit" name="intent" value="draft" disabled={isSubmitting} className="btn btn-outline">
@@ -228,7 +211,11 @@ export default function BlogEditor() {
 
           <div className="card">
             <h2 className="label-mono mb-4">Preview</h2>
-            {coverUrl && <img src={coverUrl} alt="" className="mb-4 h-48 w-full rounded-lg object-cover" />}
+            {coverUrl && (
+              <div className="mb-4 overflow-hidden rounded-lg border border-border bg-surface">
+                <img src={coverUrl} alt="" className="mx-auto max-h-64 w-full object-contain" />
+              </div>
+            )}
             <h1 className="mb-2 text-2xl font-bold text-[var(--text)]">{title || "Post title"}</h1>
             <p className="mb-4 text-sm text-[var(--text-muted)]">{excerpt || "Short description preview"}</p>
             {keywords && (
