@@ -9,6 +9,7 @@ import { MapControls } from "./MapControls";
 import { MapSearchBox } from "./MapSearchBox";
 import { StoryViewer } from "./StoryViewer";
 import { createEmojiMarkerIcon, createPinMarkerIcon } from "../lib/map-markers";
+import { addDarkBasemap } from "../lib/map-tiles";
 
 const PULSE_MS = 1200;
 
@@ -190,10 +191,7 @@ export function MapTab({
         const map = L.map(mapContainerRef.current, { zoomControl: false }).setView([51.505, -0.09], 3);
         mapInstanceRef.current = map;
 
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-          maxZoom: 19,
-        }).addTo(map);
+        addDarkBasemap(L, map);
 
         map.on("click", (e: any) => {
           setSelectedStory(null);

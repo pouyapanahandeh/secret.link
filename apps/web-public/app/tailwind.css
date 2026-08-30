@@ -55,6 +55,11 @@
   font-family: inherit;
 }
 
+/* Invert OSM raster tiles into a dark basemap (CARTO now requires an API key). */
+.leaflet-layer.map-tiles-dark {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(1.1) saturate(0.35);
+}
+
 .leaflet-control-container .leaflet-control {
   display: none;
 }

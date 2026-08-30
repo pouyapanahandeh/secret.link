@@ -1,6 +1,7 @@
 import { Link } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { getApiBase } from "../../lib/api.client";
+import { addDarkBasemap } from "../../lib/map-tiles";
 import { LocateIcon } from "../MapControls";
 
 function LandingMap() {
@@ -51,11 +52,7 @@ function LandingMap() {
       const map = L.map(mapContainerRef.current, { zoomControl: false }).setView([51.505, -0.09], 3);
       mapRef.current = map;
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: "",
-        maxZoom: 19,
-      }).addTo(map);
-      map.attributionControl.remove();
+      addDarkBasemap(L, map);
 
       setTimeout(() => map.invalidateSize(), 100);
       setTimeout(() => map.invalidateSize(), 500);
