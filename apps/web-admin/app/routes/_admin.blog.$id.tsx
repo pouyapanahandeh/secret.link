@@ -2,11 +2,12 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { requireBlogReaderSession, requireBlogEditorSession } from "~/lib/session.server";
 import { adminApi, uploadBlogCover } from "~/lib/api.server";
-import { Form, Link, useLoaderData, useNavigation, useActionData } from "@remix-run/react";
+import { Form, Link, useLoaderData, useNavigation, useActionData, useSearchParams } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
 import { BlogCoverUpload } from "~/components/BlogCoverUpload";
 import { MarkdownEditor } from "~/components/MarkdownEditor";
 import { PageHeader } from "~/components/PageHeader";
+import { Toast, useFlashToast } from "~/components/Toast";
 import { renderBlogMarkdown } from "~/lib/blog-markdown";
 
 function slugifyTitle(title: string) {
@@ -67,11 +68,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (id === "new") {
     const created = (await adminApi("/blog-posts", token, { method: "POST", body: payload })) as { id: string };
-    return redirect(`/blog/${created.id}`);
+    const publishedQuery = intent === "publish" ? "?published=1" : "";
+    return redirect(`/blog/${created.id}${publishedQuery}`);
   }
 
   await adminApi(`/blog-posts/${id}`, token, { method: "PATCH", body: payload });
-  return { ok: true, coverImageUrl };
+  return { ok: true, coverImageUrl, published: intent === "publish" };
 }
 
 function MarkdownPreview({ markdown }: { markdown: string }) {
@@ -89,6 +91,8 @@ export default function BlogEditor() {
   const { post, role, isNew } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { message: toastMessage, show: showToast } = useFlashToast();
   const isSubmitting = navigation.state === "submitting";
   const canEdit = role === "admin" || role === "editor";
 
@@ -105,7 +109,23 @@ export default function BlogEditor() {
     if (actionData && "coverImageUrl" in actionData) {
       setCoverUrl(actionData.coverImageUrl ?? null);
     }
-  }, [actionData]);
+    if (actionData && "published" in actionData && actionData.published) {
+      showToast("Blog has been published");
+    }
+  }, [actionData, showToast]);
+
+  useEffect(() => {
+    if (searchParams.get("published") !== "1") return;
+    showToast("Blog has been published");
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("published");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [searchParams, setSearchParams, showToast]);
 
   if (!canEdit && !isNew) {
     return (
@@ -225,6 +245,7 @@ export default function BlogEditor() {
           </div>
         </div>
       </Form>
+      <Toast message={toastMessage} />
     </div>
   );
 }

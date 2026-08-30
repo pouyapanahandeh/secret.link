@@ -138,6 +138,21 @@ body {
 .blog-preview pre code { background: none; padding: 0; }
 .blog-preview img { max-height: 16rem; width: auto; max-width: 100%; object-fit: contain; margin: 0.75rem 0; border-radius: 0.5rem; }
 
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.toast-copy {
+  animation: toast-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @media (max-width: 767px) {
   .btn { min-height: 44px; }
   .card { padding: 1rem; }
