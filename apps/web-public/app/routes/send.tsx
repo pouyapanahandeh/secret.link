@@ -5,7 +5,9 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { CameraCapture } from "../components/CameraCapture";
 import { SiteChrome } from "../components/SiteChrome";
 import { getApiBase } from "../lib/api.client";
+import { API_URL } from "../lib/api.server";
 import { getToken } from "../lib/session.server";
+import { saveChatSession } from "../lib/chat-session";
 
 export const meta: MetaFunction = () => [
   { title: "Send a Secret - Secretlink.life" },
@@ -14,10 +16,24 @@ export const meta: MetaFunction = () => [
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = await getToken(request);
-  return json({ isLoggedIn: Boolean(token) });
+  let handle: string | null = null;
+  if (token) {
+    try {
+      const res = await fetch(`${API_URL}/v1/users/me/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const profile = (await res.json()) as { handle?: string };
+        handle = profile.handle ?? null;
+      }
+    } catch {
+      /* stay logged-in without handle */
+    }
+  }
+  return json({ isLoggedIn: Boolean(token), handle });
 }
 
-type Tab = "text" | "file" | "camera";
+type Tab = "text" | "file" | "camera" | "chat";
 
 async function encryptAndUpload(
   data: Uint8Array,
@@ -168,8 +184,60 @@ function describeDisappearRules(linkExpiry: string, viewDuration: string, maxVie
   return `${opens} · looks for ${look} · link dies in ${dies}`;
 }
 
+const CHAT_PRESETS = [
+  { id: "quick", name: "Quick", linkExpiry: "3600", maxMembers: "5" },
+  { id: "day", name: "Day", linkExpiry: "86400", maxMembers: "10" },
+  { id: "week", name: "Week", linkExpiry: "604800", maxMembers: "25" },
+] as const;
+
+type ChatPresetId = (typeof CHAT_PRESETS)[number]["id"] | "custom";
+
+function matchChatPreset(linkExpiry: string, maxMembers: string): ChatPresetId {
+  const found = CHAT_PRESETS.find((p) => p.linkExpiry === linkExpiry && p.maxMembers === maxMembers);
+  return found?.id ?? "custom";
+}
+
+function describeChatRules(linkExpiry: string, maxMembers: string, hasPin: boolean) {
+  const dies = LINK_EXPIRY_LABELS[linkExpiry] ?? linkExpiry;
+  const pin = hasPin ? " · PIN locked" : "";
+  return `Up to ${maxMembers} people · link dies in ${dies}${pin}`;
+}
+
+async function createChatRoom(input: {
+  ttlSeconds: number;
+  maxMembers: number;
+  pin?: string;
+  displayName: string;
+  anonymous: boolean;
+}): Promise<{ link: string; token?: string; memberId?: string } | { error: string }> {
+  const { generateKeyBase64 } = await import("../lib/crypto");
+  const { keyBase64 } = await generateKeyBase64();
+  const apiBase = getApiBase();
+  const payload: Record<string, unknown> = {
+    ttlSeconds: input.ttlSeconds,
+    maxMembers: input.maxMembers,
+    displayName: input.displayName,
+    anonymous: input.anonymous,
+  };
+  if (input.pin) payload.pin = input.pin;
+
+  const res = await fetch(`${apiBase}/v1/chats`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    return { error: body?.error ?? "Failed to create chat" };
+  }
+  const data = (await res.json()) as { id: string; token?: string; memberId?: string };
+  const link = `${window.location.origin}/c/${data.id}#k=${keyBase64}`;
+  return { link, token: data.token, memberId: data.memberId };
+}
+
 export default function Send() {
-  const { isLoggedIn } = useLoaderData<typeof loader>();
+  const { isLoggedIn, handle } = useLoaderData<typeof loader>();
   const [tab, setTab] = useState<Tab>("text");
   const [message, setMessage] = useState("");
   const [viewDuration, setViewDuration] = useState("30");
@@ -177,6 +245,8 @@ export default function Send() {
   const [maxViews, setMaxViews] = useState("1");
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [link, setLink] = useState<string | null>(null);
+  const [createdKind, setCreatedKind] = useState<"secret" | "chat">("secret");
+  const [createdPin, setCreatedPin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -185,14 +255,29 @@ export default function Send() {
   const [showCamera, setShowCamera] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [chatExpiry, setChatExpiry] = useState("86400");
+  const [maxMembers, setMaxMembers] = useState("10");
+  const [chatCustomizeOpen, setChatCustomizeOpen] = useState(false);
+  const [chatPin, setChatPin] = useState("");
+  const [nickname, setNickname] = useState("anon");
+  const [joinAnonymous, setJoinAnonymous] = useState(false);
+
   const activePreset = matchDisappearPreset(linkExpiry, viewDuration, maxViews);
   const activeSummary = describeDisappearRules(linkExpiry, viewDuration, maxViews);
+  const activeChatPreset = matchChatPreset(chatExpiry, maxMembers);
+  const chatSummary = describeChatRules(chatExpiry, maxMembers, chatPin.length >= 4);
 
   const applyPreset = (preset: (typeof DISAPPEAR_PRESETS)[number]) => {
     setLinkExpiry(preset.linkExpiry);
     setViewDuration(preset.viewDuration);
     setMaxViews(preset.maxViews);
     setCustomizeOpen(false);
+  };
+
+  const applyChatPreset = (preset: (typeof CHAT_PRESETS)[number]) => {
+    setChatExpiry(preset.linkExpiry);
+    setMaxMembers(preset.maxMembers);
+    setChatCustomizeOpen(false);
   };
 
   useEffect(() => {
@@ -205,6 +290,8 @@ export default function Send() {
     setMessage("");
     setSelectedFile(null);
     setShowCamera(false);
+    setCreatedKind("secret");
+    setCreatedPin(null);
   };
 
   const handleSendText = async () => {
@@ -222,6 +309,8 @@ export default function Send() {
     if ("error" in result) {
       setError(result.error);
     } else {
+      setCreatedKind("secret");
+      setCreatedPin(null);
       setLink(result.link);
     }
     setSending(false);
@@ -252,6 +341,8 @@ export default function Send() {
     if ("error" in result) {
       setError(result.error);
     } else {
+      setCreatedKind("secret");
+      setCreatedPin(null);
       setLink(result.link);
     }
     setSending(false);
@@ -272,10 +363,49 @@ export default function Send() {
       if ("error" in result) {
         setError(result.error);
       } else {
+        setCreatedKind("secret");
+        setCreatedPin(null);
         setLink(result.link);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to encrypt capture");
+    }
+    setSending(false);
+  };
+
+  const handleCreateChat = async () => {
+    const pin = chatPin.trim();
+    if (pin && !/^\d{4,8}$/.test(pin)) {
+      setError("PIN must be 4–8 digits");
+      return;
+    }
+    const anonymous = !handle || joinAnonymous;
+    const displayName = anonymous
+      ? (nickname.trim() || "anon").slice(0, 32)
+      : `@${handle}`;
+    setSending(true);
+    setError(null);
+    const result = await createChatRoom({
+      ttlSeconds: Number(chatExpiry),
+      maxMembers: Number(maxMembers),
+      pin: pin || undefined,
+      displayName,
+      anonymous,
+    });
+    if ("error" in result) {
+      setError(result.error);
+    } else {
+      const roomId = result.link.split("/c/")[1]?.split("#")[0];
+      if (roomId && result.token && result.memberId) {
+        saveChatSession(roomId, {
+          token: result.token,
+          memberId: result.memberId,
+          displayName,
+        });
+      }
+      setCreatedKind("chat");
+      setCreatedPin(pin || null);
+      setLink(result.link);
     }
     setSending(false);
   };
@@ -292,8 +422,11 @@ export default function Send() {
     if (!link || !navigator.share) return;
     try {
       await navigator.share({
-        title: "You have a secret",
-        text: "Someone sent you a self-destructing secret on Secretlink.",
+        title: createdKind === "chat" ? "Join this secret chat" : "You have a secret",
+        text:
+          createdKind === "chat"
+            ? "Someone invited you to a self-destructing chat on Secretlink."
+            : "Someone sent you a self-destructing secret on Secretlink.",
         url: link,
       });
     } catch {
@@ -320,7 +453,15 @@ export default function Send() {
                   Ready to share
                 </p>
                 <h1 className="font-extrabold tracking-[-0.04em] text-4xl sm:text-6xl leading-[0.95] mb-4">
-                  Secret <span className="font-display font-bold text-accent">created</span>
+                  {createdKind === "chat" ? (
+                    <>
+                      Chat <span className="font-display font-bold text-accent">created</span>
+                    </>
+                  ) : (
+                    <>
+                      Secret <span className="font-display font-bold text-accent">created</span>
+                    </>
+                  )}
                 </h1>
                 <p className="text-text-muted leading-relaxed">
                   End-to-end encrypted. The key lives in the link - we never see it.
@@ -328,14 +469,24 @@ export default function Send() {
               </div>
 
               <div className="border border-border bg-surface-raised p-6 sm:p-8">
-                <p className={fieldLabel}>Your encrypted secret link</p>
+                <p className={fieldLabel}>
+                  {createdKind === "chat" ? "Your secret chat link" : "Your encrypted secret link"}
+                </p>
                 <p className="font-mono text-xs sm:text-sm break-all text-accent bg-accent/10 border border-accent/20 px-4 py-3">
                   {link}
                 </p>
                 <p className="mt-3 text-xs text-text-muted leading-relaxed">
                   Copy the full link, including the <span className="font-mono text-accent">#k=…</span> part.
-                  It can only be opened once - refreshing after reveal will show it’s gone.
+                  {createdKind === "chat"
+                    ? " Anyone with it can join until the link expires."
+                    : " It can only be opened once - refreshing after reveal will show it’s gone."}
                 </p>
+                {createdPin ? (
+                  <p className="mt-3 text-xs text-text-muted leading-relaxed">
+                    PIN: <span className="font-mono text-accent tracking-[0.2em]">{createdPin}</span>
+                    {" "}— share this separately. People need the link and the PIN.
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -349,6 +500,12 @@ export default function Send() {
                 )}
               </div>
 
+              {createdKind === "chat" && link ? (
+                <a href={link} className={secondaryBtn}>
+                  Open chat
+                </a>
+              ) : null}
+
               <div className="border-t border-border pt-8 space-y-4">
                 <Link
                   to="/signup"
@@ -361,7 +518,7 @@ export default function Send() {
                   onClick={reset}
                   className="block w-full text-center text-sm font-medium text-text-muted hover:text-accent transition-colors"
                 >
-                  Send another secret →
+                  {createdKind === "chat" ? "Create another chat →" : "Send another secret →"}
                 </button>
               </div>
             </div>
@@ -369,13 +526,23 @@ export default function Send() {
             <>
               <div className="mb-10">
                 <p className="text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-4">
-                  Encrypted · one read · then gone
+                  {tab === "chat" ? "Encrypted · join by link · then gone" : "Encrypted · one read · then gone"}
                 </p>
                 <h1 className="font-extrabold tracking-[-0.04em] text-4xl sm:text-6xl leading-[0.95] mb-4">
-                  Send a <span className="font-display font-bold text-accent">secret</span>
+                  {tab === "chat" ? (
+                    <>
+                      Start a <span className="font-display font-bold text-accent">chat</span>
+                    </>
+                  ) : (
+                    <>
+                      Send a <span className="font-display font-bold text-accent">secret</span>
+                    </>
+                  )}
                 </h1>
                 <p className="text-text-muted leading-relaxed">
-                  Encrypted on your device. Share the link - it self-destructs after reading.
+                  {tab === "chat"
+                    ? "Encrypted on your device. Share the link — the room deletes itself when it expires."
+                    : "Encrypted on your device. Share the link - it self-destructs after reading."}
                 </p>
               </div>
 
@@ -384,6 +551,7 @@ export default function Send() {
                   { id: "text" as const, label: "Text" },
                   { id: "file" as const, label: "File" },
                   { id: "camera" as const, label: "Camera" },
+                  { id: "chat" as const, label: "Chat" },
                 ]).map((t) => (
                   <button
                     key={t.id}
@@ -523,6 +691,137 @@ export default function Send() {
                   </div>
                 )}
 
+                {tab === "chat" && (
+                  <div className="space-y-4">
+                    {handle && (
+                      <label className="flex items-center gap-3 text-sm text-text">
+                        <input
+                          type="checkbox"
+                          checked={joinAnonymous}
+                          onChange={(e) => setJoinAnonymous(e.target.checked)}
+                          className="h-4 w-4 accent-accent"
+                        />
+                        Join anonymously instead of @{handle}
+                      </label>
+                    )}
+                    {(!handle || joinAnonymous) && (
+                      <div>
+                        <label htmlFor="nickname" className={fieldLabel}>Your nickname</label>
+                        <input
+                          id="nickname"
+                          type="text"
+                          maxLength={32}
+                          value={nickname}
+                          onChange={(e) => setNickname(e.target.value)}
+                          placeholder="anon"
+                          className={fieldControl}
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <label htmlFor="chatPin" className={fieldLabel}>PIN (optional)</label>
+                      <input
+                        id="chatPin"
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        maxLength={8}
+                        value={chatPin}
+                        onChange={(e) => setChatPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                        placeholder="4–8 digits"
+                        className={fieldControl}
+                      />
+                      <p className="mt-2 text-xs text-text-muted">
+                        People need the link and this PIN. Leave blank for link-only access.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {tab === "chat" ? (
+                <div className="border border-border bg-surface-raised">
+                  <div className="px-4 sm:px-5 py-4 border-b border-border">
+                    <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent mb-1">
+                      How it disappears
+                    </p>
+                    <p className="text-sm text-text-muted leading-snug">{chatSummary}</p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 p-4 sm:p-5">
+                    {CHAT_PRESETS.map((preset) => {
+                      const selected = !chatCustomizeOpen && activeChatPreset === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => applyChatPreset(preset)}
+                          className={`min-h-10 px-4 rounded-full text-sm font-semibold transition-colors ${
+                            selected
+                              ? "bg-accent text-black"
+                              : "border border-border text-text-muted hover:text-text hover:border-accent/50"
+                          }`}
+                        >
+                          {preset.name}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setChatCustomizeOpen(true)}
+                      className={`min-h-10 px-4 rounded-full text-sm font-semibold transition-colors ${
+                        chatCustomizeOpen || activeChatPreset === "custom"
+                          ? "bg-accent text-black"
+                          : "border border-border text-text-muted hover:text-text hover:border-accent/50"
+                      }`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+
+                  {chatCustomizeOpen || activeChatPreset === "custom" ? (
+                    <div className="grid sm:grid-cols-2 gap-px bg-border border-t border-border">
+                      <div className="bg-surface-raised p-4">
+                        <label htmlFor="chatExpiry" className={fieldLabel}>
+                          Link dies after
+                        </label>
+                        <select
+                          id="chatExpiry"
+                          value={chatExpiry}
+                          onChange={(e) => {
+                            setChatExpiry(e.target.value);
+                            setChatCustomizeOpen(true);
+                          }}
+                          className={settingControl}
+                        >
+                          {Object.entries(LINK_EXPIRY_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="bg-surface-raised p-4">
+                        <label htmlFor="maxMembers" className={fieldLabel}>
+                          Max people
+                        </label>
+                        <select
+                          id="maxMembers"
+                          value={maxMembers}
+                          onChange={(e) => {
+                            setMaxMembers(e.target.value);
+                            setChatCustomizeOpen(true);
+                          }}
+                          className={settingControl}
+                        >
+                          <option value="2">2 people</option>
+                          <option value="5">5 people</option>
+                          <option value="10">10 people</option>
+                          <option value="25">25 people</option>
+                          <option value="50">50 people</option>
+                        </select>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                ) : (
                 <div className="border border-border bg-surface-raised">
                   <div className="px-4 sm:px-5 py-4 border-b border-border">
                     <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent mb-1">
@@ -624,6 +923,7 @@ export default function Send() {
                     </div>
                   ) : null}
                 </div>
+                )}
 
                 {tab === "text" && (
                   <button
@@ -643,6 +943,16 @@ export default function Send() {
                     className={primaryBtn}
                   >
                     {sending ? "Encrypting & uploading…" : "Encrypt & create link"}
+                  </button>
+                )}
+                {tab === "chat" && (
+                  <button
+                    type="button"
+                    onClick={handleCreateChat}
+                    disabled={sending}
+                    className={primaryBtn}
+                  >
+                    {sending ? "Creating…" : "Create secret chat"}
                   </button>
                 )}
 

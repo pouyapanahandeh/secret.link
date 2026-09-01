@@ -13,11 +13,13 @@ import { streamsRouter } from "./streams.js";
 import { contactRouter } from "./contact.js";
 import { blogRouter } from "./blog.js";
 import { adminBlogRouter } from "./admin-blog.js";
+import { chatsRouter } from "./chats.js";
 
 export const router = new Router({ prefix: "/v1" });
 
 router.use(healthRouter.routes());
 router.use(secretsRouter.routes());
+router.use(chatsRouter.routes());
 router.use(usersRouter.routes());
 router.use(workspacesRouter.routes());
 router.use(feedbackRouter.routes());

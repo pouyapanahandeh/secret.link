@@ -645,5 +645,40 @@ migrate("admin_notification_campaigns.v1", () => {
   `);
 });
 
+migrate("chat_rooms.v1", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_rooms (
+      id TEXT PRIMARY KEY,
+      pin_hash TEXT,
+      max_members INTEGER NOT NULL,
+      member_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_rooms_expires ON chat_rooms(expires_at);
+
+    CREATE TABLE IF NOT EXISTS chat_members (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
+      display_name TEXT NOT NULL,
+      is_anonymous INTEGER NOT NULL DEFAULT 1,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      joined_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_members_room ON chat_members(room_id);
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
+      member_id TEXT NOT NULL REFERENCES chat_members(id) ON DELETE CASCADE,
+      ciphertext TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created
+      ON chat_messages(room_id, created_at);
+  `);
+});
+
 export { db };
 export default db;

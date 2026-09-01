@@ -6,6 +6,7 @@ declare module "koa" {
     body?: unknown;
     query?: unknown;
     params?: unknown;
+    chatJoin?: { roomId: string; memberId: string };
   }
 }
 

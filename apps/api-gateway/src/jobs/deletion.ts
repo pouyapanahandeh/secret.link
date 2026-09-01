@@ -20,6 +20,7 @@ const stmts = {
 
 /** Permanently erase all data belonging to a user. Runs in a transaction. */
 const purgeUser = db.transaction((userId: string, handle: string) => {
+  db.prepare(`UPDATE chat_members SET user_id = NULL WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM dm_messages WHERE sender_id = ? OR recipient_id = ?`).run(userId, userId);
   db.prepare(`DELETE FROM conversations WHERE participant1_id = ? OR participant2_id = ?`).run(userId, userId);
   db.prepare(`DELETE FROM dm_device_keys WHERE user_id = ?`).run(userId);

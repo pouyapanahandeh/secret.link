@@ -9,6 +9,7 @@ import { rateLimiter } from "./middleware/rate-limiter.js";
 import { optionalAuth } from "./middleware/auth.js";
 import { router } from "./routes/index.js";
 import { startDeletionJob } from "./jobs/deletion.js";
+import { startChatExpiryJob } from "./jobs/chat-expiry.js";
 import { initSentry, flushSentry } from "./lib/sentry.js";
 
 // Initialise error monitoring before anything else. No-op unless SENTRY_DSN set.
@@ -76,6 +77,7 @@ if (process.env["NODE_ENV"] !== "test") {
   });
   // Background job: execute due GDPR account-deletion requests.
   startDeletionJob();
+  startChatExpiryJob();
 
   // Graceful shutdown: stop accepting connections and flush pending error events.
   const shutdown = (signal: string) => {

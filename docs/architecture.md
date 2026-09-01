@@ -40,8 +40,13 @@ Horizontal scale note: in-process rate limiting and SSE hubs are single-process 
 | Link / profile secrets | AES-GCM; key in URL fragment or X25519 wrap | Ciphertext only |
 | Map drops | AES-GCM on client | Ciphertext + nonce + `MASTER_KEY`-wrapped DEK; reveal returns key material for client decrypt |
 | DMs (flagged off) | X25519 + AES-GCM | Ciphertext + nonce |
+| Chat rooms | AES-GCM; key in URL fragment `#k=` | Ciphertext + nonce only. Optional PIN stored as scrypt hash. |
 
 See [ADR-003](./adr/003-zero-knowledge-encryption.md).
+
+Expired chat rooms are **hard-deleted** (messages, members, then the room) every 60s and again on any API hit to an expired id. Live SQLite and any S3 blobs are gone immediately.
+
+Litestream keeps 30 days of point-in-time SQLite history in S3 (`retention: 720h` in `infra/litestream.yml`). Disaster-recovery replicas can still contain ciphertext (not DEKs, not PINs) until that window ends.
 
 ## Key principles
 

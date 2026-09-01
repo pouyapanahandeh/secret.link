@@ -46,6 +46,35 @@ export async function decryptBlob(
   return new Uint8Array(decrypted);
 }
 
+/** Import a URL-fragment AES key for both encrypt and decrypt (chat rooms). */
+export async function importAesGcmKey(keyBase64: string): Promise<CryptoKey> {
+  const rawKey = base64UrlToUint8(keyBase64);
+  return crypto.subtle.importKey(
+    "raw",
+    rawKey as BufferSource,
+    "AES-GCM",
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+export async function encryptChatText(
+  text: string,
+  key: CryptoKey,
+): Promise<{ ciphertext: string; nonce: string }> {
+  const { ciphertext, nonce } = await encryptBlob(new TextEncoder().encode(text), key);
+  return { ciphertext: uint8ToBase64Url(ciphertext), nonce };
+}
+
+export async function decryptChatText(
+  ciphertext: string,
+  nonce: string,
+  key: CryptoKey,
+): Promise<string> {
+  const bytes = await decryptBlob(base64UrlToUint8(ciphertext), nonce, key);
+  return new TextDecoder().decode(bytes);
+}
+
 /** Encrypt a map-drop message for server storage (lazy-loads shared crypto package). */
 export async function encryptMapMessage(text: string): Promise<{
   ciphertext: string;

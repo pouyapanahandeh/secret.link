@@ -13,6 +13,7 @@
     "./feature-flags": "./src/feature-flags.ts",
     "./profile-share": "./src/profile-share.ts",
     "./map": "./src/map/index.ts",
+    "./chat": "./src/chat/index.ts",
     "./user/schemas": "./src/user/schemas.ts",
     "./map/schemas": "./src/map/schemas.ts"
   },

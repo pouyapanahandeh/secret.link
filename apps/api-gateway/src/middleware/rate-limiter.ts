@@ -161,3 +161,54 @@ export function recoveryCodeRateLimiter() {
     await next();
   };
 }
+
+export function chatCreateRateLimiter() {
+  return async (ctx: Context, next: Next) => {
+    const bucket = hit(`chat-create:${ctx.ip}`, 60_000);
+    if (bucket.count > 10) {
+      ctx.status = 429;
+      ctx.body = {
+        error: "rate_limit_exceeded",
+        retryAfter: Math.ceil((bucket.resetAt - Date.now()) / 1000),
+      };
+      return;
+    }
+    await next();
+  };
+}
+
+/** Join / PIN attempts: 5 per 15 minutes per IP. Does not skip loopback. */
+export function chatJoinRateLimiter() {
+  return async (ctx: Context, next: Next) => {
+    const bucket = hit(`chat-join:${ctx.ip}`, 15 * 60_000);
+    if (bucket.count > 5) {
+      ctx.status = 429;
+      ctx.body = {
+        error: "rate_limit_exceeded",
+        retryAfter: Math.ceil((bucket.resetAt - Date.now()) / 1000),
+      };
+      return;
+    }
+    await next();
+  };
+}
+
+export function chatMessageRateLimiter() {
+  return async (ctx: Context, next: Next) => {
+    const memberId = ctx.state.chatJoin?.memberId as string | undefined;
+    if (!memberId) {
+      await next();
+      return;
+    }
+    const bucket = hit(`chat-msg:${memberId}`, 60_000);
+    if (bucket.count > 30) {
+      ctx.status = 429;
+      ctx.body = {
+        error: "message_rate_limit_exceeded",
+        retryAfter: Math.ceil((bucket.resetAt - Date.now()) / 1000),
+      };
+      return;
+    }
+    await next();
+  };
+}

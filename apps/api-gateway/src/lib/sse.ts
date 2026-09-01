@@ -5,6 +5,7 @@ interface SSEClient {
   channel: string;
   userId: string;
   write: (event: string, data: unknown) => void;
+  close: () => void;
 }
 
 interface Ticket {
@@ -63,6 +64,20 @@ export class SSEHub {
     }
   }
 
+  /** Drop every connection on a channel (used when a chat room is purged). */
+  disconnectChannel(channel: string) {
+    for (const client of [...this.clients]) {
+      if (client.channel === channel) {
+        try {
+          client.write("expired", { error: "expired" });
+        } catch {
+          /* stream already closed */
+        }
+        client.close();
+      }
+    }
+  }
+
   /**
    * Attach an SSE stream to the Koa context for the given channel.
    * Returns a promise that never resolves — keeps the connection open until
@@ -75,11 +90,14 @@ export class SSEHub {
     ctx.set("Cache-Control", "no-cache");
     ctx.set("Connection", "keep-alive");
     ctx.set("X-Accel-Buffering", "no"); // Disable nginx buffering
+    ctx.compress = false;
     ctx.status = 200;
 
     const stream = ctx.res;
     stream.write("event: connected\ndata: {}\n\n");
 
+    let keepAlive: ReturnType<typeof setInterval> | undefined;
+    let closed = false;
     const client: SSEClient = {
       channel,
       userId,
@@ -90,21 +108,30 @@ export class SSEHub {
           /* stream closed */
         }
       },
+      close: () => {
+        if (closed) return;
+        closed = true;
+        if (keepAlive) clearInterval(keepAlive);
+        this.clients.delete(client);
+        try {
+          stream.end();
+        } catch {
+          /* already ended */
+        }
+      },
     };
     this.clients.add(client);
 
-    const keepAlive = setInterval(() => {
+    keepAlive = setInterval(() => {
       try {
         stream.write(": ping\n\n");
       } catch {
-        clearInterval(keepAlive);
-        this.clients.delete(client);
+        client.close();
       }
     }, 30_000);
 
     ctx.req.on("close", () => {
-      clearInterval(keepAlive);
-      this.clients.delete(client);
+      client.close();
     });
 
     return new Promise(() => {}); // never resolves; connection stays open

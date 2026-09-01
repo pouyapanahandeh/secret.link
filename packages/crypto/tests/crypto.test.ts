@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encryptString, decryptString } from "../src/aes-gcm.js";
+import { encryptString, decryptString, generateSecretKey } from "../src/aes-gcm.js";
 import { deriveKey } from "../src/key-derivation.js";
 import { generateDEK, wrapDEK, unwrapDEK } from "../src/envelope.js";
 
@@ -9,6 +9,12 @@ describe("encrypt / decrypt", () => {
     const payload = encryptString("Hello, secret world!", key);
     const plaintext = decryptString(payload, key);
     expect(plaintext).toBe("Hello, secret world!");
+  });
+
+  it("round-trips a chat payload with a fragment-style AES key", () => {
+    const { rawKey } = generateSecretKey();
+    const payload = encryptString("secret chat line", rawKey);
+    expect(decryptString(payload, rawKey)).toBe("secret chat line");
   });
 
   it("fails with wrong key", () => {
