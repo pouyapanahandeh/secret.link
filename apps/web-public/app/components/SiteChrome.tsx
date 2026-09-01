@@ -19,17 +19,19 @@ export function SiteChrome({
   children,
   isLoggedIn = false,
   currentPath,
+  hideFooter = false,
 }: {
   children: React.ReactNode;
   isLoggedIn?: boolean;
   currentPath?: string;
+  hideFooter?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const authTo = isLoggedIn ? "/dashboard" : "/login";
   const authLabel = isLoggedIn ? "Dashboard" : "Sign in";
 
   return (
-    <main className="min-h-screen bg-surface text-text">
+    <main className={`${hideFooter ? "h-dvh overflow-hidden" : "min-h-screen"} bg-surface text-text`}>
       <div className="landing-grain" aria-hidden />
 
       <nav className="fixed top-0 left-0 right-0 z-50 pt-[max(0.75rem,env(safe-area-inset-top))] px-3 sm:px-4">
@@ -111,27 +113,29 @@ export function SiteChrome({
 
       {children}
 
-      <footer className="border-t border-border px-4 py-12 sm:py-16">
-        <div className="mx-auto max-w-6xl">
-          <p className="font-display text-4xl sm:text-5xl text-text mb-8">
-            secretlink<span className="text-accent">.</span>life
-          </p>
-          <nav className="grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-wrap sm:gap-x-8">
-            {FOOTER_LINKS.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={`min-h-11 sm:min-h-0 flex items-center text-sm font-medium transition-colors ${
-                  currentPath === link.to ? "text-accent" : "text-text-muted hover:text-accent"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-          <p className="mt-8 text-xs tracking-widest uppercase text-text-muted">© 2026 Secretlink.life</p>
-        </div>
-      </footer>
+      {!hideFooter && (
+        <footer className="border-t border-border px-4 py-12 sm:py-16">
+          <div className="mx-auto max-w-6xl">
+            <p className="font-display text-4xl sm:text-5xl text-text mb-8">
+              secretlink<span className="text-accent">.</span>life
+            </p>
+            <nav className="grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-wrap sm:gap-x-8">
+              {FOOTER_LINKS.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={`min-h-11 sm:min-h-0 flex items-center text-sm font-medium transition-colors ${
+                    currentPath === link.to ? "text-accent" : "text-text-muted hover:text-accent"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+            <p className="mt-8 text-xs tracking-widest uppercase text-text-muted">© 2026 Secretlink.life</p>
+          </div>
+        </footer>
+      )}
     </main>
   );
 }

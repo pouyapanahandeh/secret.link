@@ -73,6 +73,17 @@ function formatCountdown(expiresAt: string): string {
   return `${sec}s`;
 }
 
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function initialFor(name: string): string {
+  const trimmed = name.replace(/^@/, "").trim();
+  return (trimmed[0] ?? "?").toUpperCase();
+}
+
 function GoneState({ title, body }: { title: string; body: string }) {
   return (
     <div className="max-w-md mx-auto text-center space-y-4 pt-8">
@@ -104,7 +115,8 @@ export default function SecretChat() {
   const [sending, setSending] = useState(false);
   const [countdown, setCountdown] = useState("");
   const keyRef = useRef<CryptoKey | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const decryptMany = useCallback(async (rows: ChatMessage[], key: CryptoKey): Promise<ChatMessage[]> => {
@@ -262,7 +274,9 @@ export default function SecretChat() {
   }, [status?.expiresAt]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = listRef.current;
+    if (!el || !stickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
   const handleJoin = async () => {
@@ -323,6 +337,7 @@ export default function SecretChat() {
       setError("Messages can be at most 2,000 characters.");
       return;
     }
+    stickToBottomRef.current = true;
     setSending(true);
     setError(null);
     try {
@@ -357,9 +372,10 @@ export default function SecretChat() {
   };
 
   return (
-    <SiteChrome isLoggedIn={isLoggedIn} currentPath="/send">
-      <div className="relative min-h-screen">
+    <SiteChrome isLoggedIn={isLoggedIn} currentPath="/send" hideFooter={phase === "room"}>
+      <div className={`relative ${phase === "room" ? "h-full" : "min-h-screen"}`}>
         <div className="absolute -top-24 right-[-20%] w-[70vw] h-[70vw] max-w-[560px] max-h-[560px] rounded-full bg-accent/10 blur-[120px] pointer-events-none" />
+        {phase !== "room" && (
         <div className="relative mx-auto max-w-xl px-4 sm:px-6 pt-28 sm:pt-32 pb-10">
           {phase === "boot" && (
             <p className="text-center text-sm text-text-muted">Opening chat…</p>
@@ -446,74 +462,126 @@ export default function SecretChat() {
               </button>
             </div>
           )}
+        </div>
+        )}
 
           {phase === "room" && status && session && (
-            <div className="flex flex-col h-[calc(100vh-9rem)]">
-              <div className="flex items-center justify-between gap-3 pb-4 border-b border-border">
-                <div>
-                  <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent">Secret chat</p>
-                  <p className="text-sm text-text-muted mt-1">
-                    {members.length || status.memberCount} / {status.maxMembers} · {countdown}
-                  </p>
-                </div>
-                <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-text-muted truncate max-w-[40%]">
-                  {session.displayName}
-                </span>
-              </div>
+            <div className="relative h-full flex flex-col pt-[5.25rem] pb-[max(0.5rem,env(safe-area-inset-bottom))] px-3 sm:px-4">
+              <div className="mx-auto w-full max-w-xl flex-1 min-h-0 flex flex-col rounded-3xl border border-border bg-surface-raised/90 backdrop-blur-xl overflow-hidden shadow-[0_16px_60px_rgba(0,0,0,0.35)]">
+                <header className="shrink-0 flex items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-border">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent/10">
+                    <svg className="h-4 w-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <rect x="5" y="11" width="14" height="10" rx="2" />
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-extrabold tracking-tight truncate">Secret chat</p>
+                    <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-text-muted mt-0.5 truncate">
+                      Encrypted · {session.displayName}
+                    </p>
+                  </div>
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    <span className="inline-flex items-center rounded-full border border-border bg-surface px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] uppercase text-text-muted tabular-nums">
+                      {members.length || status.memberCount}/{status.maxMembers}
+                    </span>
+                    <span className={`font-mono text-[10px] tracking-[0.12em] uppercase tabular-nums ${countdown === "expired" ? "text-red-400" : "text-accent"}`}>
+                      {countdown}
+                    </span>
+                  </div>
+                </header>
 
-              <div className="flex-1 overflow-y-auto py-4 space-y-3">
-                {messages.length === 0 && (
-                  <p className="text-sm text-text-muted text-center py-10">No messages yet. Say something.</p>
-                )}
-                {messages.map((m) => {
-                  const mine = m.memberId === session.memberId;
-                  return (
-                    <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[80%] px-4 py-2.5 ${
-                          mine ? "bg-accent/15 border border-accent/30" : "bg-surface-raised border border-border"
-                        }`}
-                      >
-                        <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-text-muted mb-1">
-                          {mine ? "You" : m.displayName}
-                        </p>
-                        <p className="text-sm whitespace-pre-wrap break-words">{m.text}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={bottomRef} />
-              </div>
-
-              {error && <p className="text-red-400 text-sm pb-2">{error}</p>}
-
-              <form
-                className="flex gap-2 pt-3 border-t border-border"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void handleSend();
-                }}
-              >
-                <input
-                  type="text"
-                  value={draft}
-                  maxLength={2000}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Encrypted message"
-                  className={`${fieldControl} min-h-11`}
-                />
-                <button
-                  type="submit"
-                  disabled={sending || !draft.trim()}
-                  className="min-h-11 px-5 rounded-full bg-accent text-sm font-extrabold text-black hover:bg-accent-soft disabled:opacity-60"
+                <div
+                  ref={listRef}
+                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-5 py-4 flex flex-col"
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                  }}
                 >
-                  Send
-                </button>
-              </form>
+                  {messages.length === 0 && (
+                    <div className="flex-1 min-h-[12rem] flex flex-col items-center justify-center text-center px-6">
+                      <p className="text-sm font-semibold">You're in. It's just you for now.</p>
+                      <p className="text-xs text-text-muted mt-1.5 leading-relaxed">
+                        Messages stay on this device until the link dies — then they're gone everywhere.
+                      </p>
+                    </div>
+                  )}
+                  {messages.map((m, i) => {
+                    const mine = m.memberId === session.memberId;
+                    const prev = messages[i - 1];
+                    const showMeta = !prev || prev.memberId !== m.memberId;
+                    return (
+                      <div
+                        key={m.id}
+                        className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"} ${showMeta ? "mt-3" : "mt-1"}`}
+                      >
+                        {!mine && (
+                          showMeta ? (
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface border border-border font-mono text-[10px] font-bold text-accent">
+                              {initialFor(m.displayName)}
+                            </div>
+                          ) : (
+                            <div className="w-7 shrink-0" />
+                          )
+                        )}
+                        <div className={`max-w-[78%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
+                          {showMeta && (
+                            <p className={`font-mono text-[10px] tracking-[0.12em] uppercase text-text-muted mb-1 ${mine ? "text-right" : "text-left"}`}>
+                              {mine ? "You" : m.displayName}
+                              {m.createdAt ? ` · ${formatTime(m.createdAt)}` : ""}
+                            </p>
+                          )}
+                          <div
+                            className={`px-3.5 py-2 ${
+                              mine
+                                ? "rounded-2xl rounded-br-md bg-accent/15 border border-accent/30"
+                                : "rounded-2xl rounded-bl-md bg-surface border border-border"
+                            }`}
+                          >
+                            <p className="text-[15px] leading-snug whitespace-pre-wrap break-words">{m.text}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {error && (
+                  <p className="shrink-0 px-4 text-red-400 text-xs pb-1">{error}</p>
+                )}
+
+                <form
+                  className="shrink-0 flex items-end gap-2 px-3 sm:px-4 py-3 border-t border-border bg-surface/60"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    stickToBottomRef.current = true;
+                    void handleSend();
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={draft}
+                    maxLength={2000}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="Write a secret…"
+                    className="flex-1 min-h-11 rounded-full bg-surface border border-border px-4 text-sm text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent transition-colors"
+                  />
+                  <button
+                    type="submit"
+                    disabled={sending || !draft.trim()}
+                    aria-label="Send"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-black hover:bg-accent-soft transition-colors disabled:opacity-40"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <path d="M3.4 20.6 21 12 3.4 3.4 3 10.3 15 12 3 13.7z" />
+                    </svg>
+                  </button>
+                </form>
+              </div>
             </div>
           )}
         </div>
-      </div>
     </SiteChrome>
   );
 }
