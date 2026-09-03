@@ -31,7 +31,7 @@ pnpm typecheck
 │  ├─ api-gateway/         # Koa — main HTTPS API (deployed)
 │  ├─ mobile/              # Expo React Native (kickoff Aug 2026)
 │  ├─ web-teams/           # PARKED — B2B scaffold
-│  ├─ mobile-public/       # PARKED — Capacitor shell
+│  ├─ mobile-public/       # Capacitor shell — Android/iOS WebView over the live site
 │  ├─ mobile-teams/        # PARKED — Capacitor shell
 │  ├─ game-runtime/        # PARKED — prototype
 │  ├─ moderation-worker/   # PARKED — not on AWS path

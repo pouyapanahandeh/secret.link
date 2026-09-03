@@ -44,5 +44,7 @@ coverage/
 
 # Expo
 apps/mobile/.expo/
-apps/mobile-public/.expo/
-apps/mobile-teams/.expo/
+
+# Capacitor
+apps/mobile-public/artifacts/
+apps/mobile-teams/artifacts/

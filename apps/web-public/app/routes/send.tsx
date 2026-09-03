@@ -1,13 +1,14 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useState, useRef, useEffect } from "react";
-import { Link, useLoaderData } from "@remix-run/react";
+import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
 import { CameraCapture } from "../components/CameraCapture";
 import { SiteChrome } from "../components/SiteChrome";
 import { getApiBase } from "../lib/api.client";
 import { API_URL } from "../lib/api.server";
 import { getToken } from "../lib/session.server";
 import { saveChatSession } from "../lib/chat-session";
+import { PinDigitInput } from "../components/PinDigitInput";
 
 export const meta: MetaFunction = () => [
   { title: "Send a Secret - Secretlink.life" },
@@ -236,9 +237,18 @@ async function createChatRoom(input: {
   return { link, token: data.token, memberId: data.memberId };
 }
 
+const TABS: readonly Tab[] = ["text", "file", "camera", "chat"] as const;
+
+function tabFromParam(value: string | null): Tab | null {
+  return TABS.includes(value as Tab) ? (value as Tab) : null;
+}
+
 export default function Send() {
   const { isLoggedIn, handle } = useLoaderData<typeof loader>();
-  const [tab, setTab] = useState<Tab>("text");
+  const [searchParams] = useSearchParams();
+  // The app's bottom tab bar links straight to a mode, e.g. /send?tab=chat.
+  const requestedTab = tabFromParam(searchParams.get("tab"));
+  const [tab, setTab] = useState<Tab>(requestedTab ?? "text");
   const [message, setMessage] = useState("");
   const [viewDuration, setViewDuration] = useState("30");
   const [linkExpiry, setLinkExpiry] = useState("86400");
@@ -259,6 +269,7 @@ export default function Send() {
   const [maxMembers, setMaxMembers] = useState("10");
   const [chatCustomizeOpen, setChatCustomizeOpen] = useState(false);
   const [chatPin, setChatPin] = useState("");
+  const [chatPinLength, setChatPinLength] = useState<4 | 6 | 8>(4);
   const [nickname, setNickname] = useState("anon");
   const [joinAnonymous, setJoinAnonymous] = useState(false);
 
@@ -283,6 +294,11 @@ export default function Send() {
   useEffect(() => {
     setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
   }, []);
+
+  // Tapping the app's Chat tab while already on /send only changes the query.
+  useEffect(() => {
+    if (requestedTab) setTab(requestedTab);
+  }, [requestedTab]);
 
   const reset = () => {
     setLink(null);
@@ -375,6 +391,10 @@ export default function Send() {
 
   const handleCreateChat = async () => {
     const pin = chatPin.trim();
+    if (pin.length > 0 && pin.length !== chatPinLength) {
+      setError(`Enter all ${chatPinLength} PIN digits, or leave it blank.`);
+      return;
+    }
     if (pin && !/^\d{4,8}$/.test(pin)) {
       setError("PIN must be 4–8 digits");
       return;
@@ -719,17 +739,39 @@ export default function Send() {
                       </div>
                     )}
                     <div>
-                      <label htmlFor="chatPin" className={fieldLabel}>PIN (optional)</label>
-                      <input
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <label htmlFor="chatPin" className="font-mono text-[10px] tracking-[0.18em] uppercase text-text-muted">
+                          PIN (optional)
+                        </label>
+                        <div className="flex gap-1" role="group" aria-label="PIN length">
+                          {([4, 6, 8] as const).map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => {
+                                setChatPinLength(n);
+                                setChatPin((prev) => prev.slice(0, n));
+                              }}
+                              aria-pressed={chatPinLength === n}
+                              className={`min-h-8 px-2.5 rounded-full font-mono text-[10px] tracking-[0.12em] uppercase transition-colors ${
+                                chatPinLength === n
+                                  ? "bg-accent text-black font-bold"
+                                  : "border border-border text-text-muted hover:text-text"
+                              }`}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <PinDigitInput
+                        key={chatPinLength}
                         id="chatPin"
-                        type="password"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        maxLength={8}
                         value={chatPin}
-                        onChange={(e) => setChatPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                        placeholder="4–8 digits"
-                        className={fieldControl}
+                        onChange={setChatPin}
+                        length={chatPinLength}
+                        masked={false}
+                        ariaLabel="Chat PIN"
                       />
                       <p className="mt-2 text-xs text-text-muted">
                         People need the link and this PIN. Leave blank for link-only access.

@@ -7,8 +7,11 @@ import {
   useRouteError,
   isRouteErrorResponse,
 } from "@remix-run/react";
-import type { LinksFunction } from "@remix-run/node";
+import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { PwaInstallBanner } from "./components/PwaInstallBanner";
+import { isNativeRequest } from "./lib/native.server";
+import { useIsNativeApp } from "./lib/native";
 
 import "./tailwind.css";
 
@@ -61,12 +64,20 @@ const structuredData = JSON.stringify({
   ],
 });
 
+export async function loader({ request }: LoaderFunctionArgs) {
+  return json({ isNativeApp: isNativeRequest(request) });
+}
+
 export default function App() {
+  const isNativeApp = useIsNativeApp();
+
   return (
-    <html lang="en">
+    <html lang="en" data-native={isNativeApp ? "true" : undefined}>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* viewport-fit=cover activates the env(safe-area-inset-*) padding the
+            layout relies on, which the native shells and iOS standalone need. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#facc15" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />
@@ -75,7 +86,7 @@ export default function App() {
       </head>
       <body className="bg-surface text-text font-sans antialiased transition-colors duration-300">
         <Outlet />
-        <PwaInstallBanner />
+        {!isNativeApp && <PwaInstallBanner />}
         <ScrollRestoration />
         <Scripts />
         <script dangerouslySetInnerHTML={{ __html: swScript }} />
@@ -101,7 +112,7 @@ export function ErrorBoundary() {
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <Meta />
         <Links />
       </head>

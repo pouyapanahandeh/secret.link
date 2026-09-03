@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only: lets the WebView load a local dev server over http
+     (10.0.2.2 is the host machine from inside the Android emulator).
+     Release builds stay HTTPS-only. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>

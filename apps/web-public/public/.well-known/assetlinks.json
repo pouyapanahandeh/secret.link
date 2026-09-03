@@ -8,5 +8,18 @@
         "43:73:2F:16:04:79:95:85:8D:04:D7:8D:72:55:85:B9:1C:B1:27:CC:57:C0:44:5F:38:79:CB:48:3B:ED:FE:0E"
       ]
     }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "link.secret.app",
+      "sha256_cert_fingerprints": [
+        "42:A5:EE:88:24:50:FA:91:E2:13:89:2A:0D:55:BE:FD:B8:89:73:81:49:25:DF:68:04:B7:7B:85:5E:2C:4D:AA"
+      ]
+    }
   }
 ]

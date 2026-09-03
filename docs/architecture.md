@@ -19,7 +19,19 @@ Process manager: PM2 on a single EC2 instance behind nginx. See `ecosystem.confi
 | `web-teams` | B2B scaffold — deferred |
 | `game-runtime` | Prototype |
 | `moderation-worker` / `ai-worker` | Not on the AWS path |
-| Capacitor `mobile-*` | Prefer Expo `apps/mobile` |
+| Capacitor `mobile-teams` | Empty wrapper — deferred with `web-teams` |
+
+## Mobile
+
+| App | Stack | Notes |
+|-----|-------|-------|
+| `apps/mobile` | Expo / React Native | Native client against the API — the long-term app |
+| `apps/mobile-public` | Capacitor | Store wrapper whose WebView loads `https://secretlink.life` |
+
+The Capacitor shell exists because `web-public` is Remix SSR: there is no static
+bundle to ship, so it points at the live origin and keeps the `sl_session`
+cookie first-party. Bundle ids differ (`link.secret.app` vs the Expo app's
+`life.secretlink.app`), so the two can coexist in the stores.
 
 ## Data layer (current)
 

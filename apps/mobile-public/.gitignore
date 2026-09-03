@@ -1,0 +1,23 @@
+# Capacitor native projects are committed, but their build output is not.
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/app/google-services.json
+*.keystore
+*.jks
+
+# iOS
+ios/App/Pods/
+ios/App/build/
+ios/App/Podfile.lock
+ios/App/output/
+ios/DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Build artifacts
+artifacts/

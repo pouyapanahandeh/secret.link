@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SiteChrome } from "../components/SiteChrome";
+import { PinDigitInput } from "../components/PinDigitInput";
 import { getApiBase } from "../lib/api.client";
 import { API_URL } from "../lib/api.server";
 import { loadChatSession, saveChatSession, type ChatSession } from "../lib/chat-session";
@@ -45,6 +46,7 @@ const primaryBtn =
 type RoomStatus = {
   id: string;
   hasPin: boolean;
+  pinLength: number | null;
   memberCount: number;
   maxMembers: number;
   expiresAt: string;
@@ -71,6 +73,11 @@ function formatCountdown(expiresAt: string): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
+}
+
+function pinBoxCount(status: RoomStatus): number {
+  const n = status.pinLength;
+  return n && n >= 4 && n <= 8 ? n : 4;
 }
 
 function formatTime(iso: string): string {
@@ -287,8 +294,9 @@ export default function SecretChat() {
     const displayName = anonymous ? (nickname.trim() || "anon").slice(0, 32) : `@${handle}`;
     const payload: Record<string, unknown> = { displayName, anonymous };
     if (status.hasPin) {
-      if (!/^\d{4,8}$/.test(pin)) {
-        setError("Enter the 4–8 digit PIN.");
+      const expected = pinBoxCount(status);
+      if (pin.length !== expected || !/^\d+$/.test(pin)) {
+        setError(`Enter the ${expected}-digit PIN.`);
         setJoining(false);
         return;
       }
@@ -414,16 +422,13 @@ export default function SecretChat() {
               {status.hasPin && (
                 <div>
                   <label htmlFor="pin" className={fieldLabel}>PIN</label>
-                  <input
+                  <PinDigitInput
                     id="pin"
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    maxLength={8}
                     value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                    className={fieldControl}
-                    placeholder="4–8 digits"
+                    onChange={setPin}
+                    length={pinBoxCount(status)}
+                    autoFocus
+                    ariaLabel="Chat PIN"
                   />
                 </div>
               )}
@@ -457,7 +462,12 @@ export default function SecretChat() {
 
               {error && <p className="text-red-400 text-sm">{error}</p>}
 
-              <button type="button" onClick={handleJoin} disabled={joining} className={primaryBtn}>
+              <button
+                type="button"
+                onClick={handleJoin}
+                disabled={joining || Boolean(status.hasPin && pin.length !== pinBoxCount(status))}
+                className={primaryBtn}
+              >
                 {joining ? "Joining…" : "Join chat"}
               </button>
             </div>

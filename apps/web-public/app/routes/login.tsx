@@ -9,6 +9,7 @@ import { API_URL } from "../lib/api.server";
 import { browserApiBase } from "../lib/api-base";
 import { extractRecoveryCode } from "@secretlink/core/user/schemas";
 import { RecoveryCodeInput } from "../components/passkeys/RecoveryCodeInput";
+import { useIsNativeApp } from "../lib/native";
 
 export const meta: MetaFunction = () => [
   { title: "Log In - Secretlink.life" },
@@ -68,6 +69,7 @@ const labelClass = "block font-mono text-[10px] tracking-[0.18em] uppercase text
 export default function Login() {
   const { isLoggedIn } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const isNativeApp = useIsNativeApp();
   const [passkeyStatus, setPasskeyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [passkeyError, setPasskeyError] = useState("");
   const [showRecovery, setShowRecovery] = useState(false);
@@ -340,6 +342,20 @@ export default function Login() {
           Don&apos;t have an account?{" "}
           <Link to="/signup" className="font-semibold text-accent hover:underline">Sign up</Link>
         </p>
+
+        {isNativeApp && (
+          <div className="mt-8 border-t border-border pt-8">
+            <p className="mb-4 text-sm text-text-muted leading-relaxed">
+              You don&apos;t need an account to send a secret, share a file, or start a chat.
+            </p>
+            <Link
+              to="/send"
+              className="flex min-h-12 items-center justify-center rounded-full border border-border bg-surface-raised px-6 text-sm font-extrabold text-text hover:border-accent transition-colors"
+            >
+              Continue without an account
+            </Link>
+          </div>
+        )}
       </div>
     </SiteChrome>
   );

@@ -680,5 +680,9 @@ migrate("chat_rooms.v1", () => {
   `);
 });
 
+migrate("chat_rooms.pin_length.v1", () => {
+  addColumn("chat_rooms", "pin_length", "INTEGER");
+});
+
 export { db };
 export default db;

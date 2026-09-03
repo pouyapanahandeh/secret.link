@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isNativeShell } from "../lib/native";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -13,6 +14,7 @@ export function PwaInstallBanner() {
 
   useEffect(() => {
     // Don't show if already installed or previously dismissed this session
+    if (isNativeShell()) return;
     if (window.matchMedia("(display-mode: standalone)").matches) return;
     if ((window.navigator as any).standalone === true) return; // iOS standalone
     if (sessionStorage.getItem("pwa-dismissed")) return;

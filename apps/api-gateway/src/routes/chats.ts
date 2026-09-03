@@ -24,6 +24,7 @@ function roomStatus(room: chatRepo.ChatRoomRow) {
   return {
     id: room.id,
     hasPin: Boolean(room.pin_hash),
+    pinLength: room.pin_hash ? room.pin_length ?? 4 : null,
     memberCount: room.member_count,
     maxMembers: room.max_members,
     expiresAt: room.expires_at,
@@ -66,6 +67,7 @@ chatsRouter.post("/", chatCreateRateLimiter(), validateBody(CreateChatInput), as
   const pinHash = body.pin ? hashPin(body.pin) : null;
   const room = chatRepo.createRoom({
     pinHash,
+    pinLength: body.pin ? body.pin.length : null,
     maxMembers: body.maxMembers,
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),

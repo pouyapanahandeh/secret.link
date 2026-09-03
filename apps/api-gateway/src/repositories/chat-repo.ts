@@ -5,6 +5,7 @@ import { chatsHub } from "../lib/chat-sse.js";
 export type ChatRoomRow = {
   id: string;
   pin_hash: string | null;
+  pin_length: number | null;
   max_members: number;
   member_count: number;
   created_at: string;
@@ -31,8 +32,8 @@ export type ChatMessageRow = {
 
 const stmts = {
   insertRoom: db.prepare(
-    `INSERT INTO chat_rooms (id, pin_hash, max_members, member_count, created_at, expires_at)
-     VALUES (?, ?, ?, 0, ?, ?)`,
+    `INSERT INTO chat_rooms (id, pin_hash, pin_length, max_members, member_count, created_at, expires_at)
+     VALUES (?, ?, ?, ?, 0, ?, ?)`,
   ),
   findRoom: db.prepare(`SELECT * FROM chat_rooms WHERE id = ?`),
   expiredIds: db.prepare(`SELECT id FROM chat_rooms WHERE expires_at <= ?`),
@@ -82,15 +83,24 @@ export function findMember(memberId: string, roomId: string): ChatMemberRow | un
 
 export function createRoom(input: {
   pinHash: string | null;
+  pinLength: number | null;
   maxMembers: number;
   createdAt: string;
   expiresAt: string;
 }): ChatRoomRow {
   const id = nanoid();
-  stmts.insertRoom.run(id, input.pinHash, input.maxMembers, input.createdAt, input.expiresAt);
+  stmts.insertRoom.run(
+    id,
+    input.pinHash,
+    input.pinLength,
+    input.maxMembers,
+    input.createdAt,
+    input.expiresAt,
+  );
   return {
     id,
     pin_hash: input.pinHash,
+    pin_length: input.pinLength,
     max_members: input.maxMembers,
     member_count: 0,
     created_at: input.createdAt,

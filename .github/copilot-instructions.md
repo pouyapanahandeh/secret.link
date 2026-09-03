@@ -17,7 +17,7 @@
 | `web-teams` | `apps/web-teams` | Remix v2 + Vite (marketing placeholder) | 3001 |
 | `api-gateway` | `apps/api-gateway` | Koa 2 + better-sqlite3, JWT auth | 4000 |
 | `mobile` | `apps/mobile` | Expo SDK 54, React Native 0.81, expo-router | — |
-| `mobile-public` | `apps/mobile-public` | Expo (public-facing, early) | — |
+| `mobile-public` | `apps/mobile-public` | Capacitor 8 shell — WebView over `secretlink.life` | — |
 | `mobile-teams` | `apps/mobile-teams` | Expo (teams, early) | — |
 | `game-runtime` | `apps/game-runtime` | Sandboxed game module executor | 4002 |
 | `ai-worker` | `apps/ai-worker` | Pub/Sub consumer — Vertex AI | — |

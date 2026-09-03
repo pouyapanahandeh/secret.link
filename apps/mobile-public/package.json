@@ -4,17 +4,24 @@
   "private": true,
   "scripts": {
     "sync": "cap sync",
+    "add:android": "cap add android",
+    "add:ios": "cap add ios",
     "open:ios": "cap open ios",
-    "open:android": "cap open android"
+    "open:android": "cap open android",
+    "assets": "capacitor-assets generate --iconBackgroundColor '#0a0a0f' --splashBackgroundColor '#0a0a0f'",
+    "build:apk": "./scripts/build-apk.sh",
+    "build:ipa": "./scripts/build-ipa.sh"
   },
   "dependencies": {
-    "@capacitor/core": "^6.2.0",
-    "@capacitor/ios": "^6.2.0",
-    "@capacitor/android": "^6.2.0",
-    "@capacitor/push-notifications": "^6.0.0",
-    "@capacitor/local-notifications": "^6.0.0"
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/ios": "^8.5.1",
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/splash-screen": "^8.0.2"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.2.0"
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.1"
   }
 }

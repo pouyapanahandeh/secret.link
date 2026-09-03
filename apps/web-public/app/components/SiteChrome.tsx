@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "@remix-run/react";
 import { ThemeToggle } from "./ThemeToggle";
+import { AppShell } from "./AppShell";
+import { useIsNativeApp } from "../lib/native";
 
 const NAV_LINKS = [
   { to: "/about", label: "About" },
@@ -27,8 +29,17 @@ export function SiteChrome({
   hideFooter?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const isNativeApp = useIsNativeApp();
   const authTo = isLoggedIn ? "/dashboard" : "/login";
   const authLabel = isLoggedIn ? "Dashboard" : "Sign in";
+
+  if (isNativeApp) {
+    return (
+      <AppShell isLoggedIn={isLoggedIn} immersive={hideFooter}>
+        {children}
+      </AppShell>
+    );
+  }
 
   return (
     <main className={`${hideFooter ? "h-dvh overflow-hidden" : "min-h-screen"} bg-surface text-text`}>

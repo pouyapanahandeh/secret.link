@@ -1,11 +1,29 @@
 {
   "appId": "link.secret.app",
   "appName": "Secret.link",
-  "webDir": "../web-public/build/client",
+  "webDir": "www",
+  "appendUserAgent": "SecretlinkApp/1",
   "server": {
-    "androidScheme": "https"
+    "url": "https://secretlink.life",
+    "androidScheme": "https",
+    "allowNavigation": ["secretlink.life", "www.secretlink.life"]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0a0a0f"
+  },
+  "ios": {
+    "backgroundColor": "#0a0a0f",
+    "limitsNavigationsToAppBoundDomains": false
   },
   "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#0a0a0f",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
     "PushNotifications": {
       "presentationOptions": ["badge", "sound", "alert"]
     }

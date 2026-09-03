@@ -60,6 +60,7 @@ describe("Chats API", () => {
     expect(statusRes.status).toBe(200);
     const status = await statusRes.json();
     expect(status.hasPin).toBe(false);
+    expect(status.pinLength).toBeNull();
     expect(status.memberCount).toBe(1);
     expect(status.maxMembers).toBe(5);
     expect(status.available).toBe(true);
@@ -72,6 +73,8 @@ describe("Chats API", () => {
       maxMembers: 5,
       pin: "2468",
     });
+    const statusRes = await fetch(`${baseUrl}/v1/chats/${json.id}`);
+    expect((await statusRes.json()).pinLength).toBe(4);
 
     const noPin = await fetch(`${baseUrl}/v1/chats/${json.id}/join`, {
       method: "POST",
@@ -97,6 +100,16 @@ describe("Chats API", () => {
     const joined = await ok.json();
     expect(joined.token).toBeTruthy();
     expect(joined.memberId).toBeTruthy();
+  });
+
+  it("reports pinLength from the PIN that was set", async () => {
+    const { json } = await createChat({
+      ttlSeconds: 3600,
+      maxMembers: 5,
+      pin: "135790",
+    });
+    const statusRes = await fetch(`${baseUrl}/v1/chats/${json.id}`);
+    expect((await statusRes.json()).pinLength).toBe(6);
   });
 
   it("rejects joins once the member cap is reached", async () => {

@@ -10,7 +10,7 @@ interface AppNavProps {
 
 export function AppNav({ authLinks = "none", children }: AppNavProps) {
   return (
-    <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
+    <nav className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 pb-4 pt-[max(1rem,env(safe-area-inset-top))] bg-surface/90 backdrop-blur-md z-10 border-b border-border/50">
       <Link to="/" className="flex items-center gap-2">
         <img src="/secretlink.png" alt="Secretlink.life" className="w-8 h-8" />
         <span className="text-xl font-bold tracking-tight">

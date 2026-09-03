@@ -37,6 +37,34 @@
   --color-card: #FFFFFF;
 }
 
+/* Native app shell (apps/mobile-public). The root <html> gets data-native
+   from the server, so these apply before first paint. */
+[data-native="true"] {
+  /* No rubber-band / pull-to-refresh at the document edges. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-native="true"] body {
+  overscroll-behavior: none;
+  /* Long-pressing chrome shouldn't pop a text selection callout, but message
+     and link text must stay selectable so secrets can be copied. */
+  -webkit-touch-callout: none;
+}
+
+[data-native="true"] button,
+[data-native="true"] a,
+[data-native="true"] label,
+[data-native="true"] [role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+[data-native="true"] ::-webkit-scrollbar {
+  display: none;
+}
+
 /* Hide scrollbars for horizontal scroll rows (stories) while keeping scroll. */
 .no-scrollbar {
   -ms-overflow-style: none;

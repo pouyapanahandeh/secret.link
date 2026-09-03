@@ -1,5 +1,5 @@
 import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { Link, useLoaderData, useRouteError, isRouteErrorResponse } from "@remix-run/react";
 import { HeroSection } from "../components/landing/HeroSection";
 import { FeaturesSection } from "../components/landing/FeaturesSection";
@@ -8,9 +8,17 @@ import { TrustSection } from "../components/landing/TrustSection";
 import { MapSection, FinalCtaSection } from "../components/landing/MapSection";
 import { SiteChrome } from "../components/SiteChrome";
 import { getToken } from "../lib/session.server";
+import { isNativeRequest } from "../lib/native.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = await getToken(request);
+
+  // The native app has no use for the marketing landing page: open on the
+  // account screen, which also offers the no-account path into /send.
+  if (isNativeRequest(request)) {
+    return redirect(token ? "/dashboard" : "/login");
+  }
+
   return json({ isLoggedIn: Boolean(token) });
 }
 
