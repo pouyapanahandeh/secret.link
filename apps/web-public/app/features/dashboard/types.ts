@@ -55,12 +55,23 @@ export function sortSentSecrets(items: SentSecret[]) {
   });
 }
 
+export type ActiveChat = {
+  id: string;
+  expiresAt: string;
+  memberCount: number;
+  maxMembers: number;
+  hasPin: boolean;
+  displayName: string;
+  joinedAt: string;
+};
+
 export type DashboardInboxTabProps = {
   user: DashboardUser;
   inbox: unknown[];
   sent: SentSecret[];
   sentHasMore: boolean;
   sentNextOffset: number;
+  activeChats: ActiveChat[];
   token: string;
   following: UserLite[];
   storyHandleSet: Set<string>;

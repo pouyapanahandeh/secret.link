@@ -7,6 +7,7 @@ import { PinDigitInput } from "../components/PinDigitInput";
 import { getApiBase } from "../lib/api.client";
 import { API_URL } from "../lib/api.server";
 import { loadChatSession, saveChatSession, type ChatSession } from "../lib/chat-session";
+import { saveChatKey } from "../lib/chat-keys";
 import { getToken } from "../lib/session.server";
 
 export const meta: MetaFunction = () => [
@@ -17,14 +18,16 @@ export const meta: MetaFunction = () => [
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const token = await getToken(request);
   let handle: string | null = null;
+  let userId: string | null = null;
   if (token) {
     try {
       const res = await fetch(`${API_URL}/v1/users/me/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const profile = (await res.json()) as { handle?: string };
+        const profile = (await res.json()) as { id?: string; handle?: string };
         handle = profile.handle ?? null;
+        userId = profile.id ?? null;
       }
     } catch {
       /* ignore */
@@ -34,6 +37,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     roomId: params["id"] ?? "",
     isLoggedIn: Boolean(token),
     handle,
+    userId,
+    token,
   });
 }
 
@@ -106,7 +111,7 @@ function GoneState({ title, body }: { title: string; body: string }) {
 }
 
 export default function SecretChat() {
-  const { roomId, isLoggedIn, handle } = useLoaderData<typeof loader>();
+  const { roomId, isLoggedIn, handle, userId, token } = useLoaderData<typeof loader>();
   const [phase, setPhase] = useState<"boot" | "join" | "room" | "gone" | "full" | "missing-key">("boot");
   const [goneReason, setGoneReason] = useState("This chat is gone. Every message was deleted.");
   const [status, setStatus] = useState<RoomStatus | null>(null);
@@ -139,6 +144,15 @@ export default function SecretChat() {
     return out;
   }, []);
 
+  const persistKey = useCallback(
+    (expiresAt: string) => {
+      if (!userId) return;
+      const keyParam = window.location.hash.match(/k=([A-Za-z0-9_-]+)/)?.[1];
+      if (keyParam) saveChatKey(userId, roomId, keyParam, expiresAt);
+    },
+    [roomId, userId],
+  );
+
   const enterRoom = useCallback(
     async (sess: ChatSession, key: CryptoKey) => {
       const res = await fetch(`${getApiBase()}/v1/chats/${roomId}/messages`, {
@@ -162,8 +176,9 @@ export default function SecretChat() {
       setMessages(await decryptMany(body.messages, key));
       setSession(sess);
       setPhase("room");
+      if (handle && sess.displayName === `@${handle}`) persistKey(body.expiresAt);
     },
-    [decryptMany, roomId],
+    [decryptMany, handle, persistKey, roomId],
   );
 
   useEffect(() => {
@@ -202,6 +217,33 @@ export default function SecretChat() {
         await enterRoom(existing, keyRef.current);
         return;
       }
+
+      if (isLoggedIn && token && keyRef.current) {
+        const resumeHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        resumeHeaders.Authorization = `Bearer ${token}`;
+        const resumeRes = await fetch(`${getApiBase()}/v1/chats/${roomId}/resume`, {
+          method: "POST",
+          credentials: "include",
+          headers: resumeHeaders,
+        });
+        if (cancelled) return;
+        if (resumeRes.status === 410) {
+          setPhase("gone");
+          return;
+        }
+        if (resumeRes.ok) {
+          const body = (await resumeRes.json()) as { memberId: string; token: string; displayName: string };
+          const sess: ChatSession = {
+            token: body.token,
+            memberId: body.memberId,
+            displayName: body.displayName,
+          };
+          saveChatSession(roomId, sess);
+          await enterRoom(sess, keyRef.current);
+          return;
+        }
+      }
+
       if (!room.available) {
         setPhase(new Date(room.expiresAt).getTime() <= Date.now() ? "gone" : "full");
         return;
@@ -216,7 +258,7 @@ export default function SecretChat() {
     return () => {
       cancelled = true;
     };
-  }, [enterRoom, roomId]);
+  }, [enterRoom, isLoggedIn, roomId, token]);
 
   useEffect(() => {
     if (phase !== "room" || !session || !status) return;
@@ -302,10 +344,12 @@ export default function SecretChat() {
       }
       payload.pin = pin;
     }
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(`${getApiBase()}/v1/chats/${roomId}/join`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
     if (res.status === 409) {
@@ -334,6 +378,7 @@ export default function SecretChat() {
       displayName: body.displayName,
     };
     saveChatSession(roomId, sess);
+    if (!anonymous && status.expiresAt) persistKey(status.expiresAt);
     if (keyRef.current) await enterRoom(sess, keyRef.current);
     setJoining(false);
   };

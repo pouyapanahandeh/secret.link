@@ -15,13 +15,13 @@ import {
   DashboardBottomNav,
 } from "./DashboardNav";
 import { DashboardOverlays } from "./DashboardOverlays";
-import { readTabFromHash, type DashboardTab, type SentSecret } from "./types";
+import { readTabFromHash, type DashboardTab, type SentSecret, type ActiveChat } from "./types";
 import type { loader } from "../../routes/dashboard";
 import { registerPasskey } from "../../lib/passkey-register";
 import { RecoveryCodesPanel } from "../../components/passkeys/RecoveryCodesPanel";
 
 export function DashboardPage() {
-  const { user, inbox, sent, sentHasMore, sentNextOffset, token, following, storyHandles, storyIdsByHandle, mapSecrets } = useLoaderData<typeof loader>();
+  const { user, inbox, sent, sentHasMore, sentNextOffset, activeChats, token, following, storyHandles, storyIdsByHandle, mapSecrets } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
   const [activeTab, setActiveTab] = useState<DashboardTab>(() => readTabFromHash());
@@ -192,6 +192,7 @@ export function DashboardPage() {
                 sent={sent as SentSecret[]}
                 sentHasMore={sentHasMore}
                 sentNextOffset={sentNextOffset}
+                activeChats={activeChats as ActiveChat[]}
                 token={token}
                 following={following as UserLite[]}
                 storyHandleSet={storyHandleSet}

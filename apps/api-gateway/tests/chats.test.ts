@@ -3,7 +3,7 @@ import Koa from "koa";
 import bodyParser from "koa-bodyparser";
 import { router } from "../src/routes/index.js";
 import { errorHandler } from "../src/middleware/error-handler.js";
-import { optionalAuth } from "../src/middleware/auth.js";
+import { optionalAuth, signToken } from "../src/middleware/auth.js";
 import type { Server } from "http";
 import db from "../src/db.js";
 import { runChatExpirySweep } from "../src/jobs/chat-expiry.js";
@@ -231,5 +231,106 @@ describe("Chats API", () => {
 
     const tooMany = await createChat({ ttlSeconds: 3600, maxMembers: 99 });
     expect(tooMany.res.status).toBe(400);
+  });
+
+  it("lists and resumes identity memberships for signed-in users", async () => {
+    const handleA = `chata${Date.now().toString(36)}`;
+    const handleB = `chatb${Date.now().toString(36)}`;
+    const signupA = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: handleA }),
+    });
+    const signupB = await fetch(`${baseUrl}/v1/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle: handleB }),
+    });
+    expect(signupA.status).toBe(201);
+    expect(signupB.status).toBe(201);
+    const userA = (await signupA.json()).user as { id: string; handle: string };
+    const userB = (await signupB.json()).user as { id: string; handle: string };
+    const tokenA = signToken({ userId: userA.id, handle: userA.handle });
+    const tokenB = signToken({ userId: userB.id, handle: userB.handle });
+    const authA = { Authorization: `Bearer ${tokenA}`, "Content-Type": "application/json" };
+    const authB = { Authorization: `Bearer ${tokenB}`, "Content-Type": "application/json" };
+
+    const unauthMine = await fetch(`${baseUrl}/v1/chats/mine`);
+    expect(unauthMine.status).toBe(401);
+
+    const created = await fetch(`${baseUrl}/v1/chats`, {
+      method: "POST",
+      headers: authA,
+      body: JSON.stringify({
+        ttlSeconds: 3600,
+        maxMembers: 5,
+        displayName: `@${userA.handle}`,
+        anonymous: false,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const room = await created.json();
+
+    const now = new Date().toISOString();
+    const later = new Date(Date.now() + 3600_000).toISOString();
+    db.prepare(
+      `INSERT INTO chat_members (id, room_id, display_name, is_anonymous, user_id, joined_at)
+       VALUES (?, ?, ?, 0, ?, ?)`,
+    ).run(`mem-b-${userB.id}`, room.id, `@${userB.handle}`, userB.id, now);
+    db.prepare(`UPDATE chat_rooms SET member_count = member_count + 1 WHERE id = ?`).run(room.id);
+
+    const anonId = `anon-${userA.id.slice(0, 8)}`;
+    db.prepare(
+      `INSERT INTO chat_rooms (id, pin_hash, pin_length, max_members, member_count, created_at, expires_at)
+       VALUES (?, NULL, NULL, 5, 1, ?, ?)`,
+    ).run(anonId, now, later);
+    db.prepare(
+      `INSERT INTO chat_members (id, room_id, display_name, is_anonymous, user_id, joined_at)
+       VALUES (?, ?, ?, 1, ?, ?)`,
+    ).run(`mem-anon-${userA.id}`, anonId, "anon", userA.id, now);
+
+    const mineA = await fetch(`${baseUrl}/v1/chats/mine`, { headers: authA });
+    expect(mineA.status).toBe(200);
+    const listedA = (await mineA.json()) as { items: Array<{ id: string }> };
+    const idsA = listedA.items.map((i) => i.id);
+    expect(idsA).toContain(room.id);
+    expect(idsA).not.toContain(anonId);
+
+    const mineB = await fetch(`${baseUrl}/v1/chats/mine`, { headers: authB });
+    const idsB = ((await mineB.json()) as { items: Array<{ id: string }> }).items.map((i) => i.id);
+    expect(idsB).toContain(room.id);
+
+    const membersBefore = db.prepare(`SELECT COUNT(*) AS c FROM chat_members WHERE room_id = ?`).get(room.id) as {
+      c: number;
+    };
+    const resume = await fetch(`${baseUrl}/v1/chats/${room.id}/resume`, {
+      method: "POST",
+      headers: authB,
+    });
+    expect(resume.status).toBe(200);
+    const resumed = await resume.json();
+    expect(resumed.memberId).toBe(`mem-b-${userB.id}`);
+    expect(resumed.token).toBeTruthy();
+    const membersAfter = db.prepare(`SELECT COUNT(*) AS c FROM chat_members WHERE room_id = ?`).get(room.id) as {
+      c: number;
+    };
+    expect(membersAfter.c).toBe(membersBefore.c);
+
+    const stranger = await fetch(`${baseUrl}/v1/chats/${anonId}/resume`, {
+      method: "POST",
+      headers: authB,
+    });
+    expect(stranger.status).toBe(404);
+
+    db.prepare(`UPDATE chat_rooms SET expires_at = ? WHERE id = ?`).run("2000-01-01T00:00:00.000Z", room.id);
+    const mineExpired = await fetch(`${baseUrl}/v1/chats/mine`, { headers: authA });
+    const expiredIds = ((await mineExpired.json()) as { items: Array<{ id: string }> }).items.map((i) => i.id);
+    expect(expiredIds).not.toContain(room.id);
+
+    const resumeGone = await fetch(`${baseUrl}/v1/chats/${room.id}/resume`, {
+      method: "POST",
+      headers: authA,
+    });
+    expect(resumeGone.status).toBe(410);
   });
 });

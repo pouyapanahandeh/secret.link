@@ -8,6 +8,7 @@ import { getApiBase } from "../lib/api.client";
 import { API_URL } from "../lib/api.server";
 import { getToken } from "../lib/session.server";
 import { saveChatSession } from "../lib/chat-session";
+import { saveChatKey } from "../lib/chat-keys";
 import { PinDigitInput } from "../components/PinDigitInput";
 
 export const meta: MetaFunction = () => [
@@ -18,20 +19,22 @@ export const meta: MetaFunction = () => [
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = await getToken(request);
   let handle: string | null = null;
+  let userId: string | null = null;
   if (token) {
     try {
       const res = await fetch(`${API_URL}/v1/users/me/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const profile = (await res.json()) as { handle?: string };
+        const profile = (await res.json()) as { id?: string; handle?: string };
         handle = profile.handle ?? null;
+        userId = profile.id ?? null;
       }
     } catch {
       /* stay logged-in without handle */
     }
   }
-  return json({ isLoggedIn: Boolean(token), handle });
+  return json({ isLoggedIn: Boolean(token), handle, userId, token });
 }
 
 type Tab = "text" | "file" | "camera" | "chat";
@@ -210,6 +213,8 @@ async function createChatRoom(input: {
   pin?: string;
   displayName: string;
   anonymous: boolean;
+  authToken: string | null;
+  userId: string | null;
 }): Promise<{ link: string; token?: string; memberId?: string } | { error: string }> {
   const { generateKeyBase64 } = await import("../lib/crypto");
   const { keyBase64 } = await generateKeyBase64();
@@ -222,17 +227,23 @@ async function createChatRoom(input: {
   };
   if (input.pin) payload.pin = input.pin;
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (input.authToken) headers.Authorization = `Bearer ${input.authToken}`;
+
   const res = await fetch(`${apiBase}/v1/chats`, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     return { error: body?.error ?? "Failed to create chat" };
   }
-  const data = (await res.json()) as { id: string; token?: string; memberId?: string };
+  const data = (await res.json()) as { id: string; token?: string; memberId?: string; expiresAt?: string };
+  if (!input.anonymous && input.userId && data.id && data.expiresAt) {
+    saveChatKey(input.userId, data.id, keyBase64, data.expiresAt);
+  }
   const link = `${window.location.origin}/c/${data.id}#k=${keyBase64}`;
   return { link, token: data.token, memberId: data.memberId };
 }
@@ -244,7 +255,7 @@ function tabFromParam(value: string | null): Tab | null {
 }
 
 export default function Send() {
-  const { isLoggedIn, handle } = useLoaderData<typeof loader>();
+  const { isLoggedIn, handle, userId, token } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   // The app's bottom tab bar links straight to a mode, e.g. /send?tab=chat.
   const requestedTab = tabFromParam(searchParams.get("tab"));
@@ -411,6 +422,8 @@ export default function Send() {
       pin: pin || undefined,
       displayName,
       anonymous,
+      authToken: token,
+      userId,
     });
     if ("error" in result) {
       setError(result.error);

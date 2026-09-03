@@ -10,6 +10,7 @@ import { UI_FEATURES } from "../../lib/feature-flags";
 import { getApiBase } from "../../lib/api.client";
 import { sortSentSecrets, type DashboardInboxTabProps, type SentSecret } from "./types";
 import { SentSecretRow, SentSecretsDrawer } from "./SentSecretsDrawer";
+import { ActiveChatsSection } from "./ActiveChatsSection";
 
 const SENT_PAGE_SIZE = 10;
 
@@ -19,6 +20,7 @@ export function DashboardInboxTab({
   sent: initialSent,
   sentHasMore: initialHasMore,
   sentNextOffset: initialNextOffset,
+  activeChats,
   token,
   following,
   storyHandleSet,
@@ -319,6 +321,8 @@ export function DashboardInboxTab({
           ))}
         </div>
       )}
+
+      <ActiveChatsSection userId={user.id} chats={activeChats} />
 
       <h2 className="font-mono text-[11px] tracking-[0.2em] uppercase text-accent mt-8 mb-3">Sent</h2>
       {sent.length === 0 ? (

@@ -55,6 +55,17 @@ const stmts = {
     `UPDATE chat_rooms SET member_count = member_count + 1 WHERE id = ? AND member_count < max_members`,
   ),
   findMember: db.prepare(`SELECT * FROM chat_members WHERE id = ? AND room_id = ?`),
+  findIdentityMember: db.prepare(
+    `SELECT * FROM chat_members WHERE room_id = ? AND user_id = ? AND is_anonymous = 0 ORDER BY joined_at ASC LIMIT 1`,
+  ),
+  listMine: db.prepare(
+    `SELECT r.id, r.expires_at, r.member_count, r.max_members, r.pin_hash,
+            m.display_name, m.joined_at
+     FROM chat_members m
+     JOIN chat_rooms r ON r.id = m.room_id
+     WHERE m.user_id = ? AND m.is_anonymous = 0 AND r.expires_at > ?
+     ORDER BY r.expires_at ASC`,
+  ),
   listMembers: db.prepare(`SELECT id, display_name FROM chat_members WHERE room_id = ? ORDER BY joined_at ASC`),
   insertMessage: db.prepare(
     `INSERT INTO chat_messages (id, room_id, member_id, ciphertext, nonce, created_at)
@@ -79,6 +90,48 @@ export function findRoom(id: string): ChatRoomRow | undefined {
 
 export function findMember(memberId: string, roomId: string): ChatMemberRow | undefined {
   return stmts.findMember.get(memberId, roomId) as ChatMemberRow | undefined;
+}
+
+export function findIdentityMember(roomId: string, userId: string): ChatMemberRow | undefined {
+  return stmts.findIdentityMember.get(roomId, userId) as ChatMemberRow | undefined;
+}
+
+export type ActiveChatRow = {
+  id: string;
+  expiresAt: string;
+  memberCount: number;
+  maxMembers: number;
+  hasPin: boolean;
+  displayName: string;
+  joinedAt: string;
+};
+
+export function listActiveChatsForUser(userId: string, now = new Date()): ActiveChatRow[] {
+  const rows = stmts.listMine.all(userId, now.toISOString()) as Array<{
+    id: string;
+    expires_at: string;
+    member_count: number;
+    max_members: number;
+    pin_hash: string | null;
+    display_name: string;
+    joined_at: string;
+  }>;
+  const seen = new Set<string>();
+  const items: ActiveChatRow[] = [];
+  for (const r of rows) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    items.push({
+      id: r.id,
+      expiresAt: r.expires_at,
+      memberCount: r.member_count,
+      maxMembers: r.max_members,
+      hasPin: Boolean(r.pin_hash),
+      displayName: r.display_name,
+      joinedAt: r.joined_at,
+    });
+  }
+  return items;
 }
 
 export function createRoom(input: {

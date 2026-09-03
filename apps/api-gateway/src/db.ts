@@ -684,5 +684,9 @@ migrate("chat_rooms.pin_length.v1", () => {
   addColumn("chat_rooms", "pin_length", "INTEGER");
 });
 
+migrate("chat_members.user_id.idx.v1", () => {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)`);
+});
+
 export { db };
 export default db;

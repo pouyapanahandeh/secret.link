@@ -129,6 +129,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   const following = followingRes.ok ? await followingRes.json() : [];
 
+  const chatsRes = await fetch(`${API_URL}/v1/chats/mine`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const activeChats = chatsRes.ok
+    ? ((await chatsRes.json()) as { items?: unknown[] }).items ?? []
+    : [];
+
   const mapRes = await fetch(`${API_URL}/v1/secrets/map`);
   const mapSecrets = mapRes.ok ? await mapRes.json() : [];
   const storyHandles: string[] = Array.from(
@@ -145,7 +152,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     (storyIdsByHandle[h] ??= []).push(String(m.id));
   }
 
-  return json({ user, inbox, sent, sentHasMore, sentNextOffset, token, following, storyHandles, storyIdsByHandle, mapSecrets });
+  return json({ user, inbox, sent, sentHasMore, sentNextOffset, activeChats, token, following, storyHandles, storyIdsByHandle, mapSecrets });
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {

@@ -5,7 +5,7 @@ import {
   JoinChatInput,
   PostChatMessageInput,
 } from "@secretlink/core/chat";
-import type { AuthPayload } from "../middleware/auth.js";
+import { requireAuth, type AuthPayload } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
 import {
   chatCreateRateLimiter,
@@ -59,6 +59,37 @@ async function requireJoinToken(ctx: Context, next: Next) {
   ctx.state.chatJoin = parsed;
   await next();
 }
+
+chatsRouter.get("/mine", requireAuth(), async (ctx: Context) => {
+  const user = ctx.state.user as AuthPayload;
+  ctx.body = { items: chatRepo.listActiveChatsForUser(user.userId) };
+});
+
+chatsRouter.post("/:id/resume", requireAuth(), async (ctx: Context) => {
+  const id = String(ctx.params["id"] ?? "");
+  const user = ctx.state.user as AuthPayload;
+  const room = chatRepo.findRoom(id);
+  if (!room) {
+    notFound(ctx);
+    return;
+  }
+  if (chatRepo.purgeIfExpired(room)) {
+    gone(ctx);
+    return;
+  }
+  const member = chatRepo.findIdentityMember(id, user.userId);
+  if (!member) {
+    notFound(ctx);
+    return;
+  }
+  const expiresAtMs = new Date(room.expires_at).getTime();
+  ctx.body = {
+    memberId: member.id,
+    token: signJoinToken(room.id, member.id, expiresAtMs),
+    expiresAt: room.expires_at,
+    displayName: member.display_name,
+  };
+});
 
 chatsRouter.post("/", chatCreateRateLimiter(), validateBody(CreateChatInput), async (ctx: Context) => {
   const body = ctx.state.body as CreateChatInput;
@@ -125,6 +156,23 @@ chatsRouter.post("/:id/join", chatJoinRateLimiter(), validateBody(JoinChatInput)
     return;
   }
 
+  const sender = ctx.state.user as AuthPayload | undefined;
+  const wantAnonymous = body.anonymous === true || !sender;
+
+  if (sender && !wantAnonymous) {
+    const existing = chatRepo.findIdentityMember(id, sender.userId);
+    if (existing) {
+      const expiresAtMs = new Date(room.expires_at).getTime();
+      ctx.body = {
+        memberId: existing.id,
+        token: signJoinToken(room.id, existing.id, expiresAtMs),
+        expiresAt: room.expires_at,
+        displayName: existing.display_name,
+      };
+      return;
+    }
+  }
+
   if (room.pin_hash) {
     await pinDelay();
     if (!body.pin || !verifyPin(body.pin, room.pin_hash)) {
@@ -139,8 +187,6 @@ chatsRouter.post("/:id/join", chatJoinRateLimiter(), validateBody(JoinChatInput)
     return;
   }
 
-  const sender = ctx.state.user as AuthPayload | undefined;
-  const wantAnonymous = body.anonymous === true || !sender;
   const joined = chatRepo.joinRoom({
     roomId: room.id,
     displayName: body.displayName,
