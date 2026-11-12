@@ -4,16 +4,13 @@
 # application DATA, not shared infrastructure — the actual "IVS infra" is just
 # the ivs:* permissions on the instance role (see iam.tf).
 #
-# The two channels below already existed when this config was written. We import
-# them so the state is captured, but with prevent_destroy + ignore_changes so
-# Terraform never deletes or fights the app over user channels. New per-user
-# channels are intentionally NOT tracked here.
+# Pre-existing channels are optional. Pass name => ARN pairs through
+# var.existing_ivs_channels (gitignored terraform.tfvars). prevent_destroy and
+# ignore_changes keep Terraform from fighting the app over user channels.
+# New per-user channels are intentionally NOT tracked here.
 
 resource "aws_ivs_channel" "existing" {
-  for_each = {
-    "sl-pooya" = "arn:aws:ivs:eu-west-1:000000000000:channel/REDACTED_CHANNEL_1"
-    "sl-waac"  = "arn:aws:ivs:eu-west-1:000000000000:channel/REDACTED_CHANNEL_2"
-  }
+  for_each = var.existing_ivs_channels
 
   provider = aws.ivs
 

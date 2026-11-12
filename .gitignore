@@ -8,10 +8,18 @@ build/
 .turbo/
 *.tsbuildinfo
 
-# Environment
+# Environment and local credentials. Examples stay tracked.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*service-account*.json
+*serviceAccount*.json
+
+# Salesforce CLI cache (org metadata, not for publication)
+.sf/
 
 # IDE
 .idea/

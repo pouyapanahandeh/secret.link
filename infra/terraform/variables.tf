@@ -12,14 +12,18 @@ variable "ivs_region" {
 
 variable "blob_bucket_name" {
   type        = string
-  default     = "secretlink-blobs-000000000000"
-  description = "S3 bucket for encrypted media blobs and Litestream DB replicas."
+  description = "S3 bucket for encrypted media blobs and Litestream DB replicas. Set this in a gitignored terraform.tfvars file."
 }
 
 variable "instance_id" {
   type        = string
-  default     = "i-00000000000000000"
-  description = "Existing EC2 host. Referenced (data source) — never managed/replaced by Terraform."
+  description = "Existing EC2 host id. Referenced as a data source and never managed by Terraform. Set this in a gitignored terraform.tfvars file."
+}
+
+variable "existing_ivs_channels" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of channel name to ARN for channels that already exist. Leave empty in git. Real ARNs belong in gitignored terraform.tfvars."
 }
 
 # SSM parameter names under /secretlink/prod. Values are NEVER set from

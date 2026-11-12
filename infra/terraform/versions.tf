@@ -20,12 +20,11 @@ terraform {
     }
   }
 
-  # Remote state in the existing (encrypted, private) blobs bucket. Keeps the
-  # state — which contains SSM secret values after import — off local disk and
-  # encrypted at rest. Uses a dedicated prefix untouched by the bucket's
-  # blob/litestream lifecycle rules.
+  # Remote state stays in a private encrypted bucket. The bucket name is not
+  # committed: state can contain imported SSM values. Initialize with
+  #   terraform init -backend-config="bucket=YOUR_STATE_BUCKET"
+  # or a gitignored backend.hcl (see infra/terraform/.gitignore).
   backend "s3" {
-    bucket  = "secretlink-blobs-000000000000"
     key     = "terraform/secretlink.tfstate"
     region  = "eu-north-1"
     encrypt = true

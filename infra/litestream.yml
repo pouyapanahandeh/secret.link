@@ -7,13 +7,13 @@
 #
 # Restore (disaster recovery):
 #   litestream restore -o /home/ubuntu/secretlink-releases/shared/data/secretlink.db \
-#     s3://secretlink-blobs-000000000000/litestream/secretlink
+#     s3://your-private-blob-bucket/litestream/secretlink
 
 dbs:
   - path: /home/ubuntu/secretlink-releases/shared/data/secretlink.db
     replicas:
       - type: s3
-        bucket: secretlink-blobs-000000000000
+        bucket: your-private-blob-bucket
         path: litestream/secretlink
         region: eu-north-1
         retention: 720h        # 30 days of point-in-time history

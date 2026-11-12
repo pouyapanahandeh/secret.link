@@ -15,7 +15,8 @@ set -euo pipefail
 
 REGION="${AWS_REGION:-eu-north-1}"
 PREFIX="${SSM_PREFIX:-/secretlink/prod}"
-LEAKED_KEY_ID="${LEAKED_KEY_ID:-REDACTED_AWS_ACCESS_KEY_ID}"
+# Never hardcode a key id. Pass LEAKED_KEY_ID only when rotating a specific key.
+LEAKED_KEY_ID="${LEAKED_KEY_ID:-}"
 IAM_USER="${IAM_USER:-}"
 
 echo "──── Secretlink secret rotation ────"
@@ -55,15 +56,15 @@ put STORAGE_DRIVER "s3"
 put BLOB_BUCKET "${BLOB_BUCKET:-secretlink-blobs}"
 
 # ── Rotate the leaked IAM access key (only if an IAM user is provided) ────────
-if [[ -n "$IAM_USER" ]]; then
-  echo "→ Deactivating leaked access key ${LEAKED_KEY_ID} for ${IAM_USER}..."
+if [[ -n "$IAM_USER" && -n "$LEAKED_KEY_ID" ]]; then
+  echo "→ Deactivating access key ${LEAKED_KEY_ID} for ${IAM_USER}..."
   aws iam update-access-key --user-name "$IAM_USER" --access-key-id "$LEAKED_KEY_ID" --status Inactive --region "$REGION" || true
   echo "  Key deactivated. Verify the app still works (via instance role), then delete it:"
   echo "    aws iam delete-access-key --user-name $IAM_USER --access-key-id $LEAKED_KEY_ID"
 else
-  echo "! IAM_USER not set — skipping IAM key rotation."
+  echo "! IAM_USER or LEAKED_KEY_ID not set — skipping IAM key rotation."
   echo "  Prefer removing static keys entirely and attaching an EC2 instance role."
-  echo "  To rotate manually: IAM_USER=<user> ./scripts/rotate-secrets.sh"
+  echo "  To rotate manually: IAM_USER=<user> LEAKED_KEY_ID=<key-id> ./scripts/rotate-secrets.sh"
 fi
 
 echo "✅ Rotation complete. Redeploy to apply."

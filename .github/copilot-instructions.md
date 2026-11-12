@@ -61,8 +61,7 @@ pnpm typecheck        # Type-check single app
 
 ## Mobile Builds (EAS)
 
-- Account: `waactech`
-- Project ID: `b99ce94d-0800-4632-b340-1d42a0691af5`
+- Expo account and project id live in `apps/mobile/app.json`. Do not commit Expo tokens or service-account JSON.
 - Build: `eas build --platform <android|ios> --profile <preview|production>`
 - Known patches: `postinstall` strips `-Werror` from react-native-reanimated CMakeLists.txt
 

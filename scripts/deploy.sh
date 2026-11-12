@@ -9,7 +9,7 @@ set -euo pipefail
 # Secrets are pulled from SSM on the server (scripts/pull-ssm-env.sh) if
 # available; otherwise the existing server-side .env is reused.
 
-SERVER="${DEPLOY_SERVER:-ubuntu@203.0.113.10}"
+SERVER="${DEPLOY_SERVER:?Set DEPLOY_SERVER to user@host}"
 SSH_KEY="${DEPLOY_KEY:-$HOME/.ssh/secretlink-key.pem}"
 BASE_DIR="/home/ubuntu/secretlink-releases"
 LEGACY_DIR="/home/ubuntu/secretlink"

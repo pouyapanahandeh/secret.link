@@ -4,7 +4,7 @@ Package: `life.secretlink.app`
 Privacy: https://secretlink.life/privacy  
 Terms: https://secretlink.life/terms  
 Support: https://secretlink.life/contact  
-Contact email: ops@example.com
+Contact email: use the public support address you publish on the store listing
 
 ## Required store assets
 

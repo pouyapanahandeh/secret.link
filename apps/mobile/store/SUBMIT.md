@@ -1,33 +1,29 @@
 # Submit Secretlink Android to Google Play
 
-## Production artifact (ready)
+## Production artifact
 
-- EAS build: https://expo.dev/accounts/waactech/projects/secretlink/builds/00000000-0000-0000-0000-000000000000
-- AAB download: https://expo.dev/artifacts/eas/REDACTED_ARTIFACT.aab
-- Local copy: `store/releases/secretlink-1.0.0-vc4.aab`
+Build the AAB with EAS and keep the binary, download URLs, and service-account JSON outside git.
+
 - Package: `life.secretlink.app`
 - Version: `1.0.0` (versionCode `4`)
-- Upload key SHA-256: `43:73:2F:16:04:79:95:85:8D:04:D7:8D:72:55:85:B9:1C:B1:27:CC:57:C0:44:5F:38:79:CB:48:3B:ED:FE:0E`
+- Upload key SHA-256 is the public certificate fingerprint also published in `apps/web-public/public/.well-known/assetlinks.json`
 
-## Accounts (must be ops@example.com)
+## Accounts
 
-- Expo / EAS: `waactech` ← `ops@example.com`
-- Google Cloud active account: `ops@example.com`
-- Play upload service account (for later EAS submit): `play-publisher@your-gcp-project.iam.gserviceaccount.com`
-  - Lives in GCP project `your-gcp-project` owned/accessible by `ops@example.com`
+Use your own Expo, Google Cloud, and Play Console accounts. Do not commit the account email, the GCP project id, or the Play service-account JSON (`apps/mobile/credentials/` is gitignored).
 
 **First Play upload cannot be automated.** Google requires creating the app + uploading the first AAB in Play Console UI: https://expo.fyi/first-android-submission
 
 ## Option A — Play Console UI (required for first publish)
 
-Sign into Play Console as **ops@example.com** (not another Google account).
+Sign into Play Console with the Google account that owns the app.
 
 1. https://play.google.com/console → Create app → **Secretlink**
 2. Complete declarations (18+, UGC, location, privacy policy URL `https://secretlink.life/privacy`)
 3. Store listing: paste text from `store/en-US/`, upload `store/icon-512.png`, `store/feature-graphic.png`, `store/screenshots/*` (or Desktop zip `secretlink-play-listing-assets.zip`)
 4. Data safety: follow `store/DATA_SAFETY.md`
 5. Testing → Internal testing → Create release → upload Desktop file `secretlink-1.0.0-vc4.aab` (package `life.secretlink.app`, versionCode 4)
-6. Link GCP project `your-gcp-project` under Play Console → Setup → API access, then grant **Admin** (or Release apps) to `play-publisher@your-gcp-project.iam.gserviceaccount.com`
+6. Link your GCP project under Play Console → Setup → API access, then grant **Admin** (or Release apps) to your Play service account. Keep that JSON key on your machine only.
 7. After Play App Signing is enabled, copy the **App signing key** SHA-256 into `apps/web-public/public/.well-known/assetlinks.json` and deploy the site
 8. Later updates: `eas submit -p android --latest --profile production`
 
@@ -39,7 +35,7 @@ Sign into Play Console as **ops@example.com** (not another Google account).
 3. From `apps/mobile`:
 
 ```bash
-eas submit -p android --id 00000000-0000-0000-0000-000000000000 --profile production
+eas submit -p android --latest --profile production
 ```
 
 When prompted, provide the service-account JSON path.  
