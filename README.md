@@ -103,4 +103,4 @@ See [docs/mobile-v1-kickoff.md](docs/mobile-v1-kickoff.md) for the Expo v1 scope
 
 ## License
 
-Proprietary. All rights reserved.
+[MIT](LICENSE). Copyright (c) 2026 Pooya Panahandeh.
